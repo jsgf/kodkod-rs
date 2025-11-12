@@ -1,0 +1,384 @@
+//! Boolean factory with gate caching
+//!
+//! The factory creates boolean values and formulas with automatic deduplication.
+
+use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind};
+use rustc_hash::FxHashMap;
+use std::sync::Arc;
+
+/// Options for boolean factory
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// Enable sharing of boolean formulas (default: true)
+    pub sharing: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self { sharing: true }
+    }
+}
+
+/// Boolean circuit factory with caching
+///
+/// Creates boolean values and formulas, with automatic deduplication of gates.
+pub struct BooleanFactory {
+    num_variables: u32,
+    next_label: i32,
+    options: Options,
+    // Cache for gate deduplication
+    // Key: (kind, input labels) -> cached formula
+    cache: FxHashMap<CacheKey, BooleanFormula>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+enum CacheKey {
+    And(Vec<i32>),
+    Or(Vec<i32>),
+    Not(i32),
+    Ite(i32, i32, i32),
+}
+
+impl BooleanFactory {
+    /// Creates a new boolean factory
+    ///
+    /// # Arguments
+    /// * `num_variables` - Initial number of variables to allocate
+    /// * `options` - Factory options
+    pub fn new(num_variables: u32, options: Options) -> Self {
+        Self {
+            num_variables,
+            // Start labels after variables (variables are 1..=num_variables)
+            next_label: (num_variables as i32) + 1,
+            options,
+            cache: FxHashMap::default(),
+        }
+    }
+
+    /// Returns the number of variables
+    pub fn num_variables(&self) -> u32 {
+        self.num_variables
+    }
+
+    /// Creates a boolean variable
+    pub fn variable(&self, label: i32) -> BoolValue {
+        assert!(label > 0 && label <= self.num_variables as i32,
+                "Variable label must be in range 1..={}", self.num_variables);
+        BoolValue::Variable(BooleanVariable::new(label))
+    }
+
+    /// Creates a constant
+    pub fn constant(&self, value: bool) -> BoolValue {
+        BoolValue::Constant(if value {
+            BooleanConstant::TRUE
+        } else {
+            BooleanConstant::FALSE
+        })
+    }
+
+    /// Creates an AND gate
+    pub fn and(&mut self, left: BoolValue, right: BoolValue) -> BoolValue {
+        self.and_multi(vec![left, right])
+    }
+
+    /// Creates a multi-input AND gate
+    pub fn and_multi(&mut self, mut inputs: Vec<BoolValue>) -> BoolValue {
+        if inputs.is_empty() {
+            return self.constant(true);
+        }
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
+        // Check for trivial cases
+        if inputs.iter().any(|v| matches!(v, BoolValue::Constant(BooleanConstant::FALSE))) {
+            return self.constant(false);
+        }
+
+        // Remove TRUE constants
+        inputs.retain(|v| !matches!(v, BoolValue::Constant(BooleanConstant::TRUE)));
+
+        if inputs.is_empty() {
+            return self.constant(true);
+        }
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
+        // Check cache
+        if self.options.sharing {
+            let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
+            let key = CacheKey::And(labels.clone());
+
+            if let Some(cached) = self.cache.get(&key) {
+                return BoolValue::Formula(cached.clone());
+            }
+
+            // Create new formula
+            let label = self.allocate_label();
+            let formula = BooleanFormula::new(label, FormulaKind::And(inputs));
+            self.cache.insert(key, formula.clone());
+            BoolValue::Formula(formula)
+        } else {
+            let label = self.allocate_label();
+            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::And(inputs)))
+        }
+    }
+
+    /// Creates an OR gate
+    pub fn or(&mut self, left: BoolValue, right: BoolValue) -> BoolValue {
+        self.or_multi(vec![left, right])
+    }
+
+    /// Creates a multi-input OR gate
+    pub fn or_multi(&mut self, mut inputs: Vec<BoolValue>) -> BoolValue {
+        if inputs.is_empty() {
+            return self.constant(false);
+        }
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
+        // Check for trivial cases
+        if inputs.iter().any(|v| matches!(v, BoolValue::Constant(BooleanConstant::TRUE))) {
+            return self.constant(true);
+        }
+
+        // Remove FALSE constants
+        inputs.retain(|v| !matches!(v, BoolValue::Constant(BooleanConstant::FALSE)));
+
+        if inputs.is_empty() {
+            return self.constant(false);
+        }
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
+        // Check cache
+        if self.options.sharing {
+            let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
+            let key = CacheKey::Or(labels.clone());
+
+            if let Some(cached) = self.cache.get(&key) {
+                return BoolValue::Formula(cached.clone());
+            }
+
+            // Create new formula
+            let label = self.allocate_label();
+            let formula = BooleanFormula::new(label, FormulaKind::Or(inputs));
+            self.cache.insert(key, formula.clone());
+            BoolValue::Formula(formula)
+        } else {
+            let label = self.allocate_label();
+            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Or(inputs)))
+        }
+    }
+
+    /// Creates a NOT gate
+    pub fn not(&mut self, input: BoolValue) -> BoolValue {
+        // Check for trivial cases
+        if let BoolValue::Constant(c) = input {
+            return self.constant(match c {
+                BooleanConstant::TRUE => false,
+                BooleanConstant::FALSE => true,
+            });
+        }
+
+        // Check cache
+        if self.options.sharing {
+            let key = CacheKey::Not(input.label());
+
+            if let Some(cached) = self.cache.get(&key) {
+                return BoolValue::Formula(cached.clone());
+            }
+
+            // Create new formula
+            let label = self.allocate_label();
+            let formula = BooleanFormula::new(label, FormulaKind::Not(Box::new(input.clone())));
+            self.cache.insert(key, formula.clone());
+            BoolValue::Formula(formula)
+        } else {
+            let label = self.allocate_label();
+            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Not(Box::new(input))))
+        }
+    }
+
+    /// Creates an if-then-else gate
+    pub fn ite(&mut self, condition: BoolValue, then_val: BoolValue, else_val: BoolValue) -> BoolValue {
+        // Check for trivial cases
+        if let BoolValue::Constant(c) = condition {
+            return match c {
+                BooleanConstant::TRUE => then_val,
+                BooleanConstant::FALSE => else_val,
+            };
+        }
+
+        // If then and else are the same, return that value
+        if then_val == else_val {
+            return then_val;
+        }
+
+        // Check cache
+        if self.options.sharing {
+            let key = CacheKey::Ite(condition.label(), then_val.label(), else_val.label());
+
+            if let Some(cached) = self.cache.get(&key) {
+                return BoolValue::Formula(cached.clone());
+            }
+
+            // Create new formula
+            let label = self.allocate_label();
+            let formula = BooleanFormula::new(
+                label,
+                FormulaKind::Ite {
+                    condition: Box::new(condition.clone()),
+                    then_val: Box::new(then_val.clone()),
+                    else_val: Box::new(else_val.clone()),
+                },
+            );
+            self.cache.insert(key, formula.clone());
+            BoolValue::Formula(formula)
+        } else {
+            let label = self.allocate_label();
+            BoolValue::Formula(BooleanFormula::new(
+                label,
+                FormulaKind::Ite {
+                    condition: Box::new(condition),
+                    then_val: Box::new(then_val),
+                    else_val: Box::new(else_val),
+                },
+            ))
+        }
+    }
+
+    /// Creates a boolean matrix with the given dimensions
+    ///
+    /// Each element is initialized to a fresh variable.
+    pub fn matrix(&mut self, dimensions: Dimensions) -> BooleanMatrix {
+        let capacity = dimensions.capacity();
+        let mut elements = Vec::with_capacity(capacity);
+
+        for _ in 0..capacity {
+            let label = self.allocate_label();
+            elements.push(BoolValue::Variable(BooleanVariable::new(label)));
+        }
+
+        // Update variable count
+        self.num_variables = self.next_label as u32 - 1;
+
+        BooleanMatrix::new(dimensions, elements)
+    }
+
+    fn allocate_label(&mut self) -> i32 {
+        let label = self.next_label;
+        self.next_label += 1;
+        label
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn factory_creates_variables() {
+        let factory = BooleanFactory::new(10, Options::default());
+        assert_eq!(factory.num_variables(), 10);
+    }
+
+    #[test]
+    fn factory_variable_creation() {
+        let factory = BooleanFactory::new(5, Options::default());
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        assert_eq!(v1.label(), 1);
+        assert_eq!(v2.label(), 2);
+        assert_ne!(v1, v2);
+    }
+
+    #[test]
+    fn gate_deduplication() {
+        let mut factory = BooleanFactory::new(5, Options::default());
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        let and1 = factory.and(v1.clone(), v2.clone());
+        let and2 = factory.and(v1.clone(), v2.clone());
+
+        // Same gate instance due to caching
+        assert_eq!(and1.label(), and2.label());
+    }
+
+    #[test]
+    fn boolean_matrix() {
+        let mut factory = BooleanFactory::new(10, Options::default());
+        let dims = Dimensions::new(2, 3); // 2x3 matrix
+
+        let matrix = factory.matrix(dims);
+
+        assert_eq!(matrix.dimensions().capacity(), 6);
+        // Each element should be a unique variable
+        assert_eq!(matrix.get(0, 0).unwrap().label(), 11); // First new var after 10 initial
+    }
+
+    #[test]
+    fn and_simplification() {
+        let mut factory = BooleanFactory::new(5, Options::default());
+
+        // AND with FALSE => FALSE
+        let result = factory.and(factory.constant(true), factory.constant(false));
+        assert_eq!(result.label(), -1); // FALSE
+
+        // AND with TRUE => other value
+        let v1 = factory.variable(1);
+        let result = factory.and(factory.constant(true), v1.clone());
+        assert_eq!(result.label(), 1); // v1
+    }
+
+    #[test]
+    fn or_simplification() {
+        let mut factory = BooleanFactory::new(5, Options::default());
+
+        // OR with TRUE => TRUE
+        let result = factory.or(factory.constant(true), factory.constant(false));
+        assert_eq!(result.label(), 0); // TRUE
+
+        // OR with FALSE => other value
+        let v1 = factory.variable(1);
+        let result = factory.or(factory.constant(false), v1.clone());
+        assert_eq!(result.label(), 1); // v1
+    }
+
+    #[test]
+    fn not_simplification() {
+        let mut factory = BooleanFactory::new(5, Options::default());
+
+        // NOT TRUE => FALSE
+        let result = factory.not(factory.constant(true));
+        assert_eq!(result.label(), -1); // FALSE
+
+        // NOT FALSE => TRUE
+        let result = factory.not(factory.constant(false));
+        assert_eq!(result.label(), 0); // TRUE
+    }
+
+    #[test]
+    fn ite_simplification() {
+        let mut factory = BooleanFactory::new(5, Options::default());
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        // ITE with TRUE condition => then branch
+        let result = factory.ite(factory.constant(true), v1.clone(), v2.clone());
+        assert_eq!(result.label(), 1); // v1
+
+        // ITE with FALSE condition => else branch
+        let result = factory.ite(factory.constant(false), v1.clone(), v2.clone());
+        assert_eq!(result.label(), 2); // v2
+
+        // ITE with same branches => that value
+        let result = factory.ite(v1.clone(), v2.clone(), v2.clone());
+        assert_eq!(result.label(), 2); // v2
+    }
+}
