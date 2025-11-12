@@ -60,6 +60,9 @@ pub mod bool;
 /// FOL to boolean circuit translator
 pub mod translator;
 
+/// Boolean circuit to CNF translator
+pub mod cnf;
+
 /// Main solver API
 pub mod solver;
 
