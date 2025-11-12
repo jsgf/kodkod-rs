@@ -52,9 +52,7 @@ pub mod ast;
 pub mod instance;
 
 /// Solver engine and translation infrastructure
-pub mod engine {
-    //! Solver, Solution, Translation types
-}
+pub mod engine;
 
 /// Utility collections and helper functions
 pub mod util {
