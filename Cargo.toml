@@ -14,6 +14,8 @@ thiserror = "1.0"
 # Phase 9: Boolean factory dependencies
 typed-arena = "2.0"
 rustc-hash = "2.0"
+# Phase 10: Translation dependencies
+indexmap = "2.0"
 
 [dev-dependencies]
 # SAT solver backends (Phase 12) - using pure Rust batsat
