@@ -2,5 +2,20 @@
 name = "kodkod-rs"
 version = "0.1.0"
 edition = "2024"
+authors = ["Kodkod-rs contributors"]
+license = "MIT"
+description = "A Rust port of Kodkod, a relational logic solver"
+repository = "https://github.com/yourusername/kodkod-rs"
+keywords = ["sat", "solver", "logic", "relational", "alloy"]
+categories = ["algorithms", "science"]
 
 [dependencies]
+thiserror = "1.0"
+
+[dev-dependencies]
+# SAT solver backends for testing (Phase 12+)
+# Uncomment when implementing Phase 12
+# rustsat = "0.5"
+# rustsat-minisat = "0.6"
+# rustsat-cadical = "0.5"
+# rustsat-kissat = "0.2"
