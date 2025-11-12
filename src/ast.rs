@@ -87,6 +87,286 @@ impl fmt::Display for Relation {
     }
 }
 
+/// A variable in a quantified formula or comprehension
+///
+/// Variables have identity equality like relations.
+#[derive(Clone)]
+pub struct Variable {
+    inner: Arc<VariableInner>,
+}
+
+struct VariableInner {
+    name: String,
+    arity: usize,
+}
+
+impl Variable {
+    /// Creates a new unary variable
+    pub fn unary(name: impl Into<String>) -> Self {
+        Self::nary(name, 1)
+    }
+
+    /// Creates a new variable with the given arity
+    pub fn nary(name: impl Into<String>, arity: usize) -> Self {
+        assert!(arity >= 1, "arity must be at least 1");
+        Self {
+            inner: Arc::new(VariableInner {
+                name: name.into(),
+                arity,
+            }),
+        }
+    }
+
+    /// Returns the name of this variable
+    pub fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    /// Returns the arity of this variable
+    pub fn arity(&self) -> usize {
+        self.inner.arity
+    }
+}
+
+impl PartialEq for Variable {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for Variable {}
+
+impl std::hash::Hash for Variable {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Arc::as_ptr(&self.inner).hash(state);
+    }
+}
+
+impl fmt::Debug for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Variable({}/{})", self.name(), self.arity())
+    }
+}
+
+/// Operators for binary expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    /// Relational composition/join
+    Join,
+    /// Cartesian product
+    Product,
+    /// Set union
+    Union,
+    /// Set difference
+    Difference,
+    /// Set intersection
+    Intersection,
+    /// Relational override
+    Override,
+}
+
+/// Operators for unary expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    /// Transpose of a binary relation
+    Transpose,
+    /// Transitive closure
+    Closure,
+    /// Reflexive transitive closure
+    ReflexiveClosure,
+}
+
+/// A relational expression
+#[derive(Clone, Debug)]
+pub enum Expression {
+    /// A relation (leaf)
+    Relation(Relation),
+    /// A variable (leaf)
+    Variable(Variable),
+    /// A constant expression
+    Constant(ConstantExpr),
+    /// Binary expression (e.g., join, product, union)
+    Binary {
+        left: Box<Expression>,
+        op: BinaryOp,
+        right: Box<Expression>,
+        arity: usize,
+    },
+    /// Unary expression (e.g., transpose, closure)
+    Unary {
+        op: UnaryOp,
+        expr: Box<Expression>,
+    },
+    /// N-ary union
+    Nary {
+        exprs: Vec<Expression>,
+        arity: usize,
+    },
+}
+
+/// Constant expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConstantExpr {
+    /// Universal relation (all atoms)
+    Univ,
+    /// Identity relation (diagonal)
+    Iden,
+    /// Empty relation
+    None,
+    /// Integer atoms
+    Ints,
+}
+
+impl Expression {
+    /// Universal relation constant
+    pub const UNIV: Expression = Expression::Constant(ConstantExpr::Univ);
+    /// Identity relation constant
+    pub const IDEN: Expression = Expression::Constant(ConstantExpr::Iden);
+    /// Empty relation constant
+    pub const NONE: Expression = Expression::Constant(ConstantExpr::None);
+    /// Integer relation constant
+    pub const INTS: Expression = Expression::Constant(ConstantExpr::Ints);
+
+    /// Returns the arity of this expression
+    pub fn arity(&self) -> usize {
+        match self {
+            Expression::Relation(r) => r.arity(),
+            Expression::Variable(v) => v.arity(),
+            Expression::Constant(c) => match c {
+                ConstantExpr::Univ => 1,
+                ConstantExpr::Iden => 2,
+                ConstantExpr::None => 1,
+                ConstantExpr::Ints => 1,
+            },
+            Expression::Binary { arity, .. } => *arity,
+            Expression::Unary { .. } => 2,
+            Expression::Nary { arity, .. } => *arity,
+        }
+    }
+
+    /// Relational join
+    pub fn join(self, other: Expression) -> Expression {
+        self.binary(BinaryOp::Join, other)
+    }
+
+    /// Cartesian product
+    pub fn product(self, other: Expression) -> Expression {
+        self.binary(BinaryOp::Product, other)
+    }
+
+    /// Set union
+    pub fn union(self, other: Expression) -> Expression {
+        self.binary(BinaryOp::Union, other)
+    }
+
+    /// Set difference
+    pub fn difference(self, other: Expression) -> Expression {
+        self.binary(BinaryOp::Difference, other)
+    }
+
+    /// Set intersection
+    pub fn intersection(self, other: Expression) -> Expression {
+        self.binary(BinaryOp::Intersection, other)
+    }
+
+    /// Relational override
+    pub fn override_with(self, other: Expression) -> Expression {
+        self.binary(BinaryOp::Override, other)
+    }
+
+    /// Transpose
+    pub fn transpose(self) -> Expression {
+        assert_eq!(self.arity(), 2, "transpose requires arity 2");
+        Expression::Unary {
+            op: UnaryOp::Transpose,
+            expr: Box::new(self),
+        }
+    }
+
+    /// Transitive closure
+    pub fn closure(self) -> Expression {
+        assert_eq!(self.arity(), 2, "closure requires arity 2");
+        Expression::Unary {
+            op: UnaryOp::Closure,
+            expr: Box::new(self),
+        }
+    }
+
+    /// Reflexive transitive closure
+    pub fn reflexive_closure(self) -> Expression {
+        assert_eq!(self.arity(), 2, "reflexive_closure requires arity 2");
+        Expression::Unary {
+            op: UnaryOp::ReflexiveClosure,
+            expr: Box::new(self),
+        }
+    }
+
+    fn binary(self, op: BinaryOp, other: Expression) -> Expression {
+        let arity = match op {
+            BinaryOp::Union | BinaryOp::Difference | BinaryOp::Intersection | BinaryOp::Override => {
+                assert_eq!(
+                    self.arity(),
+                    other.arity(),
+                    "Incompatible arities for {:?}: {} and {}",
+                    op,
+                    self.arity(),
+                    other.arity()
+                );
+                self.arity()
+            }
+            BinaryOp::Join => {
+                let result_arity = self.arity() + other.arity() - 2;
+                assert!(
+                    result_arity >= 1,
+                    "Join would result in arity < 1: {} + {} - 2",
+                    self.arity(),
+                    other.arity()
+                );
+                result_arity
+            }
+            BinaryOp::Product => self.arity() + other.arity(),
+        };
+
+        Expression::Binary {
+            left: Box::new(self),
+            op,
+            right: Box::new(other),
+            arity,
+        }
+    }
+
+    /// Create an n-ary union from multiple expressions
+    pub fn union_all(exprs: Vec<Expression>) -> Expression {
+        assert!(!exprs.is_empty(), "Cannot create empty union");
+        if exprs.len() == 1 {
+            return exprs.into_iter().next().unwrap();
+        }
+
+        let arity = exprs[0].arity();
+        for expr in &exprs[1..] {
+            assert_eq!(
+                expr.arity(),
+                arity,
+                "All expressions in union must have same arity"
+            );
+        }
+
+        Expression::Nary { exprs, arity }
+    }
+}
+
+impl From<Relation> for Expression {
+    fn from(r: Relation) -> Self {
+        Expression::Relation(r)
+    }
+}
+
+impl From<Variable> for Expression {
+    fn from(v: Variable) -> Self {
+        Expression::Variable(v)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,4 +407,101 @@ mod tests {
     fn zero_arity_panics() {
         Relation::nary("invalid", 0);
     }
+
+    #[test]
+    fn create_variables() {
+        let v1 = Variable::unary("x");
+        assert_eq!(v1.name(), "x");
+        assert_eq!(v1.arity(), 1);
+
+        let v2 = Variable::nary("y", 2);
+        assert_eq!(v2.arity(), 2);
+    }
+
+    #[test]
+    fn variable_identity() {
+        let v1 = Variable::unary("x");
+        let v2 = Variable::unary("x");
+        let v3 = v1.clone();
+
+        assert_eq!(v1, v3);
+        assert_ne!(v1, v2);
+    }
+
+    #[test]
+    fn expression_constants() {
+        assert_eq!(Expression::UNIV.arity(), 1);
+        assert_eq!(Expression::IDEN.arity(), 2);
+        assert_eq!(Expression::NONE.arity(), 1);
+        assert_eq!(Expression::INTS.arity(), 1);
+    }
+
+    #[test]
+    fn build_expression_tree() {
+        let r1 = Relation::binary("knows");
+        let r2 = Relation::unary("Person");
+
+        // r1.join(r2) - arity is 2 + 1 - 2 = 1
+        let expr = Expression::from(r1.clone()).join(Expression::from(r2.clone()));
+        assert_eq!(expr.arity(), 1);
+
+        // r2.product(r2) - arity is 1 + 1 = 2
+        let product = Expression::from(r2.clone()).product(Expression::from(r2.clone()));
+        assert_eq!(product.arity(), 2);
+
+        // transpose
+        let transpose = Expression::from(r1.clone()).transpose();
+        assert_eq!(transpose.arity(), 2);
+    }
+
+    #[test]
+    fn set_operations() {
+        let r1 = Relation::unary("A");
+        let r2 = Relation::unary("B");
+
+        let union = Expression::from(r1.clone()).union(Expression::from(r2.clone()));
+        assert_eq!(union.arity(), 1);
+
+        let diff = Expression::from(r1.clone()).difference(Expression::from(r2.clone()));
+        assert_eq!(diff.arity(), 1);
+
+        let inter = Expression::from(r1).intersection(Expression::from(r2));
+        assert_eq!(inter.arity(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Incompatible arities")]
+    fn incompatible_union() {
+        let r1 = Relation::unary("A");
+        let r2 = Relation::binary("B");
+
+        let _ = Expression::from(r1).union(Expression::from(r2));
+    }
+
+    #[test]
+    fn closure_operations() {
+        let r = Relation::binary("parent");
+
+        let closure = Expression::from(r.clone()).closure();
+        assert_eq!(closure.arity(), 2);
+
+        let ref_closure = Expression::from(r).reflexive_closure();
+        assert_eq!(ref_closure.arity(), 2);
+    }
+
+    #[test]
+    fn nary_union() {
+        let r1 = Relation::unary("A");
+        let r2 = Relation::unary("B");
+        let r3 = Relation::unary("C");
+
+        let union = Expression::union_all(vec![
+            Expression::from(r1),
+            Expression::from(r2),
+            Expression::from(r3),
+        ]);
+
+        assert_eq!(union.arity(), 1);
+    }
 }
+
