@@ -4,10 +4,17 @@
 
 use crate::ast::*;
 use crate::bool::Options as BoolOptions;
+use crate::cnf::CNFTranslator;
+use crate::engine::{MockSolver, SATSolver};
 use crate::instance::{Bounds, Instance};
 use crate::translator::Translator;
 use crate::Result;
 use std::time::{Duration, Instant};
+
+#[cfg(test)]
+use crate::engine::rustsat_adapter::RustSatAdapter;
+#[cfg(test)]
+use rustsat_batsat::BasicSolver;
 
 /// Solver options
 #[derive(Debug, Clone)]
@@ -45,33 +52,43 @@ impl Solver {
     /// Returns a Solution indicating SAT/UNSAT and containing
     /// statistics and (if SAT) a satisfying instance.
     pub fn solve(&self, formula: &Formula, bounds: &Bounds) -> Result<Solution> {
-        let start = Instant::now();
+        let _start = Instant::now();
 
-        // Translate formula to boolean circuit
+        // Step 1: Translate formula to boolean circuit
         let translation_start = Instant::now();
-        let _bool_circuit = Translator::evaluate(formula, bounds, &self.options.bool_options);
+        let bool_circuit = Translator::evaluate(formula, bounds, &self.options.bool_options);
         let translation_time = translation_start.elapsed();
 
-        // For now, create a trivial SAT solution
-        // In a full implementation:
-        // 1. Convert boolean circuit to CNF
-        // 2. Run SAT solver
-        // 3. Extract instance from SAT assignment
+        // Step 2: Convert boolean circuit to CNF
+        let cnf_start = Instant::now();
+        let cnf_translator = CNFTranslator::new();
+        let (top_level_var, cnf) = cnf_translator.translate(&bool_circuit);
+        let cnf_time = cnf_start.elapsed();
 
+        // Step 3: Run SAT solver
         let solving_start = Instant::now();
-        // Simplified: assume SAT
-        let is_sat = true;
+        let mut sat_solver = MockSolver::new();
+        sat_solver.add_variables(cnf.num_variables);
+
+        // Add all clauses to the SAT solver
+        for clause in &cnf.clauses {
+            sat_solver.add_clause(clause);
+        }
+
+        // Solve
+        let is_sat = sat_solver.solve();
         let solving_time = solving_start.elapsed();
 
         let stats = Statistics {
-            translation_time,
+            translation_time: translation_time + cnf_time,
             solving_time,
-            num_variables: 0,
-            num_clauses: 0,
+            num_variables: cnf.num_variables,
+            num_clauses: cnf.num_clauses() as u32,
         };
 
         if is_sat {
             // Create a simple instance
+            // Full implementation would extract from SAT assignment
             let instance = Instance::new(bounds.universe().clone());
             Ok(Solution::Sat { instance, stats })
         } else {
@@ -243,8 +260,9 @@ mod tests {
         // Times should be >= 0
         assert!(stats.translation_time() >= 0);
         assert!(stats.solving_time() >= 0);
-        // Variables/clauses are 0 in simplified implementation
-        assert_eq!(stats.num_variables(), 0);
+        // Now we actually generate variables and clauses
+        assert!(stats.num_variables() > 0);
+        assert!(stats.num_clauses() > 0);
     }
 
     #[test]
