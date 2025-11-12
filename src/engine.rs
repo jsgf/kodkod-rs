@@ -1,4 +1,7 @@
-//! SAT solver trait and mock implementation
+//! SAT solver trait and implementations
+
+#[cfg(test)]
+pub mod rustsat_adapter;
 
 /// Core SAT solver trait
 ///

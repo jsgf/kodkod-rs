@@ -13,9 +13,6 @@ categories = ["algorithms", "science"]
 thiserror = "1.0"
 
 [dev-dependencies]
-# SAT solver backends for testing (Phase 12+)
-# Uncomment when implementing Phase 12
-# rustsat = "0.5"
-# rustsat-minisat = "0.6"
-# rustsat-cadical = "0.5"
-# rustsat-kissat = "0.2"
+# SAT solver backends (Phase 12) - using pure Rust batsat
+rustsat = "0.7"
+rustsat-batsat = "0.7"
