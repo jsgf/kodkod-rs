@@ -15,6 +15,7 @@
 //! - `BooleanFactory`: Factory for creating and caching boolean circuits
 
 mod factory;
+mod matrix_ops;
 
 pub use factory::{BooleanFactory, Options};
 
