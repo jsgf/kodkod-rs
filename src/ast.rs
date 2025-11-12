@@ -4,11 +4,13 @@
 
 pub mod formula;
 pub mod int_expr;
+pub mod visitor;
 
 pub use formula::{
     BinaryFormulaOp, CompareOp, Decl, Decls, Formula, Multiplicity, Quantifier,
 };
 pub use int_expr::{IntBinaryOp, IntCompareOp, IntExpression, IntUnaryOp};
+pub use visitor::{ExpressionVisitor, FormulaVisitor};
 
 use std::fmt;
 use std::sync::Arc;
