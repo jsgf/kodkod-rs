@@ -1,5 +1,6 @@
 //! Formula types for first-order logic
 
+use super::int_expr::{IntCompareOp, IntExpression};
 use super::{Expression, Variable};
 
 /// Operators for binary formulas
@@ -80,6 +81,12 @@ pub enum Formula {
         quantifier: Quantifier,
         declarations: Decls,
         body: Box<Formula>,
+    },
+    /// Integer comparison
+    IntComparison {
+        left: Box<IntExpression>,
+        op: IntCompareOp,
+        right: Box<IntExpression>,
     },
 }
 
