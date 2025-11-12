@@ -2,6 +2,12 @@
 //!
 //! This module contains the types that make up Kodkod's abstract syntax tree.
 
+pub mod formula;
+
+pub use formula::{
+    BinaryFormulaOp, CompareOp, Decl, Decls, Formula, Multiplicity, Quantifier,
+};
+
 use std::fmt;
 use std::sync::Arc;
 
