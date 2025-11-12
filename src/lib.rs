@@ -60,6 +60,9 @@ pub mod bool;
 /// FOL to boolean circuit translator
 pub mod translator;
 
+/// Main solver API
+pub mod solver;
+
 /// Utility collections and helper functions
 pub mod util {
     //! Integer collections, sparse sequences, and utilities

@@ -435,6 +435,7 @@ impl Bounds {
 }
 
 /// An instance maps relations to tuple sets (a solution)
+#[derive(Debug)]
 pub struct Instance {
     universe: Universe,
     relations: HashMap<Relation, TupleSet>,
