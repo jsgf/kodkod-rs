@@ -1,4 +1,4 @@
-//! Instance types: Universe, Tuple, TupleSet, and TupleFactory
+//! Instance types: Universe, Tuple, TupleSet, TupleFactory, Bounds, and Instance
 //!
 //! These types define the domain of discourse and bindings for relations.
 
@@ -7,6 +7,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use crate::ast::Relation;
 use crate::error::{KodkodError, Result};
 
 /// An ordered set of unique atoms
@@ -335,6 +336,155 @@ impl TupleFactory {
     }
 }
 
+/// Bounds map relations to lower and upper bounds on their contents
+///
+/// The lower bound specifies tuples that must be in the relation,
+/// while the upper bound specifies tuples that may be in the relation.
+pub struct Bounds {
+    universe: Universe,
+    lower_bounds: HashMap<Relation, TupleSet>,
+    upper_bounds: HashMap<Relation, TupleSet>,
+    int_bounds: HashMap<i32, TupleSet>,
+}
+
+impl Bounds {
+    /// Creates new bounds over the given universe
+    pub fn new(universe: Universe) -> Self {
+        Self {
+            universe,
+            lower_bounds: HashMap::new(),
+            upper_bounds: HashMap::new(),
+            int_bounds: HashMap::new(),
+        }
+    }
+
+    /// Returns the universe
+    pub fn universe(&self) -> &Universe {
+        &self.universe
+    }
+
+    /// Sets both lower and upper bounds for a relation
+    pub fn bound(&mut self, relation: &Relation, lower: TupleSet, upper: TupleSet) -> Result<()> {
+        // Validate that bounds are compatible
+        if lower.universe() != &self.universe || upper.universe() != &self.universe {
+            return Err(KodkodError::InvalidArgument(
+                "Tuple sets must be from the same universe".to_string(),
+            ));
+        }
+
+        if lower.arity() != relation.arity() || upper.arity() != relation.arity() {
+            return Err(KodkodError::InvalidArgument(format!(
+                "Tuple set arity {} does not match relation arity {}",
+                lower.arity(),
+                relation.arity()
+            )));
+        }
+
+        self.lower_bounds.insert(relation.clone(), lower);
+        self.upper_bounds.insert(relation.clone(), upper);
+        Ok(())
+    }
+
+    /// Sets exact bound for a relation (lower == upper)
+    pub fn bound_exactly(&mut self, relation: &Relation, tuples: TupleSet) -> Result<()> {
+        let upper = tuples.clone();
+        self.bound(relation, tuples, upper)
+    }
+
+    /// Returns the lower bound for a relation
+    pub fn lower_bound(&self, relation: &Relation) -> Option<&TupleSet> {
+        self.lower_bounds.get(relation)
+    }
+
+    /// Returns the upper bound for a relation
+    pub fn upper_bound(&self, relation: &Relation) -> Option<&TupleSet> {
+        self.upper_bounds.get(relation)
+    }
+
+    /// Returns all relations with bounds
+    pub fn relations(&self) -> impl Iterator<Item = &Relation> {
+        self.upper_bounds.keys()
+    }
+
+    /// Sets integer bounds (min and max)
+    pub fn bound_int(&mut self, min: i32, max: i32) {
+        // Store integer atoms for the bounded range
+        for i in min..=max {
+            if let Ok(tuple) = self.universe.factory().tuple(&[&i.to_string()]) {
+                let mut set = TupleSet::empty(self.universe.clone(), 1);
+                let _ = set.add(tuple);
+                self.int_bounds.insert(i, set);
+            }
+        }
+    }
+
+    /// Returns the tuple set for an integer
+    pub fn int_bound(&self, i: i32) -> Option<&TupleSet> {
+        self.int_bounds.get(&i)
+    }
+
+    /// Returns the min and max integers if integer bounds are set
+    pub fn ints(&self) -> Option<(i32, i32)> {
+        if self.int_bounds.is_empty() {
+            return None;
+        }
+        let min = *self.int_bounds.keys().min()?;
+        let max = *self.int_bounds.keys().max()?;
+        Some((min, max))
+    }
+}
+
+/// An instance maps relations to tuple sets (a solution)
+pub struct Instance {
+    universe: Universe,
+    relations: HashMap<Relation, TupleSet>,
+}
+
+impl Instance {
+    /// Creates a new empty instance
+    pub fn new(universe: Universe) -> Self {
+        Self {
+            universe,
+            relations: HashMap::new(),
+        }
+    }
+
+    /// Returns the universe
+    pub fn universe(&self) -> &Universe {
+        &self.universe
+    }
+
+    /// Adds a relation binding
+    pub fn add(&mut self, relation: Relation, tuples: TupleSet) -> Result<()> {
+        if tuples.universe() != &self.universe {
+            return Err(KodkodError::InvalidArgument(
+                "Tuple set from different universe".to_string(),
+            ));
+        }
+
+        if tuples.arity() != relation.arity() {
+            return Err(KodkodError::InvalidArgument(format!(
+                "Tuple set arity {} does not match relation arity {}",
+                tuples.arity(),
+                relation.arity()
+            )));
+        }
+
+        self.relations.insert(relation, tuples);
+        Ok(())
+    }
+
+    /// Returns the tuples for a relation
+    pub fn tuples(&self, relation: &Relation) -> Option<&TupleSet> {
+        self.relations.get(relation)
+    }
+
+    /// Returns all relations in this instance
+    pub fn relations(&self) -> impl Iterator<Item = &Relation> {
+        self.relations.keys()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -416,6 +566,83 @@ mod tests {
 
         let all2 = factory.all(2);
         assert_eq!(all2.size(), 4); // {A,A}, {A,B}, {B,A}, {B,B}
+
+        Ok(())
+    }
+
+    #[test]
+    fn bounds_basic() -> Result<()> {
+        use crate::ast::Relation;
+
+        let universe = Universe::new(&["A", "B", "C"])?;
+        let mut bounds = Bounds::new(universe.clone());
+
+        let person = Relation::unary("Person");
+        let factory = universe.factory();
+
+        let lower = factory.tuple_set(&[&["A"]])?;
+        let upper = factory.tuple_set(&[&["A"], &["B"], &["C"]])?;
+
+        bounds.bound(&person, lower, upper)?;
+
+        assert!(bounds.lower_bound(&person).is_some());
+        assert!(bounds.upper_bound(&person).is_some());
+
+        Ok(())
+    }
+
+    #[test]
+    fn bounds_exact() -> Result<()> {
+        use crate::ast::Relation;
+
+        let universe = Universe::new(&["A", "B"])?;
+        let mut bounds = Bounds::new(universe.clone());
+
+        let r = Relation::unary("R");
+        let factory = universe.factory();
+        let exact = factory.tuple_set(&[&["A"]])?;
+
+        bounds.bound_exactly(&r, exact)?;
+
+        let lower = bounds.lower_bound(&r).unwrap();
+        let upper = bounds.upper_bound(&r).unwrap();
+
+        assert_eq!(lower.size(), 1);
+        assert_eq!(upper.size(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn bounds_integers() -> Result<()> {
+        let universe = Universe::new(&["-1", "0", "1", "2"])?;
+        let mut bounds = Bounds::new(universe);
+
+        bounds.bound_int(-1, 2);
+
+        assert_eq!(bounds.ints(), Some((-1, 2)));
+        assert!(bounds.int_bound(0).is_some());
+        assert!(bounds.int_bound(3).is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn instance_basic() -> Result<()> {
+        use crate::ast::Relation;
+
+        let universe = Universe::new(&["A", "B"])?;
+        let mut instance = Instance::new(universe.clone());
+
+        let person = Relation::unary("Person");
+        let factory = universe.factory();
+        let tuples = factory.tuple_set(&[&["A"], &["B"]])?;
+
+        instance.add(person.clone(), tuples)?;
+
+        let result = instance.tuples(&person);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().size(), 2);
 
         Ok(())
     }
