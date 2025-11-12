@@ -54,6 +54,9 @@ pub mod instance;
 /// Solver engine and translation infrastructure
 pub mod engine;
 
+/// Boolean circuit representation for translation
+pub mod bool;
+
 /// Utility collections and helper functions
 pub mod util {
     //! Integer collections, sparse sequences, and utilities
