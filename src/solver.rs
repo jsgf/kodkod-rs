@@ -5,16 +5,12 @@
 use crate::ast::*;
 use crate::bool::Options as BoolOptions;
 use crate::cnf::CNFTranslator;
-use crate::engine::{MockSolver, SATSolver};
+use crate::engine::{rustsat_adapter::RustSatAdapter, SATSolver};
 use crate::instance::{Bounds, Instance};
 use crate::translator::Translator;
 use crate::Result;
-use std::time::{Duration, Instant};
-
-#[cfg(test)]
-use crate::engine::rustsat_adapter::RustSatAdapter;
-#[cfg(test)]
 use rustsat_batsat::BasicSolver;
+use std::time::{Duration, Instant};
 
 /// Solver options
 #[derive(Debug, Clone)]
@@ -67,7 +63,7 @@ impl Solver {
 
         // Step 3: Run SAT solver
         let solving_start = Instant::now();
-        let mut sat_solver = MockSolver::new();
+        let mut sat_solver = RustSatAdapter::new(BasicSolver::default());
         sat_solver.add_variables(cnf.num_variables);
 
         // Add all clauses to the SAT solver

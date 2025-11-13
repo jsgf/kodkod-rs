@@ -58,8 +58,22 @@ impl CNFTranslator {
     pub fn translate(mut self, value: &BoolValue) -> (i32, CNF) {
         let label = self.translate_value(value);
 
-        // Assert that the top-level formula is true
-        self.cnf.add_clause(vec![label]);
+        // Special handling for constants
+        match value {
+            BoolValue::Constant(c) => {
+                // TRUE (label 0): add empty clause list (always SAT)
+                // FALSE (label -1): add empty clause (always UNSAT)
+                if c.label() == -1 {
+                    // FALSE: add empty clause to make formula UNSAT
+                    self.cnf.add_clause(vec![]);
+                }
+                // For TRUE, don't add anything - formula is SAT
+            }
+            _ => {
+                // Assert that the top-level formula is true
+                self.cnf.add_clause(vec![label]);
+            }
+        }
 
         (label, self.cnf)
     }
