@@ -5,7 +5,7 @@
 use crate::bool::{BoolValue, BooleanFormula, FormulaKind};
 
 /// CNF representation
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CNF {
     /// Number of variables
     pub num_variables: u32,
@@ -16,10 +16,7 @@ pub struct CNF {
 impl CNF {
     /// Creates a new empty CNF
     pub fn new() -> Self {
-        Self {
-            num_variables: 0,
-            clauses: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Adds a clause to the CNF
@@ -45,10 +42,16 @@ pub struct CNFTranslator {
     cnf: CNF,
 }
 
+impl Default for CNFTranslator {
+    fn default() -> Self {
+        Self { cnf: CNF::default() }
+    }
+}
+
 impl CNFTranslator {
     /// Creates a new CNF translator
     pub fn new() -> Self {
-        Self { cnf: CNF::new() }
+        Self::default()
     }
 
     /// Translates a boolean value to CNF

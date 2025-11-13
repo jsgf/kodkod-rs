@@ -797,6 +797,6 @@ mod tests {
     #[test]
     fn operator_variants() {
         // Just ensure all operators exist
-        let _ops = vec![Operator::AND, Operator::OR, Operator::NOT, Operator::ITE];
+        let _ = [Operator::AND, Operator::OR, Operator::NOT, Operator::ITE];
     }
 }

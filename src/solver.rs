@@ -262,7 +262,7 @@ mod tests {
             &person,
             factory.none(1),
             factory.tuple_set(&[&["A"], &["B"], &["C"]]).unwrap(),
-        );
+        ).unwrap();
 
         let formula = Expression::from(person.clone()).some();
 
@@ -282,7 +282,7 @@ mod tests {
 
         let r = Relation::unary("R");
         let factory = bounds.universe().factory();
-        bounds.bound_exactly(&r, factory.none(1));
+        bounds.bound_exactly(&r, factory.none(1)).unwrap();
 
         // R must be non-empty, but we bound it to empty
         let formula = Expression::from(r).some();
@@ -300,7 +300,7 @@ mod tests {
 
         let r = Relation::binary("R");
         let factory = bounds.universe().factory();
-        bounds.bound(&r, factory.none(2), factory.all(2));
+        bounds.bound(&r, factory.none(2), factory.all(2)).unwrap();
 
         let formula = Expression::from(r).some();
 
