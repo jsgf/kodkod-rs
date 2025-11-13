@@ -223,28 +223,35 @@ CNF translation has some independent branches:
 
 ### Thread-Safe Arena Allocation
 
-`bumpalo::Bump` is **not `Send`/`Sync`** by default. Options:
+`bumpalo::Bump` is **not `Send`/`Sync`** by default. The **recommended solution is `bumpalo_herd`**:
 
-**A. Thread-local arenas (Recommended)**
 ```rust
-thread_local! {
-    static ARENA: RefCell<Bump> = RefCell::new(Bump::new());
-}
+use bumpalo_herd::Herd;
 
-// Each thread has exclusive Bump
-// No synchronization overhead
+// Create a Herd - manages multiple Bump allocators
+let herd: Herd = Herd::new();
+
+// Each thread gets its own Bump from the Herd
+rayon::scope(|s| {
+    s.spawn(|_| {
+        let bump = herd.get();  // Thread-local Bump
+        let allocated = bump.alloc(value);
+    });
+});
+
+// Memory allocated in threads can survive thread termination
+// because lifetime is tied to Herd itself
 ```
 
-**B. Separate arena per thread**
-```rust
-let arenas = (0..num_threads).map(|_| Bump::new()).collect::<Vec<_>>();
-// Parallel iteration with arena[thread_index]
-```
+**Key advantages**:
+- Each thread gets exclusive access to its own Bump (no synchronization overhead)
+- Allocated memory survives thread/iterator termination (lifetime tied to Herd)
+- Cleaner API than manual thread-local management
+- No bottlenecks from Mutex contention
 
-**C. Synchronized arena (not recommended)**
-```rust
-let arena = Arc::new(Mutex<Bump>);  // Defeats purpose - bottleneck
-```
+**Alternative approaches** (if not using bumpalo_herd):
+- **Thread-local arenas**: `thread_local! { static ARENA: RefCell<Bump> }` - works but limited to static lifetimes
+- **Separate per-thread arenas**: Manual allocation per rayon worker - more verbose, same performance
 
 ### Java Kodkod Reference
 
@@ -328,6 +335,8 @@ perf report
 **Recommendation**: Defer until profiling shows pointer overhead is critical. Current Arc design is cleaner and enables parallelization.
 
 ## Concrete Performance Numbers
+
+**⚠️ IMPORTANT: These numbers are theoretical estimates, not measured from the actual codebase.** They are based on typical CPU cycle costs and common Rust allocation patterns. Before making optimization decisions, profile the actual codebase using flamegraph, perf, or valgrind (see Profiling Recommendations below). Actual impact may vary significantly based on workload characteristics.
 
 ### Arc Overhead Impact
 
