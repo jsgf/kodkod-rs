@@ -389,7 +389,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                         // Shift left by constant amount
                         if let IntExpression::Constant(shift_amt) = &**right {
                             if *shift_amt >= 0 {
-                                left_int.shift_left(*shift_amt as usize, factory)
+                                left_int.shift_left(*shift_amt as usize)
                             } else {
                                 left_int // Invalid shift amount
                             }
@@ -402,7 +402,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                         // Arithmetic right shift by constant
                         if let IntExpression::Constant(shift_amt) = &**right {
                             if *shift_amt >= 0 {
-                                left_int.shift_right_arithmetic(*shift_amt as usize, factory)
+                                left_int.shift_right_arithmetic(*shift_amt as usize)
                             } else {
                                 left_int
                             }
@@ -414,7 +414,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                         // Logical right shift by constant
                         if let IntExpression::Constant(shift_amt) = &**right {
                             if *shift_amt >= 0 {
-                                left_int.shift_right(*shift_amt as usize, factory)
+                                left_int.shift_right(*shift_amt as usize)
                             } else {
                                 left_int
                             }
