@@ -16,9 +16,11 @@
 
 mod factory;
 pub mod var_allocator;
+pub mod int;
 
 pub use factory::{BooleanFactory, Options};
 pub use var_allocator::VariableAllocator;
+pub use int::Int;
 
 use std::sync::Arc;
 

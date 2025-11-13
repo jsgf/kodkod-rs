@@ -28,6 +28,7 @@ pub struct BooleanFactory {
     // Cache for gate deduplication
     // Key: (kind, input labels) -> cached formula
     cache: FxHashMap<CacheKey, BooleanFormula>,
+    bitwidth: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -51,6 +52,7 @@ impl BooleanFactory {
             next_label: (num_variables as i32) + 1,
             options,
             cache: FxHashMap::default(),
+            bitwidth: 32, // Default bitwidth for integers
         }
     }
 
@@ -254,6 +256,45 @@ impl BooleanFactory {
     /// Following Java: used for quantifier translation
     pub fn matrix(&mut self, dimensions: Dimensions) -> BooleanMatrix {
         BooleanMatrix::empty(dimensions)
+    }
+
+    /// Returns the bitwidth used for integer operations
+    pub fn bitwidth(&self) -> usize {
+        self.bitwidth
+    }
+
+    /// XOR operation: a XOR b = (a AND NOT b) OR (NOT a AND b)
+    pub fn xor(&mut self, a: BoolValue, b: BoolValue) -> BoolValue {
+        let a_and_not_b = self.and(a.clone(), self.not(b.clone()));
+        let not_a_and_b = self.and(self.not(a), b);
+        self.or(a_and_not_b, not_a_and_b)
+    }
+
+    /// IFF (if and only if): a IFF b = (a AND b) OR (NOT a AND NOT b)
+    pub fn iff(&mut self, a: BoolValue, b: BoolValue) -> BoolValue {
+        let a_and_b = self.and(a.clone(), b.clone());
+        let not_a_and_not_b = self.and(self.not(a), self.not(b));
+        self.or(a_and_b, not_a_and_not_b)
+    }
+
+    /// IMPLIES: a IMPLIES b = NOT a OR b
+    pub fn implies(&mut self, a: BoolValue, b: BoolValue) -> BoolValue {
+        self.or(self.not(a), b)
+    }
+
+    /// Full adder sum: a XOR b XOR cin
+    /// Returns the sum bit (without carry)
+    pub fn sum(&mut self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
+        let ab_xor = self.xor(a, b);
+        self.xor(ab_xor, cin)
+    }
+
+    /// Full adder carry out: (a AND b) OR (cin AND (a XOR b))
+    pub fn carry(&mut self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
+        let a_and_b = self.and(a.clone(), b.clone());
+        let ab_xor = self.xor(a, b);
+        let cin_and_xor = self.and(cin, ab_xor);
+        self.or(a_and_b, cin_and_xor)
     }
 
     fn allocate_label(&mut self) -> i32 {
