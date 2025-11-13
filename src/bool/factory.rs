@@ -4,7 +4,6 @@
 
 use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind};
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
 
 /// Options for boolean factory
 #[derive(Debug, Clone)]
@@ -251,22 +250,10 @@ impl BooleanFactory {
         }
     }
 
-    /// Creates a boolean matrix with the given dimensions
-    ///
-    /// Each element is initialized to a fresh variable.
+    /// Creates an empty boolean matrix with the given dimensions
+    /// Following Java: used for quantifier translation
     pub fn matrix(&mut self, dimensions: Dimensions) -> BooleanMatrix {
-        let capacity = dimensions.capacity();
-        let mut elements = Vec::with_capacity(capacity);
-
-        for _ in 0..capacity {
-            let label = self.allocate_label();
-            elements.push(BoolValue::Variable(BooleanVariable::new(label)));
-        }
-
-        // Update variable count
-        self.num_variables = self.next_label as u32 - 1;
-
-        BooleanMatrix::new(dimensions, elements)
+        BooleanMatrix::empty(dimensions)
     }
 
     fn allocate_label(&mut self) -> i32 {
@@ -313,13 +300,14 @@ mod tests {
     #[test]
     fn boolean_matrix() {
         let mut factory = BooleanFactory::new(10, Options::default());
-        let dims = Dimensions::new(2, 3); // 2x3 matrix
+        // Ternary relation over universe of size 2: capacity=8 (2³), arity=3
+        let dims = Dimensions::new(8, 3);
 
         let matrix = factory.matrix(dims);
 
-        assert_eq!(matrix.dimensions().capacity(), 6);
-        // Each element should be a unique variable
-        assert_eq!(matrix.get(0, 0).unwrap().label(), 11); // First new var after 10 initial
+        assert_eq!(matrix.dimensions().capacity(), 8);
+        // Matrix starts empty (all FALSE)
+        assert_eq!(matrix.density(), 0);
     }
 
     #[test]

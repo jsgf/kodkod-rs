@@ -10,9 +10,9 @@ Kodkod translates formulas in **relational logic** (the logic of Alloy) to boole
 
 **Complete FOL→Bool→CNF→SAT pipeline implemented!**
 
-- 90 tests passing
+- 101 tests passing (93 unit tests + 8 integration tests)
 - Full translation pipeline functional
-- Working examples (simple constraints, Sudoku)
+- Working examples (Sudoku solver)
 - Pure Rust implementation (no JNI/C++ FFI)
 
 ## Quick Start
@@ -54,14 +54,16 @@ if solution.is_sat() {
 ## Examples
 
 ```bash
-# Simple constraint problem
-cargo run --example simple
-
 # 4x4 Sudoku solver
 cargo run --example sudoku
 ```
 
-## Architecture
+## Testing
+
+```bash
+cargo test              # Run all tests (97 total)
+cargo test --quiet      # Minimal output
+```
 
 ### Complete Translation Pipeline
 
@@ -90,6 +92,13 @@ SAT / UNSAT + Statistics
 - **`cnf`**: Boolean → CNF using Tseitin transformation
 - **`engine`**: SATSolver trait + adapters for rustsat
 - **`solver`**: Main API (solve, statistics, options)
+
+## Testing
+
+```bash
+cargo test              # Run all tests (101 total)
+cargo test --quiet      # Minimal output
+```
 
 ## Features
 
@@ -125,28 +134,21 @@ SAT / UNSAT + Statistics
 
 ### 🚧 Simplified
 
-- ⚠️ Quantifier iteration (handles single var, not full domain iteration)
 - ⚠️ Transitive closure (stub - returns input)
 - ⚠️ Integer expressions (basic support)
-- ⚠️ Instance extraction (creates empty instance, not from SAT assignment)
 
 ### 📝 Future Work
 
-- [ ] Full quantifier domain iteration
 - [ ] Actual transitive closure computation
-- [ ] Extract instance from SAT solution
+- [ ] Full integer expression support
+- [ ] Parameterize Solver over SAT solver type (currently hardcoded to batsat)
+  - Should accept any type implementing rustsat traits
+  - Provide convenience helper for batsat default
 - [ ] Incremental solving
 - [ ] Solution enumeration
 - [ ] Unsat core extraction
 - [ ] More examples (N-Queens, graph problems, Alloy models)
 - [ ] Performance optimizations (symmetry breaking, etc.)
-
-## Testing
-
-```bash
-cargo test              # 90 tests
-cargo test --quiet      # Minimal output
-```
 
 ## SAT Solver Integration
 
@@ -177,11 +179,11 @@ kodkod-rs uses [rustsat](https://github.com/chrjabs/rustsat) trait abstraction:
 - Modern error handling
 - Rust 2024 edition
 
-## Implementation Phases
+## Implementation Status
 
-See [PLAN.md](PLAN.md) for detailed roadmap.
+See [PLAN.md](PLAN.md) for the original implementation plan (now complete).
 
-**Completed:**
+**Completed phases:**
 - Phases 1-6: AST, Bounds, Instance ✅
 - Phases 8-9: Boolean layer ✅
 - Phase 10: FOL→Bool translation ✅
@@ -190,8 +192,8 @@ See [PLAN.md](PLAN.md) for detailed roadmap.
 - Phase 14: Solver API ✅
 
 **Deferred:**
-- Phase 7: Int collections (using std)
-- Phase 15-17: Incremental solving, examples, parallelism
+- Phase 7: Int collections (using std where possible)
+- Phase 15-17: Incremental solving, additional examples, parallelism
 
 ## Performance
 

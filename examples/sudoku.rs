@@ -2,9 +2,15 @@
 //!
 //! Encodes Sudoku puzzle as a relational logic problem and solves it.
 //! This version solves 4x4 Sudoku (2x2 regions) for simplicity.
+//!
+//! NOTE: The current implementation has an issue where the complex quantified
+//! formula evaluates to TRUE, causing the solver to return only the given clues
+//! rather than a complete solution. This is a known limitation with the current
+//! translation of complex quantified formulas with joins and differences.
+//! Solution extraction itself works correctly (see examples/simple_solution.rs).
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::instance::{Bounds, Universe};
+use kodkod_rs::instance::{Bounds, Instance, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
 fn main() {
@@ -15,19 +21,19 @@ fn main() {
 
     // Define a simple puzzle (0 means empty cell)
     // Puzzle:
-    //   1 _ | _ 4
-    //   _ 3 | 2 _
+    //   1 2 | 3 4
+    //   _ _ | _ _
     //   -----+-----
-    //   _ 2 | 3 _
-    //   4 _ | _ 1
+    //   _ _ | _ _
+    //   4 3 | 2 1
     let puzzle = vec![
         (1, 1, 1), // row 1, col 1 = 1
+        (1, 2, 2), // row 1, col 2 = 2
+        (1, 3, 3), // row 1, col 3 = 3
         (1, 4, 4), // row 1, col 4 = 4
-        (2, 2, 3), // row 2, col 2 = 3
-        (2, 3, 2), // row 2, col 3 = 2
-        (3, 2, 2), // row 3, col 2 = 2
-        (3, 3, 3), // row 3, col 3 = 3
         (4, 1, 4), // row 4, col 1 = 4
+        (4, 2, 3), // row 4, col 2 = 3
+        (4, 3, 2), // row 4, col 3 = 2
         (4, 4, 1), // row 4, col 4 = 1
     ];
 
@@ -42,6 +48,7 @@ fn main() {
 
     // Solve
     println!("\nSolving...");
+
     let solver = Solver::new(Options::default());
 
     match solver.solve(&formula, &bounds) {
@@ -60,10 +67,18 @@ fn main() {
                     solution.statistics().solving_time()
                 );
 
-                // In a full implementation, we would extract and print the solution grid
-                // from the instance
+                // Extract and print the solution grid
+                if let Some(instance) = solution.instance() {
+                    println!("\nSolution:");
+                    print_solution(instance, &sudoku);
+                }
             } else {
                 println!("✗ No solution exists (UNSAT)");
+                println!(
+                    "  Variables: {}, Clauses: {}",
+                    solution.statistics().num_variables(),
+                    solution.statistics().num_clauses()
+                );
             }
         }
         Err(e) => {
@@ -78,12 +93,24 @@ fn print_puzzle(clues: &[(usize, usize, usize)], n: usize) {
         grid[row - 1][col - 1] = val;
     }
 
+    print_grid(&grid, n);
+}
+
+fn print_grid(grid: &[Vec<usize>], n: usize) {
+    let r = (n as f64).sqrt() as usize;
     for (i, row) in grid.iter().enumerate() {
-        if i > 0 && i % 2 == 0 {
-            println!("  -----+-----");
+        if i > 0 && i % r == 0 {
+            print!("  ");
+            for j in 0..n {
+                if j > 0 && j % r == 0 {
+                    print!("+-");
+                }
+                print!("--");
+            }
+            println!();
         }
         for (j, &val) in row.iter().enumerate() {
-            if j > 0 && j % 2 == 0 {
+            if j > 0 && j % r == 0 {
                 print!("| ");
             }
             if val == 0 {
@@ -94,6 +121,34 @@ fn print_puzzle(clues: &[(usize, usize, usize)], n: usize) {
         }
         println!();
     }
+}
+
+fn print_solution(instance: &Instance, sudoku: &Sudoku) {
+    let n = sudoku.n;
+    let mut grid = vec![vec![0; n]; n];
+
+    // Extract grid relation from instance
+    if let Some(grid_tuples) = instance.get(&sudoku.grid) {
+        // The grid relation is ternary: grid[row][col] = value
+        // Encoded as tuples (row, col, value) where each is a "number" atom
+        for tuple in grid_tuples.iter() {
+            let atoms: Vec<_> = tuple.atoms().collect();
+            if atoms.len() == 3 {
+                // Parse the atom names (they are "1", "2", "3", "4" for 4x4)
+                if let (Ok(row), Ok(col), Ok(val)) = (
+                    atoms[0].parse::<usize>(),
+                    atoms[1].parse::<usize>(),
+                    atoms[2].parse::<usize>(),
+                ) {
+                    if row > 0 && row <= n && col > 0 && col <= n {
+                        grid[row - 1][col - 1] = val;
+                    }
+                }
+            }
+        }
+    }
+
+    print_grid(&grid, n);
 }
 
 /// Sudoku puzzle encoder
@@ -117,11 +172,11 @@ impl Sudoku {
         let number = Relation::unary("number");
         let grid = Relation::ternary("grid");
 
+        // Java: region = new Relation[r]
+        // Creates r regions, not r×r!
         let mut regions = Vec::new();
         for i in 0..r {
-            for j in 0..r {
-                regions.push(Relation::unary(&format!("r{}_{}", i, j)));
-            }
+            regions.push(Relation::unary(&format!("r{}", i + 1)));
         }
 
         Self {
@@ -182,26 +237,30 @@ impl Sudoku {
         ));
 
         // Rule 4: Each region has distinct values
-        for region in &self.regions {
-            let rx = Variable::unary("rx");
-            let ry = Variable::unary("ry");
-            let region_decls = Decls::from(Decl::one_of(&rx, &Expression::from(region.clone())))
-                .and(Decl::one_of(&ry, &Expression::from(region.clone())));
+        // Java: for(Relation rx : region) for(Relation ry: region)
+        // Need DOUBLE loop over regions!
+        for rx_region in &self.regions {
+            for ry_region in &self.regions {
+                let rx = Variable::unary("rx");
+                let ry = Variable::unary("ry");
+                let region_decls = Decls::from(Decl::one_of(&rx, &Expression::from(rx_region.clone())))
+                    .and(Decl::one_of(&ry, &Expression::from(ry_region.clone())));
 
-            let rx_expr = Expression::from(rx.clone());
-            let ry_expr = Expression::from(ry.clone());
+                let rx_expr = Expression::from(rx.clone());
+                let ry_expr = Expression::from(ry.clone());
 
-            let other_in_region_x =
-                Expression::from(region.clone()).difference(rx_expr.clone());
-            let other_in_region_y =
-                Expression::from(region.clone()).difference(ry_expr.clone());
+                let other_in_region_x =
+                    Expression::from(rx_region.clone()).difference(rx_expr.clone());
+                let other_in_region_y =
+                    Expression::from(ry_region.clone()).difference(ry_expr.clone());
 
-            rules.push(Formula::forall(
-                region_decls,
-                self.grid_at(&rx_expr, &ry_expr)
-                    .intersection(self.grid_at(&other_in_region_x, &other_in_region_y))
-                    .no(),
-            ));
+                rules.push(Formula::forall(
+                    region_decls,
+                    self.grid_at(&rx_expr, &ry_expr)
+                        .intersection(self.grid_at(&other_in_region_x, &other_in_region_y))
+                        .no(),
+                ));
+            }
         }
 
         Formula::and_all(rules)
@@ -232,11 +291,25 @@ impl Sudoku {
             .expect("Failed to bind number");
 
         // Bind region relations
-        // For simplicity, each region contains the same atoms as the universe
-        // In a full implementation, we would properly partition the universe
-        for region in &self.regions {
+        // Each region is a partition of the numbers
+        // For 4x4 (r=2): region[0] = {1,2}, region[1] = {3,4}
+        // Java: bounds.boundExactly(region[i], f.range(f.tuple(i*r+1), f.tuple((i+1)*r)));
+        for (i, region) in self.regions.iter().enumerate() {
+            let start = i * self.r + 1;
+            let end = (i + 1) * self.r;
+
+            let region_atoms: Vec<&str> = (start..=end)
+                .map(|idx| atoms[idx - 1].as_str())
+                .collect();
+            let region_tuples: Vec<Vec<&str>> = region_atoms.iter().map(|&a| vec![a]).collect();
+            let region_refs: Vec<&[&str]> = region_tuples.iter().map(|v| v.as_slice()).collect();
+
+            let region_set = factory
+                .tuple_set(&region_refs)
+                .expect("Failed to create region tuples");
+
             bounds
-                .bound_exactly(region, all_numbers.clone())
+                .bound_exactly(region, region_set)
                 .expect("Failed to bind region");
         }
 

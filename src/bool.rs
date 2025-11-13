@@ -15,9 +15,10 @@
 //! - `BooleanFactory`: Factory for creating and caching boolean circuits
 
 mod factory;
-mod matrix_ops;
+pub mod var_allocator;
 
 pub use factory::{BooleanFactory, Options};
+pub use var_allocator::VariableAllocator;
 
 use std::sync::Arc;
 
@@ -264,33 +265,97 @@ impl Dimensions {
         self.cols
     }
 
-    /// Returns the total capacity (rows × cols)
+    /// Returns the total capacity (number of tuples in the relation)
+    /// Note: In this implementation, rows stores the capacity, not rows*cols
     pub fn capacity(&self) -> usize {
-        self.rows * self.cols
+        self.rows
+    }
+
+    /// Returns the arity (number of columns, i.e., dimensionality)
+    pub fn arity(&self) -> usize {
+        self.cols
+    }
+
+    /// Returns dimension(0) - the size of the first dimension
+    /// For uniform relations over a universe of size u with arity n:
+    /// capacity = u^n, so u = capacity^(1/n)
+    ///
+    /// This computes the integer nth root of capacity using binary search.
+    pub fn dimension_0(&self) -> usize {
+        if self.cols == 1 {
+            return self.rows;
+        }
+
+        // Binary search for the nth root
+        let n = self.cols as u32;
+        let capacity = self.rows;
+
+        // Start with reasonable bounds
+        let mut low = 1;
+        let mut high = capacity;
+
+        while low < high {
+            let mid = (low + high + 1) / 2;
+            let pow = mid.pow(n);
+
+            if pow == capacity {
+                return mid;
+            } else if pow < capacity {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        low
     }
 }
 
 /// Matrix of boolean values
 ///
 /// Used to encode relations during FOL→Boolean translation.
+/// Implements sparse storage: only non-FALSE entries are stored.
 #[derive(Debug, Clone)]
 pub struct BooleanMatrix {
     dimensions: Dimensions,
-    elements: Vec<BoolValue>,
+    /// Sparse storage: only non-FALSE entries (index → value)
+    cells: std::collections::HashMap<usize, BoolValue>,
 }
 
 impl BooleanMatrix {
-    /// Creates a new boolean matrix with the given dimensions and elements
-    pub fn new(dimensions: Dimensions, elements: Vec<BoolValue>) -> Self {
-        assert_eq!(
-            dimensions.capacity(),
-            elements.len(),
-            "Element count must match matrix capacity"
-        );
+    /// Creates an empty matrix with the given dimensions (all FALSE)
+    pub fn empty(dimensions: Dimensions) -> Self {
         Self {
             dimensions,
-            elements,
+            cells: std::collections::HashMap::new(),
         }
+    }
+
+    /// Creates a matrix with specific indices marked TRUE
+    /// Following Java: BooleanMatrix(Dimensions, BooleanFactory, IntSet, IntSet)
+    ///
+    /// # Arguments
+    /// * `dims` - Matrix dimensions
+    /// * `all_indices` - Upper bound indices (domain of possible values)
+    /// * `true_indices` - Lower bound indices (definitely TRUE)
+    pub fn with_bounds(
+        dims: Dimensions,
+        _factory: &mut BooleanFactory,
+        all_indices: &[usize],
+        true_indices: &[usize],
+    ) -> Self {
+        let mut cells = std::collections::HashMap::new();
+
+        // Mark lower bound indices as TRUE
+        for &idx in true_indices {
+            cells.insert(idx, BoolValue::Constant(BooleanConstant::TRUE));
+        }
+
+        // Note: all_indices defines the domain, but we don't store FALSE values
+        // Variables will be assigned later in LeafInterpreter
+        let _ = all_indices; // Suppress warning - used for validation in Java
+
+        Self { dimensions: dims, cells }
     }
 
     /// Returns the dimensions of this matrix
@@ -298,18 +363,351 @@ impl BooleanMatrix {
         &self.dimensions
     }
 
-    /// Returns the elements of this matrix
-    pub fn elements(&self) -> &[BoolValue] {
-        &self.elements
+    /// Sets value at flat index
+    /// Following Java: BooleanMatrix.set(int, BooleanValue)
+    pub fn set(&mut self, index: usize, value: BoolValue) {
+        if value == BoolValue::Constant(BooleanConstant::FALSE) {
+            // Sparse: don't store FALSE
+            self.cells.remove(&index);
+        } else {
+            self.cells.insert(index, value);
+        }
+    }
+
+    /// Gets value at flat index
+    /// Following Java: BooleanMatrix.get(int)
+    pub fn get(&self, index: usize) -> BoolValue {
+        self.cells
+            .get(&index)
+            .cloned()
+            .unwrap_or(BoolValue::Constant(BooleanConstant::FALSE))
+    }
+
+    /// Iterates over (index, value) pairs - ONLY non-FALSE entries
+    /// Following Java: BooleanMatrix.iterator()
+    pub fn iter_indexed(&self) -> impl Iterator<Item = (usize, &BoolValue)> + '_ {
+        self.cells.iter().map(|(&idx, val)| (idx, val))
+    }
+
+    /// Returns the number of non-FALSE entries
+    /// Following Java: BooleanMatrix.density()
+    pub fn density(&self) -> usize {
+        self.cells.len()
     }
 
     /// Gets the element at the given row and column
-    pub fn get(&self, row: usize, col: usize) -> Option<&BoolValue> {
+    pub fn get_at(&self, row: usize, col: usize) -> Option<BoolValue> {
         if row < self.dimensions.rows && col < self.dimensions.cols {
-            self.elements.get(row * self.dimensions.cols + col)
+            Some(self.get(row * self.dimensions.cols + col))
         } else {
             None
         }
+    }
+
+    /// Union (OR) of two matrices
+    /// Following Java: BooleanMatrix.or(BooleanMatrix)
+    pub fn union(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BooleanMatrix {
+        assert_eq!(self.dimensions, other.dimensions);
+        let mut result = BooleanMatrix::empty(self.dimensions);
+
+        // Add all entries from self
+        for (&idx, val) in &self.cells {
+            let other_val = other.get(idx);
+            result.set(idx, factory.or(val.clone(), other_val));
+        }
+
+        // Add entries only in other
+        for (&idx, val) in &other.cells {
+            if !self.cells.contains_key(&idx) {
+                result.set(idx, val.clone());
+            }
+        }
+
+        result
+    }
+
+    /// Intersection (AND) of two matrices
+    /// Following Java: BooleanMatrix.and(BooleanMatrix)
+    pub fn intersection(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BooleanMatrix {
+        assert_eq!(self.dimensions, other.dimensions);
+        let mut result = BooleanMatrix::empty(self.dimensions);
+
+        // Only entries in BOTH can be non-FALSE
+        for (&idx, val) in &self.cells {
+            if let Some(other_val) = other.cells.get(&idx) {
+                result.set(idx, factory.and(val.clone(), other_val.clone()));
+            }
+        }
+
+        result
+    }
+
+    /// Difference (this AND NOT other)
+    /// Following Java: BooleanMatrix.difference(BooleanMatrix)
+    pub fn difference(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BooleanMatrix {
+        assert_eq!(self.dimensions, other.dimensions);
+        if self.cells.is_empty() || other.cells.is_empty() {
+            return self.clone();
+        }
+
+        let mut result = BooleanMatrix::empty(self.dimensions);
+        for (&idx, val) in &self.cells {
+            let other_val = other.get(idx);
+            let not_other = factory.not(other_val);
+            result.set(idx, factory.and(val.clone(), not_other));
+        }
+
+        result
+    }
+
+    /// Join/Dot Product of two matrices
+    /// Following Java: BooleanMatrix.dot(BooleanMatrix)
+    pub fn join(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BooleanMatrix {
+        // Result arity: self.arity + other.arity - 2
+        // Following Java: Dimensions.dot()
+        let result_arity = self.dimensions.arity() + other.dimensions.arity() - 2;
+
+        // Java: b = other.dims.dimension(0)
+        let b = other.dimensions.dimension_0();
+
+        // Java: c = other.dims.capacity() / b
+        let c = other.dimensions.capacity() / b;
+
+        // Result capacity
+        // Following Java: (capacity*dim.capacity) / (drop*drop) where drop = b
+        let result_capacity = (self.dimensions.capacity() * other.dimensions.capacity()) / (b * b);
+
+        let result_dims = Dimensions::new(result_capacity, result_arity);
+        let mut result = BooleanMatrix::empty(result_dims);
+
+        if self.cells.is_empty() || other.cells.is_empty() {
+            return result;
+        }
+
+        // Use b and c already calculated above (don't recalculate!)
+        for (&i, v0) in &self.cells {
+            // For each entry in self at flat index i
+            let row_head = (i % b) * c;
+            let row_tail = row_head + c - 1;
+
+            // Find matching entries in other
+            for (&j, v1) in &other.cells {
+                if j >= row_head && j <= row_tail {
+                    let product = factory.and(v0.clone(), v1.clone());
+                    if product != BoolValue::Constant(BooleanConstant::FALSE) {
+                        let k = (i / b) * c + j % c;
+                        // Accumulate OR
+                        let existing = result.get(k);
+                        result.set(k, factory.or(existing, product));
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Cross Product of two matrices
+    /// Following Java: BooleanMatrix.cross(BooleanMatrix)
+    pub fn product(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BooleanMatrix {
+        let result_dims = Dimensions::new(
+            self.dimensions.capacity() * other.dimensions.capacity(),
+            self.dimensions.cols() + other.dimensions.cols(),
+        );
+        let mut result = BooleanMatrix::empty(result_dims);
+
+        if self.cells.is_empty() || other.cells.is_empty() {
+            return result;
+        }
+
+        let other_cap = other.dimensions.capacity();
+        for (&i, v0) in &self.cells {
+            let base = other_cap * i;
+            for (&j, v1) in &other.cells {
+                let conjunction = factory.and(v0.clone(), v1.clone());
+                result.set(base + j, conjunction);
+            }
+        }
+
+        result
+    }
+
+    /// Transpose of this matrix
+    /// Following Java: BooleanMatrix.transpose()
+    pub fn transpose(&self, _factory: &mut BooleanFactory) -> BooleanMatrix {
+        let transposed_dims = Dimensions::new(self.dimensions.cols(), self.dimensions.rows());
+        let mut result = BooleanMatrix::empty(transposed_dims);
+
+        let rows = self.dimensions.rows();
+        let cols = self.dimensions.cols();
+
+        for (&idx, val) in &self.cells {
+            let new_idx = (idx % cols) * rows + (idx / cols);
+            result.set(new_idx, val.clone());
+        }
+
+        result
+    }
+
+    /// Override: combine matrices with precedence
+    /// Following Java: BooleanMatrix.override(BooleanMatrix)
+    pub fn override_with(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BooleanMatrix {
+        assert_eq!(self.dimensions, other.dimensions);
+        if other.cells.is_empty() {
+            return self.clone();
+        }
+
+        let mut result = BooleanMatrix::empty(self.dimensions);
+        // Start with other's entries
+        for (&idx, val) in &other.cells {
+            result.set(idx, val.clone());
+        }
+
+        let row_length = self.dimensions.capacity() / self.dimensions.rows();
+        let mut row = usize::MAX;
+        let mut row_val = BoolValue::Constant(BooleanConstant::TRUE);
+
+        for (&idx, val) in &self.cells {
+            let e0row = idx / row_length;
+            if row != e0row {
+                row = e0row;
+                // Compute nand of other's values in this row
+                row_val = self.nand_row(other, row * row_length, (row + 1) * row_length, factory);
+            }
+            let current = result.get(idx);
+            let conjunction = factory.and(val.clone(), row_val.clone());
+            result.set(idx, factory.or(current, conjunction));
+        }
+
+        result
+    }
+
+    /// Helper: Returns conjunction of negated values in range [start, end)
+    /// Following Java: BooleanMatrix.nand(int, int)
+    fn nand_row(&self, matrix: &BooleanMatrix, start: usize, end: usize, factory: &mut BooleanFactory) -> BoolValue {
+        let mut acc = Vec::new();
+        for idx in start..end {
+            if let Some(val) = matrix.cells.get(&idx) {
+                acc.push(factory.not(val.clone()));
+            }
+        }
+        if acc.is_empty() {
+            BoolValue::Constant(BooleanConstant::TRUE)
+        } else {
+            factory.and_multi(acc)
+        }
+    }
+
+    /// Check equality: all corresponding entries must be equal
+    /// Following Java: BooleanMatrix.eq(BooleanMatrix)
+    pub fn equals(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BoolValue {
+        let subset1 = self.subset(other, factory);
+        let subset2 = other.subset(self, factory);
+        factory.and(subset1, subset2)
+    }
+
+    /// Check subset: all entries in self imply corresponding entries in other
+    /// Following Java: BooleanMatrix.subset(BooleanMatrix)
+    pub fn subset(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BoolValue {
+        assert_eq!(self.dimensions, other.dimensions);
+        let mut acc = Vec::new();
+
+        for (&idx, val) in &self.cells {
+            let other_val = other.get(idx);
+            let not_val = factory.not(val.clone());
+            // self[i] => other[i]  ≡  !self[i] || other[i]
+            let implication = factory.or(not_val, other_val);
+            acc.push(implication);
+        }
+
+        if acc.is_empty() {
+            BoolValue::Constant(BooleanConstant::TRUE)
+        } else {
+            factory.and_multi(acc)
+        }
+    }
+
+    /// Multiplicity: some (at least one entry is TRUE)
+    /// Following Java: BooleanMatrix.some()
+    pub fn some(&self, factory: &mut BooleanFactory) -> BoolValue {
+        if self.cells.is_empty() {
+            return BoolValue::Constant(BooleanConstant::FALSE);
+        }
+
+        let values: Vec<BoolValue> = self.cells.values().cloned().collect();
+        factory.or_multi(values)
+    }
+
+    /// Multiplicity: none (all entries are FALSE)
+    /// Following Java: BooleanMatrix.none()
+    pub fn none(&self, factory: &mut BooleanFactory) -> BoolValue {
+        let some_val = self.some(factory);
+        factory.not(some_val)
+    }
+
+    /// Multiplicity: one (exactly one entry is TRUE)
+    /// Following Java: BooleanMatrix.one()
+    pub fn one(&self, factory: &mut BooleanFactory) -> BoolValue {
+        if self.cells.is_empty() {
+            return BoolValue::Constant(BooleanConstant::FALSE);
+        }
+
+        let mut constraints = Vec::new();
+        let mut partial = BoolValue::Constant(BooleanConstant::FALSE);
+
+        for val in self.cells.values() {
+            // Each value implies no previous values were true
+            // val => !partial  ≡  !val || !partial
+            let not_val = factory.not(val.clone());
+            let not_partial = factory.not(partial.clone());
+            let constraint = factory.or(not_val, not_partial);
+            constraints.push(constraint);
+            partial = factory.or(partial, val.clone());
+        }
+
+        // At least one must be true
+        constraints.push(partial);
+        factory.and_multi(constraints)
+    }
+
+    /// Transitive closure of a binary relation
+    /// Following Java: BooleanMatrix.closure()
+    /// Computes R^+ = R ∪ (R.R) ∪ (R.R.R) ∪ ... using iterative squaring
+    pub fn closure(&self, factory: &mut BooleanFactory) -> BooleanMatrix {
+        assert_eq!(self.dimensions.cols(), 2, "closure requires binary relation");
+
+        if self.cells.is_empty() {
+            return self.clone();
+        }
+
+        let mut ret = self.clone();
+
+        // Compute the number of rows in the matrix
+        let row_factor = self.dimensions.cols();
+        let mut seen_rows = std::collections::HashSet::new();
+
+        for (&idx, _) in &self.cells {
+            let row = idx / row_factor;
+            seen_rows.insert(row);
+        }
+        let row_num = seen_rows.len();
+
+        // Compute closure using iterative squaring: ret = ret OR (ret . ret)
+        let mut i = 1;
+        while i < row_num {
+            let dot_result = ret.join(&ret, factory);
+            ret = ret.union(&dot_result, factory);
+            i *= 2;
+        }
+
+        ret
+    }
+
+    /// Reflexive transitive closure
+    /// Following Java: R* = IDEN ∪ R^+
+    pub fn reflexive_closure(&self, factory: &mut BooleanFactory, iden: &BooleanMatrix) -> BooleanMatrix {
+        let closure = self.closure(factory);
+        closure.union(iden, factory)
     }
 }
 
@@ -367,28 +765,33 @@ mod tests {
 
     #[test]
     fn dimensions() {
-        let dims = Dimensions::new(2, 3);
-        assert_eq!(dims.rows(), 2);
-        assert_eq!(dims.cols(), 3);
-        assert_eq!(dims.capacity(), 6);
+        // Dimensions::new(capacity, arity)
+        // For a binary relation over universe of size 2: capacity=4, arity=2
+        let dims = Dimensions::new(4, 2);
+        assert_eq!(dims.rows(), 4); // capacity
+        assert_eq!(dims.cols(), 2); // arity
+        assert_eq!(dims.capacity(), 4);
+        assert_eq!(dims.arity(), 2);
     }
 
     #[test]
     fn boolean_matrix() {
-        let dims = Dimensions::new(2, 2);
-        let elements = vec![
-            BoolValue::Constant(BooleanConstant::TRUE),
-            BoolValue::Constant(BooleanConstant::FALSE),
-            BoolValue::Variable(BooleanVariable::new(1)),
-            BoolValue::Variable(BooleanVariable::new(2)),
-        ];
+        // Binary relation over universe of size 2: capacity=4 (2²), arity=2
+        let dims = Dimensions::new(4, 2);
+        let mut matrix = BooleanMatrix::empty(dims);
 
-        let matrix = BooleanMatrix::new(dims, elements);
+        // Set some values
+        matrix.set(0, BoolValue::Constant(BooleanConstant::TRUE));
+        matrix.set(1, BoolValue::Constant(BooleanConstant::FALSE)); // Won't be stored
+        matrix.set(2, BoolValue::Variable(BooleanVariable::new(1)));
+        matrix.set(3, BoolValue::Variable(BooleanVariable::new(2)));
+
         assert_eq!(matrix.dimensions().capacity(), 4);
-        assert_eq!(matrix.get(0, 0).unwrap().label(), 0); // TRUE
-        assert_eq!(matrix.get(0, 1).unwrap().label(), -1); // FALSE
-        assert_eq!(matrix.get(1, 0).unwrap().label(), 1); // var 1
-        assert_eq!(matrix.get(1, 1).unwrap().label(), 2); // var 2
+        assert_eq!(matrix.get(0).label(), 0); // TRUE
+        assert_eq!(matrix.get(1).label(), -1); // FALSE (not stored)
+        assert_eq!(matrix.get(2).label(), 1); // var 1
+        assert_eq!(matrix.get(3).label(), 2); // var 2
+        assert_eq!(matrix.density(), 3); // Only 3 non-FALSE entries stored
     }
 
     #[test]

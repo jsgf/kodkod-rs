@@ -2,7 +2,7 @@
 //!
 //! Converts boolean gates to CNF clauses using Tseitin transformation.
 
-use crate::bool::{BoolValue, BooleanConstant, BooleanFormula, FormulaKind};
+use crate::bool::{BoolValue, BooleanFormula, FormulaKind};
 
 /// CNF representation
 #[derive(Debug, Clone)]
@@ -61,17 +61,19 @@ impl CNFTranslator {
         // Special handling for constants
         match value {
             BoolValue::Constant(c) => {
-                // TRUE (label 0): add empty clause list (always SAT)
-                // FALSE (label -1): add empty clause (always UNSAT)
                 if c.label() == -1 {
                     // FALSE: add empty clause to make formula UNSAT
                     self.cnf.add_clause(vec![]);
                 }
-                // For TRUE, don't add anything - formula is SAT
+                // For TRUE (label 0), don't add any clauses - formula is trivially SAT
+                // Note: We don't assert [0] because 0 is not a valid DIMACS literal
             }
             _ => {
-                // Assert that the top-level formula is true
-                self.cnf.add_clause(vec![label]);
+                // For non-constants, assert that the top-level formula is true
+                // Skip if label is 0 (shouldn't happen for non-constants but be safe)
+                if label != 0 {
+                    self.cnf.add_clause(vec![label]);
+                }
             }
         }
 
@@ -197,7 +199,7 @@ impl CNFTranslator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bool::{BooleanFactory, BooleanVariable, Options};
+    use crate::bool::{BooleanConstant, BooleanFactory, BooleanVariable, Options};
 
     #[test]
     fn cnf_empty() {
@@ -220,9 +222,8 @@ mod tests {
         let value = BoolValue::Constant(BooleanConstant::TRUE);
         let (_label, cnf) = translator.translate(&value);
 
-        // Should have one unit clause asserting TRUE (label 0)
-        assert_eq!(cnf.num_clauses(), 1);
-        assert_eq!(cnf.clauses[0], vec![0]);
+        // TRUE constant: no clauses needed (trivially SAT)
+        assert_eq!(cnf.num_clauses(), 0);
     }
 
     #[test]

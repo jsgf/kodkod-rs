@@ -6,8 +6,8 @@ use crate::ast::*;
 use crate::bool::Options as BoolOptions;
 use crate::cnf::CNFTranslator;
 use crate::engine::{rustsat_adapter::RustSatAdapter, SATSolver};
-use crate::instance::{Bounds, Instance};
-use crate::translator::Translator;
+use crate::instance::{Bounds, Instance, TupleSet};
+use crate::translator::{Translator, LeafInterpreter};
 use crate::Result;
 use rustsat_batsat::BasicSolver;
 use std::time::{Duration, Instant};
@@ -52,13 +52,13 @@ impl Solver {
 
         // Step 1: Translate formula to boolean circuit
         let translation_start = Instant::now();
-        let bool_circuit = Translator::evaluate(formula, bounds, &self.options.bool_options);
+        let (bool_circuit, interpreter) = Translator::evaluate(formula, bounds, &self.options.bool_options);
         let translation_time = translation_start.elapsed();
 
         // Step 2: Convert boolean circuit to CNF
         let cnf_start = Instant::now();
         let cnf_translator = CNFTranslator::new();
-        let (top_level_var, cnf) = cnf_translator.translate(&bool_circuit);
+        let (_top_level_var, cnf) = cnf_translator.translate(&bool_circuit);
         let cnf_time = cnf_start.elapsed();
 
         // Step 3: Run SAT solver
@@ -83,13 +83,64 @@ impl Solver {
         };
 
         if is_sat {
-            // Create a simple instance
-            // Full implementation would extract from SAT assignment
-            let instance = Instance::new(bounds.universe().clone());
+            // Extract solution from SAT model
+            let instance = self.extract_instance(&sat_solver, &interpreter, bounds)?;
             Ok(Solution::Sat { instance, stats })
         } else {
             Ok(Solution::Unsat { stats })
         }
+    }
+
+    /// Extracts an Instance from a SAT model
+    /// Following Java: similar logic in Translator
+    fn extract_instance(
+        &self,
+        sat_solver: &RustSatAdapter<BasicSolver>,
+        interpreter: &LeafInterpreter,
+        bounds: &Bounds,
+    ) -> Result<Instance> {
+        let mut instance = Instance::new(bounds.universe().clone());
+        let factory = bounds.universe().factory();
+
+        // For each relation, extract its tuples from the SAT model
+        for relation in bounds.relations() {
+            let mut tuple_set = TupleSet::empty(bounds.universe().clone(), relation.arity());
+
+            // Start with lower bound (definitely TRUE)
+            if let Some(lower) = interpreter.lower_bounds().get(relation) {
+                for tuple in lower.iter() {
+                    tuple_set.add(tuple.clone())?;
+                }
+            }
+
+            // Check variables for uncertain tuples
+            if let Some(var_range) = interpreter.variable_ranges().get(relation) {
+                if let (Some(lower), Some(upper)) = (
+                    interpreter.lower_bounds().get(relation),
+                    interpreter.upper_bounds().get(relation),
+                ) {
+                    let lower_indices = LeafInterpreter::tuple_set_to_indices(lower, interpreter.universe());
+                    let upper_indices = LeafInterpreter::tuple_set_to_indices(upper, interpreter.universe());
+
+                    let mut var_id = var_range.start;
+                    for &idx in &upper_indices {
+                        if !lower_indices.contains(&idx) {
+                            // This is an uncertain tuple - check SAT model
+                            if sat_solver.value_of(var_id) {
+                                // Variable is TRUE - add this tuple
+                                let tuple = factory.tuple_from_index(relation.arity(), idx)?;
+                                tuple_set.add(tuple)?;
+                            }
+                            var_id += 1;
+                        }
+                    }
+                }
+            }
+
+            instance.add(relation.clone(), tuple_set)?;
+        }
+
+        Ok(instance)
     }
 }
 
@@ -213,7 +264,6 @@ mod tests {
         assert!(solution.is_sat());
 
         let instance = solution.instance().unwrap();
-        // Instance exists but may be empty in this simplified implementation
         assert_eq!(instance.universe().size(), 3);
     }
 
@@ -232,10 +282,7 @@ mod tests {
         let solver = Solver::new(Options::default());
         let solution = solver.solve(&formula, &bounds).unwrap();
 
-        // In simplified implementation, we assume SAT
-        // Full implementation would detect UNSAT
-        // For now, we expect SAT
-        assert!(solution.is_sat() || solution.is_unsat());
+        assert!(solution.is_unsat());
     }
 
     #[test]

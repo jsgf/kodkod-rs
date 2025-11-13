@@ -136,6 +136,11 @@ impl Tuple {
     pub fn atom_index(&self, i: usize) -> Option<usize> {
         self.atom_indices.get(i).copied()
     }
+
+    /// Returns an iterator over the atoms in this tuple
+    pub fn atoms(&self) -> impl Iterator<Item = &str> + '_ {
+        (0..self.arity()).filter_map(move |i| self.atom(i))
+    }
 }
 
 impl PartialEq for Tuple {
@@ -305,7 +310,7 @@ impl TupleFactory {
     }
 
     /// Creates a tuple from an index in n-dimensional space
-    fn tuple_from_index(&self, arity: usize, index: usize) -> Result<Tuple> {
+    pub fn tuple_from_index(&self, arity: usize, index: usize) -> Result<Tuple> {
         let base = self.universe.size();
         let max_index = base.pow(arity as u32);
 
@@ -319,6 +324,8 @@ impl TupleFactory {
         let mut atom_indices = Vec::with_capacity(arity);
         let mut remaining = index;
 
+        // Extract atoms in row-major order (first atom is most significant)
+        // This must match the calculation in tuple()
         for pos in (0..arity).rev() {
             let divisor = base.pow(pos as u32);
             let atom_idx = remaining / divisor;
@@ -326,7 +333,7 @@ impl TupleFactory {
             remaining %= divisor;
         }
 
-        atom_indices.reverse();
+        // Don't reverse - we built them in the correct order
 
         Ok(Tuple {
             universe: self.universe.clone(),
@@ -477,6 +484,11 @@ impl Instance {
 
     /// Returns the tuples for a relation
     pub fn tuples(&self, relation: &Relation) -> Option<&TupleSet> {
+        self.relations.get(relation)
+    }
+
+    /// Gets the tuple set for a relation (alias for tuples)
+    pub fn get(&self, relation: &Relation) -> Option<&TupleSet> {
         self.relations.get(relation)
     }
 

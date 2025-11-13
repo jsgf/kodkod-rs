@@ -33,6 +33,8 @@ impl<S> RustSatAdapter<S> {
 
 impl<S: rustsat::solvers::Solve> SATSolver for RustSatAdapter<S> {
     fn add_variables(&mut self, num_vars: u32) {
+        // RustSat auto-creates variables as needed when clauses are added
+        // Just track the count for our interface
         self.num_vars += num_vars;
     }
 

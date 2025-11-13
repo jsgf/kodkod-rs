@@ -4,7 +4,7 @@
 //! from the Java version. Instead, we provide pattern matching on enum variants
 //! and optional visitor traits for convenience.
 
-use super::formula::{Decl, Decls, Formula};
+use super::formula::{Decls, Formula};
 use super::int_expr::IntExpression;
 use super::{Expression, Relation, Variable};
 
