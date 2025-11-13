@@ -128,7 +128,7 @@ fn in_cycle(v_expr: Expression, c: Expression) -> Formula {
     let f1 = v_prime_expr.in_set(reachable);
 
     f0.or(Formula::exists(
-        Decls::from(Decl::one_of(&v_prime, &v_expr_copy.join(c_copy2))),
+        Decls::from(Decl::one_of(v_prime, v_expr_copy.join(c_copy2))),
         f1,
     ))
 }
@@ -140,7 +140,7 @@ fn cyclic(v: &Relation, c: Expression) -> Formula {
     let in_cycle_v = in_cycle(v_var_expr, c);
 
     Formula::exists(
-        Decls::from(Decl::one_of(&v_var, &Expression::from(v.clone()))),
+        Decls::from(Decl::one_of(v_var.clone(), Expression::from(v.clone()))),
         in_cycle_v,
     )
 }
@@ -181,11 +181,11 @@ fn statement2(v: &Relation, e: &Relation) -> Formula {
         .difference(v_expr.clone().product(u_copy));
     let f1 = connected(v, edge_removed).not();
     let f2 = Formula::forall(
-        Decls::from(Decl::one_of(&v_var, &u_expr.join(e_expr))),
+        Decls::from(Decl::one_of(v_var, u_expr.join(e_expr))),
         f1,
     );
     let f3 = Formula::forall(
-        Decls::from(Decl::one_of(&u_var, &Expression::from(v.clone()))),
+        Decls::from(Decl::one_of(u_var.clone(), Expression::from(v.clone()))),
         f2,
     );
 
@@ -241,8 +241,8 @@ fn statement5(v: &Relation, e: &Relation) -> Formula {
     let f0 = edge_not_in.implies(cyclic(v, edge_added));
 
     let f1 = Formula::forall(
-        Decls::from(Decl::one_of(&u_var, &Expression::from(v.clone())))
-            .and(Decl::one_of(&v_var, &Expression::from(v.clone()))),
+        Decls::from(Decl::one_of(u_var.clone(), Expression::from(v.clone())))
+            .and(Decl::one_of(v_var.clone(), Expression::from(v.clone()))),
         f0,
     );
 

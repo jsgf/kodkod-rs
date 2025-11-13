@@ -252,29 +252,30 @@ pub struct Decl {
 
 impl Decl {
     /// Creates a new declaration with "one of" multiplicity
-    pub fn one_of(variable: &Variable, expression: &Expression) -> Self {
+    /// Takes owned values since Variable and Expression clone cheaply (Arc-based)
+    pub fn one_of(variable: Variable, expression: Expression) -> Self {
         Self {
-            variable: variable.clone(),
+            variable,
             multiplicity: Multiplicity::One,
-            expression: expression.clone(),
+            expression,
         }
     }
 
     /// Creates a new declaration with "lone" multiplicity
-    pub fn lone_of(variable: &Variable, expression: &Expression) -> Self {
+    pub fn lone_of(variable: Variable, expression: Expression) -> Self {
         Self {
-            variable: variable.clone(),
+            variable,
             multiplicity: Multiplicity::Lone,
-            expression: expression.clone(),
+            expression,
         }
     }
 
     /// Creates a new declaration with "some" multiplicity
-    pub fn some_of(variable: &Variable, expression: &Expression) -> Self {
+    pub fn some_of(variable: Variable, expression: Expression) -> Self {
         Self {
-            variable: variable.clone(),
+            variable,
             multiplicity: Multiplicity::Some,
-            expression: expression.clone(),
+            expression,
         }
     }
 
@@ -418,7 +419,7 @@ mod tests {
         let person = Relation::unary("Person");
         let x = Variable::unary("x");
 
-        let decl = Decl::one_of(&x, &Expression::from(person.clone()));
+        let decl = Decl::one_of(x.clone(), Expression::from(&person));
         assert_eq!(decl.variable(), &x);
         assert_eq!(decl.multiplicity(), Multiplicity::One);
 
@@ -431,10 +432,10 @@ mod tests {
         let person = Relation::unary("Person");
         let x = Variable::unary("x");
 
-        let decl = Decl::one_of(&x, &Expression::from(person.clone()));
+        let decl = Decl::one_of(x.clone(), Expression::from(&person));
         let decls = Decls::from(decl);
 
-        let body = Expression::from(x.clone()).in_set(Expression::from(person));
+        let body = Expression::from(x.clone()).in_set(Expression::from(&person));
         let forall = Formula::forall(decls.clone(), body.clone());
         assert!(matches!(forall, Formula::Quantified { quantifier: Quantifier::All, .. }));
 
@@ -448,10 +449,10 @@ mod tests {
         let person = Relation::unary("Person");
         let p = Variable::unary("p");
 
-        let decl = Decl::one_of(&p, &Expression::from(person.clone()));
+        let decl = Decl::one_of(p.clone(), Expression::from(&person));
         let decls = Decls::from(decl);
 
-        let body = Expression::from(p).in_set(Expression::from(person));
+        let body = Expression::from(p).in_set(Expression::from(&person));
         let formula = Formula::forall(decls, body);
 
         assert!(matches!(formula, Formula::Quantified { .. }));

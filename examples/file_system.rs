@@ -148,7 +148,7 @@ fn no_dir_aliases(dir: &Relation, contents: &Relation) -> Formula {
     // For each object, it appears in at most one contents relation
     let lone_check = o_expr.join(contents_transpose).lone();
     Formula::forall(
-        Decls::from(Decl::one_of(&o, &Expression::from(dir.clone()))),
+        Decls::from(Decl::one_of(o.clone(), Expression::from(dir.clone()))),
         lone_check,
     )
 }

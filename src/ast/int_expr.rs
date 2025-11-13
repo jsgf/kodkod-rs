@@ -306,7 +306,7 @@ mod tests {
     fn sum_expression() {
         let person = Relation::unary("Person");
         let x = Variable::unary("x");
-        let decl = Decl::one_of(&x, &Expression::from(person.clone()));
+        let decl = Decl::one_of(x, Expression::from(&person));
         let decls = Decls::from(decl);
 
         let sum = Expression::from(person).sum(decls);

@@ -99,18 +99,18 @@ fn main() {
         .in_set(
             g_expr
                 .clone()
-                .join(Expression::from(holds.clone()))
-                .intersection(r_expr.clone().join(Expression::from(room_key.clone()))),
+                .join(Expression::from(&holds))
+                .intersection(r_expr.clone().join(Expression::from(&room_key))),
         );
 
     let entry_ok = Formula::exists(
-        Decls::from(Decl::one_of(&c, &Expression::from(card.clone()))),
+        Decls::from(Decl::one_of(c.clone(), Expression::from(&card))),
         has_card_for_room,
     );
 
     let guest_in_room_implies_has_key = Formula::forall(
-        Decls::from(Decl::one_of(&r, &Expression::from(room.clone())))
-            .and(Decl::one_of(&g, &Expression::from(guest.clone()))),
+        Decls::from(Decl::one_of(r.clone(), Expression::from(&room)))
+            .and(Decl::one_of(g.clone(), Expression::from(&guest))),
         entry_ok,
     );
 

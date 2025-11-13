@@ -34,7 +34,7 @@ impl Handshake {
             .join(Expression::from(self.spouse.clone()))
             .one();
         let spouse_fn_formula = Formula::forall(
-            Decls::from(Decl::one_of(&p, &Expression::from(self.person.clone()))),
+            Decls::from(Decl::one_of(p.clone(), Expression::from(self.person.clone()))),
             spouse_fn
         );
 
@@ -67,7 +67,7 @@ impl Handshake {
         let p_shaken = p_expr.clone().join(Expression::from(self.shaken.clone()));
         let f1_body = p_and_spouse.intersection(p_shaken).no();
         let f1 = Formula::forall(
-            Decls::from(Decl::one_of(&p, &Expression::from(self.person.clone()))),
+            Decls::from(Decl::one_of(p.clone(), Expression::from(self.person.clone()))),
             f1_body
         );
 
@@ -79,8 +79,8 @@ impl Handshake {
             .in_set(p_expr.join(Expression::from(self.shaken.clone())));
         let f2_body = p_in_q_shaken.implies(q_in_p_shaken);
         let f2 = Formula::forall(
-            Decls::from(Decl::one_of(&p, &Expression::from(self.person.clone())))
-                .and(Decl::one_of(&q, &Expression::from(self.person.clone()))),
+            Decls::from(Decl::one_of(p.clone(), Expression::from(self.person.clone())))
+                .and(Decl::one_of(q.clone(), Expression::from(self.person.clone()))),
             f2_body
         );
 
@@ -112,8 +112,8 @@ impl Handshake {
 
         let disj_implies_body = disjoint.implies(f1.and(f2));
         let disj_implies = Formula::forall(
-            Decls::from(Decl::one_of(&p, &Expression::from(self.person.clone())))
-                .and(Decl::one_of(&q, &Expression::from(self.person.clone()))),
+            Decls::from(Decl::one_of(p.clone(), Expression::from(self.person.clone())))
+                .and(Decl::one_of(q.clone(), Expression::from(self.person.clone()))),
             disj_implies_body
         );
 
@@ -134,7 +134,7 @@ impl Handshake {
             .not();
 
         let all_p = Formula::forall(
-            Decls::from(Decl::one_of(&p, &Expression::from(self.person.clone()))),
+            Decls::from(Decl::one_of(p.clone(), Expression::from(self.person.clone()))),
             f3.and(f4)
         );
 
@@ -162,8 +162,8 @@ impl Handshake {
         let disjoint = p_expr.clone().intersection(q_expr.clone()).no();
         let puzzle1_body = disjoint.implies(different_counts);
         let puzzle1 = Formula::forall(
-            Decls::from(Decl::one_of(&p, &not_jocelyn.clone()))
-                .and(Decl::one_of(&q, &not_jocelyn)),
+            Decls::from(Decl::one_of(p, not_jocelyn.clone()))
+                .and(Decl::one_of(q, not_jocelyn)),
             puzzle1_body
         );
 

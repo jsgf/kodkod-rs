@@ -124,7 +124,7 @@ fn solve_graph_coloring(edges: &[(usize, usize)], num_colors: usize, expected_sa
     let no_conflict = v_color.intersection(neighbor_colors).no();
 
     let formula = Formula::forall(
-        Decls::from(Decl::one_of(&v, &Expression::from(vertex))),
+        Decls::from(Decl::one_of(v.clone(), Expression::from(vertex))),
         one_color.and(no_conflict),
     );
 

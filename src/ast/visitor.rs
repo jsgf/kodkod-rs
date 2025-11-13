@@ -293,9 +293,9 @@ mod tests {
 
         let person = Relation::unary("Person");
         let p = Variable::unary("p");
-        let decl = Decl::one_of(&p, &Expression::from(person.clone()));
+        let decl = Decl::one_of(p.clone(), Expression::from(&person));
         let decls = Decls::from(decl);
-        let body = Expression::from(p).in_set(Expression::from(person));
+        let body = Expression::from(p).in_set(Expression::from(&person));
 
         let formula = Formula::forall(decls, body);
 

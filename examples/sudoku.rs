@@ -193,8 +193,8 @@ impl Sudoku {
     fn rules(&self) -> Formula {
         let x = Variable::unary("x");
         let y = Variable::unary("y");
-        let decls = Decls::from(Decl::one_of(&x, &Expression::from(self.number.clone())))
-            .and(Decl::one_of(&y, &Expression::from(self.number.clone())));
+        let decls = Decls::from(Decl::one_of(x.clone(), Expression::from(self.number.clone())))
+            .and(Decl::one_of(y.clone(), Expression::from(self.number.clone())));
 
         let mut rules = Vec::new();
 
@@ -237,8 +237,8 @@ impl Sudoku {
             for ry_region in &self.regions {
                 let rx = Variable::unary("rx");
                 let ry = Variable::unary("ry");
-                let region_decls = Decls::from(Decl::one_of(&rx, &Expression::from(rx_region.clone())))
-                    .and(Decl::one_of(&ry, &Expression::from(ry_region.clone())));
+                let region_decls = Decls::from(Decl::one_of(rx.clone(), Expression::from(rx_region.clone())))
+                    .and(Decl::one_of(ry.clone(), Expression::from(ry_region.clone())));
 
                 let rx_expr = Expression::from(rx.clone());
                 let ry_expr = Expression::from(ry.clone());

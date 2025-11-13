@@ -6,7 +6,10 @@
       "Bash(do echo \"=== Testing $ex ===\")",
       "Bash(cargo run:*)",
       "Bash(done)",
-      "Bash(timeout 30 cargo run:*)"
+      "Bash(timeout 30 cargo run:*)",
+      "Bash(RUST_BACKTRACE=1 timeout 10 cargo run:*)",
+      "Bash(timeout 10 cargo run:*)",
+      "Bash(timeout 120 cargo run:*)"
     ],
     "deny": [],
     "ask": []

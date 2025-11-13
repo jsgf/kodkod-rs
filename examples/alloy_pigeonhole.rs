@@ -27,7 +27,7 @@ impl Pigeonhole {
         let hole_expr = p_expr.join(Expression::from(self.hole_relation.clone()));
 
         let body = hole_expr.one();
-        let decls = Decls::from(Decl::one_of(&p, &Expression::from(self.pigeon.clone())));
+        let decls = Decls::from(Decl::one_of(p.clone(), Expression::from(self.pigeon.clone())));
 
         Formula::forall(decls, body)
     }
@@ -51,8 +51,8 @@ impl Pigeonhole {
         let body = not_equal.implies(no_shared);
 
         // Declarations: p1 in Pigeon, p2 in Pigeon
-        let decls = Decls::from(Decl::one_of(&p1, &Expression::from(self.pigeon.clone())))
-            .and(Decl::one_of(&p2, &Expression::from(self.pigeon.clone())));
+        let decls = Decls::from(Decl::one_of(p1, Expression::from(self.pigeon.clone())))
+            .and(Decl::one_of(p2, Expression::from(self.pigeon.clone())));
 
         Formula::forall(decls, body)
     }

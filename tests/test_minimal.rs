@@ -46,8 +46,8 @@ fn test_forall_quantifier() {
     // forall x,y: U | (x, y) in R
     let x = Variable::unary("x");
     let y = Variable::unary("y");
-    let decls = Decls::from(Decl::one_of(&x, &Expression::from(univ_rel.clone())))
-        .and(Decl::one_of(&y, &Expression::from(univ_rel.clone())));
+    let decls = Decls::from(Decl::one_of(x.clone(), Expression::from(univ_rel.clone())))
+        .and(Decl::one_of(y.clone(), Expression::from(univ_rel.clone())));
 
     // (x, y) in R
     let xy = Expression::from(x.clone()).product(Expression::from(y.clone()));

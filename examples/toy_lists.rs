@@ -146,7 +146,7 @@ fn build_spec(
     let a = Variable::unary("a");
     specs.push(
         Formula::forall(
-            Decls::from(Decl::one_of(&a, &Expression::from(non_empty.clone()))),
+            Decls::from(Decl::one_of(a.clone(), Expression::from(non_empty.clone()))),
             Expression::from(a.clone())
                 .join(Expression::from(car.clone()))
                 .one(),
@@ -163,7 +163,7 @@ fn build_spec(
     // Each non-empty list has exactly one cdr
     specs.push(
         Formula::forall(
-            Decls::from(Decl::one_of(&a, &Expression::from(non_empty.clone()))),
+            Decls::from(Decl::one_of(a.clone(), Expression::from(non_empty.clone()))),
             Expression::from(a.clone())
                 .join(Expression::from(cdr.clone()))
                 .one(),
@@ -174,9 +174,9 @@ fn build_spec(
     let e = Variable::unary("e");
     specs.push(
         Formula::forall(
-            Decls::from(Decl::one_of(&a, &Expression::from(list.clone()))),
+            Decls::from(Decl::one_of(a.clone(), Expression::from(list.clone()))),
             Formula::exists(
-                Decls::from(Decl::one_of(&e, &Expression::from(empty.clone()))),
+                Decls::from(Decl::one_of(e.clone(), Expression::from(empty.clone()))),
                 Expression::from(e.clone()).in_set(
                     Expression::from(a.clone())
                         .join(Expression::from(cdr.clone()).reflexive_closure())
@@ -212,8 +212,8 @@ fn build_spec(
 
     specs.push(
         Formula::forall(
-            Decls::from(Decl::one_of(&a, &Expression::from(list.clone())))
-                .and(Decl::one_of(&b, &Expression::from(list.clone()))),
+            Decls::from(Decl::one_of(a.clone(), Expression::from(list.clone())))
+                .and(Decl::one_of(b.clone(), Expression::from(list.clone()))),
             equiv_iff,
         )
     );
@@ -228,8 +228,8 @@ fn build_spec(
     // Every empty list is a prefix of every list
     specs.push(
         Formula::forall(
-            Decls::from(Decl::one_of(&e, &Expression::from(empty.clone())))
-                .and(Decl::one_of(&a, &Expression::from(list.clone()))),
+            Decls::from(Decl::one_of(e.clone(), Expression::from(empty.clone())))
+                .and(Decl::one_of(a.clone(), Expression::from(list.clone()))),
             Expression::from(e.clone()).in_set(
                 Expression::from(a.clone()).join(Expression::from(prefixes.clone()))
             ),
@@ -239,8 +239,8 @@ fn build_spec(
     // No non-empty list is a prefix of an empty list
     specs.push(
         Formula::forall(
-            Decls::from(Decl::one_of(&e, &Expression::from(empty.clone())))
-                .and(Decl::one_of(&a, &Expression::from(non_empty.clone()))),
+            Decls::from(Decl::one_of(e.clone(), Expression::from(empty.clone())))
+                .and(Decl::one_of(a.clone(), Expression::from(non_empty.clone()))),
             Expression::from(a.clone())
                 .in_set(Expression::from(e.clone()).join(Expression::from(prefixes.clone())))
                 .not(),
@@ -261,8 +261,8 @@ fn build_spec(
 
     specs.push(
         Formula::forall(
-            Decls::from(Decl::one_of(&a, &Expression::from(non_empty.clone())))
-                .and(Decl::one_of(&b, &Expression::from(non_empty.clone()))),
+            Decls::from(Decl::one_of(a.clone(), Expression::from(non_empty.clone())))
+                .and(Decl::one_of(b.clone(), Expression::from(non_empty.clone()))),
             prefix_iff,
         )
     );

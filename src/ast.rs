@@ -372,9 +372,21 @@ impl From<Relation> for Expression {
     }
 }
 
+impl From<&Relation> for Expression {
+    fn from(r: &Relation) -> Self {
+        Expression::Relation(r.clone())
+    }
+}
+
 impl From<Variable> for Expression {
     fn from(v: Variable) -> Self {
         Expression::Variable(v)
+    }
+}
+
+impl From<&Variable> for Expression {
+    fn from(v: &Variable) -> Self {
+        Expression::Variable(v.clone())
     }
 }
 

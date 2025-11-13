@@ -34,7 +34,7 @@ fn test_cardinality_with_existential_quantifier() {
     let p_likes = p_expr.join(Expression::from(likes.clone()));
     let p_count = p_likes.count();
     let formula = Formula::exists(
-        Decls::from(Decl::one_of(&p, &Expression::from(people.clone()))),
+        Decls::from(Decl::one_of(p.clone(), Expression::from(people.clone()))),
         p_count.gt(kodkod_rs::ast::IntExpression::constant(0))
     );
 
@@ -67,7 +67,7 @@ fn test_cardinality_with_universal_quantifier_trivial() {
     let p_likes = p_expr.join(Expression::from(likes.clone()));
     let p_count = p_likes.count();
     let formula = Formula::forall(
-        Decls::from(Decl::one_of(&p, &Expression::from(people.clone()))),
+        Decls::from(Decl::one_of(p.clone(), Expression::from(people.clone()))),
         p_count.gte(kodkod_rs::ast::IntExpression::constant(0))
     );
 
@@ -104,8 +104,8 @@ fn test_cardinality_with_universal_quantifier_constraint() {
     let different = p_count.eq(q_count).not();
 
     let formula = Formula::forall(
-        Decls::from(Decl::one_of(&p, &Expression::from(people.clone())))
-            .and(Decl::one_of(&q, &Expression::from(people.clone()))),
+        Decls::from(Decl::one_of(p.clone(), Expression::from(people.clone())))
+            .and(Decl::one_of(q.clone(), Expression::from(people.clone()))),
         different
     );
 
@@ -140,7 +140,7 @@ fn test_cardinality_dynamic_evaluation_with_join() {
     let p_expr = Expression::from(p.clone());
     let p_likes = p_expr.join(Expression::from(likes.clone()));
     let formula = Formula::forall(
-        Decls::from(Decl::one_of(&p, &Expression::from(people.clone()))),
+        Decls::from(Decl::one_of(p.clone(), Expression::from(people.clone()))),
         p_likes.count().eq(kodkod_rs::ast::IntExpression::constant(1))
     );
 
