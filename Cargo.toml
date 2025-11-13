@@ -21,3 +21,12 @@ rustsat = "0.7"
 rustsat-batsat = "0.7"
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "solver_benchmarks"
+harness = false
+
+[[bench]]
+name = "solver_comparison"
+harness = false
