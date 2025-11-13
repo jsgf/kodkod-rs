@@ -19,6 +19,11 @@ indexmap = "2.0"
 # SAT solver for production builds
 rustsat = "0.7"
 rustsat-batsat = "0.7"
+# Arena allocation for translator
+bumpalo = "3.19"
+bumpalo-herd = "0.1"
+# Fast hashing for HashMaps
+ahash = "0.8"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
@@ -30,3 +35,6 @@ harness = false
 [[bench]]
 name = "solver_comparison"
 harness = false
+
+[profile.release]
+debug = true

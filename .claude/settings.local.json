@@ -9,7 +9,8 @@
       "Bash(timeout 30 cargo run:*)",
       "Bash(RUST_BACKTRACE=1 timeout 10 cargo run:*)",
       "Bash(timeout 10 cargo run:*)",
-      "Bash(timeout 120 cargo run:*)"
+      "Bash(timeout 120 cargo run:*)",
+      "Bash(tokei:*)"
     ],
     "deny": [],
     "ask": []

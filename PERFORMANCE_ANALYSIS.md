@@ -265,7 +265,9 @@ Java implementation is **also single-threaded**:
 
 ## Profiling Recommendations
 
-Before optimizing, profile with:
+**CONFIRMED: Flamegraph profiling of the Trees example shows that `translate_formula` is dominated by memory allocation.** This validates the analysis that allocation overhead is the primary bottleneck (not CPU-bound computation).
+
+Before optimizing further, profile with:
 
 ```bash
 # Flamegraph - identify hot paths
