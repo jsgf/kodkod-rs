@@ -537,15 +537,22 @@ impl BooleanMatrix {
     /// Transpose of this matrix
     /// Following Java: BooleanMatrix.transpose()
     pub fn transpose(&self, _factory: &mut BooleanFactory) -> BooleanMatrix {
-        let transposed_dims = Dimensions::new(self.dimensions.cols(), self.dimensions.rows());
-        let mut result = BooleanMatrix::empty(transposed_dims);
+        // For a binary relation, transpose only swaps the elements in each pair
+        // The capacity (number of tuples) and arity (dimensionality) remain unchanged
+        assert_eq!(self.dimensions.arity(), 2, "transpose only works on binary relations");
 
-        let rows = self.dimensions.rows();
-        let cols = self.dimensions.cols();
+        // Compute universe size from capacity = u^2
+        let u = self.dimensions.dimension_0();
+
+        let mut result = BooleanMatrix::empty(self.dimensions);
 
         for (&idx, val) in &self.cells {
-            let new_idx = (idx % cols) * rows + (idx / cols);
-            result.set(new_idx, val.clone());
+            // Convert flat index to (row, col) coordinates
+            let row = idx / u;
+            let col = idx % u;
+            // Swap to (col, row) and convert back to flat index
+            let transposed_idx = col * u + row;
+            result.set(transposed_idx, val.clone());
         }
 
         result
