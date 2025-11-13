@@ -26,20 +26,10 @@ fn main() {
     let all_binary = factory.all(2);
     bounds.bound(&shaken, factory.none(2), all_binary).unwrap();
 
-    // Test 1: Simple - just count handshakes for a person
-    println!("Test 1: Simple count");
-    let p = Variable::unary("p");
-    let p_expr = Expression::from(p.clone());
-    let p_shaken = p_expr.join(Expression::from(shaken.clone()));
-    let p_count = p_shaken.count();
-    println!("Formula: p.shaken.count() > 0");
-    let formula = p_count.gt(kodkod_rs::ast::IntExpression::constant(0));
-
     let solver = Solver::new(Options::default());
-    match solver.solve(&formula, &bounds) {
-        Ok(sol) => println!("Result: {}", if sol.is_sat() { "SAT" } else { "UNSAT" }),
-        Err(e) => println!("Error: {:?}", e),
-    }
+
+    // Test 1: Skip - free variable not valid
+    println!("Test 1: Skipped (free variable test)\n");
 
     // Test 2: Count with forall (no disj)
     println!("\nTest 2: Count with forall (no disjoint)");

@@ -239,7 +239,7 @@ impl Int {
     }
 
     /// Left shift by a constant amount
-    pub fn shift_left(&self, shift: usize, factory: &mut BooleanFactory) -> Int {
+    pub fn shift_left(&self, shift: usize, _factory: &mut BooleanFactory) -> Int {
         let width = self.width();
         let mut bits = Vec::with_capacity(width);
 
@@ -255,7 +255,7 @@ impl Int {
     }
 
     /// Right shift by a constant amount (zero extension)
-    pub fn shift_right(&self, shift: usize, factory: &mut BooleanFactory) -> Int {
+    pub fn shift_right(&self, shift: usize, _factory: &mut BooleanFactory) -> Int {
         let width = self.width();
         let mut bits = Vec::with_capacity(width);
 
@@ -271,7 +271,7 @@ impl Int {
     }
 
     /// Arithmetic right shift (sign extension)
-    pub fn shift_right_arithmetic(&self, shift: usize, factory: &mut BooleanFactory) -> Int {
+    pub fn shift_right_arithmetic(&self, shift: usize, _factory: &mut BooleanFactory) -> Int {
         let width = self.width();
         let sign_bit = self.bit(width - 1);
         let mut bits = Vec::with_capacity(width);
@@ -325,7 +325,6 @@ impl Int {
         let sign_bit = self.bit(self.width() - 1);
 
         let width = factory.bitwidth();
-        let mut result = Vec::with_capacity(width);
 
         // Result: [sign_bit, NOT(sign_bit) OR is_zero, is_zero]
         // -1 (negative): [1, 1, 0]

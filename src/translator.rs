@@ -10,7 +10,7 @@ pub use leaf_interpreter::LeafInterpreter;
 pub use environment::Environment;
 
 use crate::ast::*;
-use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Options};
+use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Int, Options};
 use crate::instance::Bounds;
 
 /// Translator for FOL formulas to boolean circuits
@@ -129,10 +129,18 @@ impl<'a> FOL2BoolTranslator<'a> {
                 self.translate_quantified(*quantifier, declarations, body)
             }
 
-            Formula::IntComparison { .. } => {
-                // Integer comparisons are an extension feature
-                // For now, return TRUE (conservative approximation)
-                self.interpreter.factory_mut().constant(true)
+            Formula::IntComparison { left, op, right } => {
+                let left_int = self.translate_int_expr(left);
+                let right_int = self.translate_int_expr(right);
+                let factory = self.interpreter.factory_mut();
+
+                match op {
+                    IntCompareOp::Eq => left_int.eq(&right_int, factory),
+                    IntCompareOp::Lt => left_int.lt(&right_int, factory),
+                    IntCompareOp::Lte => left_int.lte(&right_int, factory),
+                    IntCompareOp::Gt => right_int.lt(&left_int, factory),
+                    IntCompareOp::Gte => right_int.lte(&left_int, factory),
+                }
             }
         }
     }
@@ -344,5 +352,163 @@ impl<'a> FOL2BoolTranslator<'a> {
 
         // POP binding
         self.env.pop();
+    }
+
+    /// Integer expression translation
+    /// Following Java: FOL2BoolTranslator integer expression handling
+    fn translate_int_expr(&mut self, expr: &IntExpression) -> Int {
+        match expr {
+            IntExpression::Constant(c) => {
+                let factory = self.interpreter.factory_mut();
+                let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+                Int::constant(*c, factory.bitwidth(), one_bit)
+            }
+
+            IntExpression::Cardinality(set_expr) => {
+                // Count the number of tuples in the set expression
+                let matrix = self.translate_expression(set_expr);
+                let count = matrix.density() as i32;
+
+                let factory = self.interpreter.factory_mut();
+                let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+                Int::constant(count, factory.bitwidth(), one_bit)
+            }
+
+            IntExpression::Binary { left, op, right } => {
+                let left_int = self.translate_int_expr(left);
+                let right_int = self.translate_int_expr(right);
+                let factory = self.interpreter.factory_mut();
+
+                match op {
+                    IntBinaryOp::Plus => left_int.plus(&right_int, factory),
+                    IntBinaryOp::Minus => left_int.minus(&right_int, factory),
+                    IntBinaryOp::And => left_int.and(&right_int, factory),
+                    IntBinaryOp::Or => left_int.or(&right_int, factory),
+                    IntBinaryOp::Xor => left_int.xor(&right_int, factory),
+                    IntBinaryOp::Shl => {
+                        // Shift left by constant amount
+                        if let IntExpression::Constant(shift_amt) = &**right {
+                            if *shift_amt >= 0 {
+                                left_int.shift_left(*shift_amt as usize, factory)
+                            } else {
+                                left_int // Invalid shift amount
+                            }
+                        } else {
+                            // Dynamic shift not yet supported
+                            left_int
+                        }
+                    }
+                    IntBinaryOp::Shr => {
+                        // Arithmetic right shift by constant
+                        if let IntExpression::Constant(shift_amt) = &**right {
+                            if *shift_amt >= 0 {
+                                left_int.shift_right_arithmetic(*shift_amt as usize, factory)
+                            } else {
+                                left_int
+                            }
+                        } else {
+                            left_int
+                        }
+                    }
+                    IntBinaryOp::Sha => {
+                        // Logical right shift by constant
+                        if let IntExpression::Constant(shift_amt) = &**right {
+                            if *shift_amt >= 0 {
+                                left_int.shift_right(*shift_amt as usize, factory)
+                            } else {
+                                left_int
+                            }
+                        } else {
+                            left_int
+                        }
+                    }
+                    IntBinaryOp::Multiply => {
+                        // Multiplication not yet fully implemented in Int
+                        // For now, fallback to constant evaluation if possible
+                        if let (Some(lv), Some(rv)) = (left_int.value(), right_int.value()) {
+                            let product = lv.wrapping_mul(rv);
+                            let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+                            Int::constant(product, factory.bitwidth(), one_bit)
+                        } else {
+                            left_int // Unsupported
+                        }
+                    }
+                    IntBinaryOp::Divide | IntBinaryOp::Modulo => {
+                        // Division/modulo not implemented
+                        if let (Some(lv), Some(rv)) = (left_int.value(), right_int.value()) {
+                            let result = match op {
+                                IntBinaryOp::Divide if rv != 0 => lv / rv,
+                                IntBinaryOp::Modulo if rv != 0 => lv % rv,
+                                _ => 0,
+                            };
+                            let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+                            Int::constant(result, factory.bitwidth(), one_bit)
+                        } else {
+                            left_int
+                        }
+                    }
+                }
+            }
+
+            IntExpression::Unary { op, expr } => {
+                let int_val = self.translate_int_expr(expr);
+                let factory = self.interpreter.factory_mut();
+
+                match op {
+                    IntUnaryOp::Negate => int_val.negate(factory),
+                    IntUnaryOp::Not => int_val.not(factory),
+                    IntUnaryOp::Abs => int_val.abs(factory),
+                    IntUnaryOp::Sgn => int_val.sign(factory),
+                }
+            }
+
+            IntExpression::If { condition, then_expr, else_expr } => {
+                let cond_val = self.translate_formula(condition);
+                let then_int = self.translate_int_expr(then_expr);
+                let else_int = self.translate_int_expr(else_expr);
+                let factory = self.interpreter.factory_mut();
+
+                // Build result bit-by-bit using ite
+                let mut result_bits = Vec::new();
+                for i in 0..then_int.width().max(else_int.width()) {
+                    let then_bit = then_int.bit(i);
+                    let else_bit = else_int.bit(i);
+                    let result_bit = factory.ite(cond_val.clone(), then_bit, else_bit);
+                    result_bits.push(result_bit);
+                }
+                Int::new(result_bits)
+            }
+
+            IntExpression::Nary { exprs } => {
+                // N-ary sum
+                if exprs.is_empty() {
+                    let factory = self.interpreter.factory_mut();
+                    let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+                    return Int::constant(0, factory.bitwidth(), one_bit);
+                }
+
+                let mut result = self.translate_int_expr(&exprs[0]);
+                for expr in &exprs[1..] {
+                    let int_val = self.translate_int_expr(expr);
+                    let factory = self.interpreter.factory_mut();
+                    result = result.plus(&int_val, factory);
+                }
+                result
+            }
+
+            IntExpression::Sum { .. } => {
+                // Sum over declarations not yet supported
+                let factory = self.interpreter.factory_mut();
+                let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+                Int::constant(0, factory.bitwidth(), one_bit)
+            }
+
+            IntExpression::ExprCast(_) => {
+                // Cast expression not yet supported
+                let factory = self.interpreter.factory_mut();
+                let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+                Int::constant(0, factory.bitwidth(), one_bit)
+            }
+        }
     }
 }

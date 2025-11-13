@@ -1,9 +1,11 @@
 //! Boolean factory with gate caching
 //!
-//! The factory creates boolean values and formulas with automatic deduplication.
+//! The factory creates boolean values and formulas, with automatic deduplication.
+//! Uses interior mutability (Cell/RefCell) to avoid &mut self everywhere.
 
 use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind};
 use rustc_hash::FxHashMap;
+use std::cell::{Cell, RefCell};
 
 /// Options for boolean factory
 #[derive(Debug, Clone)]
@@ -21,13 +23,14 @@ impl Default for Options {
 /// Boolean circuit factory with caching
 ///
 /// Creates boolean values and formulas, with automatic deduplication of gates.
+/// Uses interior mutability to allow creating gates through `&self`.
 pub struct BooleanFactory {
     num_variables: u32,
-    next_label: i32,
+    next_label: Cell<u32>,
     options: Options,
     // Cache for gate deduplication
     // Key: (kind, input labels) -> cached formula
-    cache: FxHashMap<CacheKey, BooleanFormula>,
+    cache: RefCell<FxHashMap<CacheKey, BooleanFormula>>,
     bitwidth: usize,
 }
 
@@ -49,9 +52,9 @@ impl BooleanFactory {
         Self {
             num_variables,
             // Start labels after variables (variables are 1..=num_variables)
-            next_label: (num_variables as i32) + 1,
+            next_label: Cell::new(num_variables + 1),
             options,
-            cache: FxHashMap::default(),
+            cache: RefCell::new(FxHashMap::default()),
             bitwidth: 32, // Default bitwidth for integers
         }
     }
@@ -78,12 +81,12 @@ impl BooleanFactory {
     }
 
     /// Creates an AND gate
-    pub fn and(&mut self, left: BoolValue, right: BoolValue) -> BoolValue {
+    pub fn and(&self, left: BoolValue, right: BoolValue) -> BoolValue {
         self.and_multi(vec![left, right])
     }
 
     /// Creates a multi-input AND gate
-    pub fn and_multi(&mut self, mut inputs: Vec<BoolValue>) -> BoolValue {
+    pub fn and_multi(&self, mut inputs: Vec<BoolValue>) -> BoolValue {
         if inputs.is_empty() {
             return self.constant(true);
         }
@@ -111,14 +114,14 @@ impl BooleanFactory {
             let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
             let key = CacheKey::And(labels.clone());
 
-            if let Some(cached) = self.cache.get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key) {
                 return BoolValue::Formula(cached.clone());
             }
 
             // Create new formula
             let label = self.allocate_label();
             let formula = BooleanFormula::new(label, FormulaKind::And(inputs));
-            self.cache.insert(key, formula.clone());
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
@@ -127,12 +130,12 @@ impl BooleanFactory {
     }
 
     /// Creates an OR gate
-    pub fn or(&mut self, left: BoolValue, right: BoolValue) -> BoolValue {
+    pub fn or(&self, left: BoolValue, right: BoolValue) -> BoolValue {
         self.or_multi(vec![left, right])
     }
 
     /// Creates a multi-input OR gate
-    pub fn or_multi(&mut self, mut inputs: Vec<BoolValue>) -> BoolValue {
+    pub fn or_multi(&self, mut inputs: Vec<BoolValue>) -> BoolValue {
         if inputs.is_empty() {
             return self.constant(false);
         }
@@ -160,14 +163,14 @@ impl BooleanFactory {
             let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
             let key = CacheKey::Or(labels.clone());
 
-            if let Some(cached) = self.cache.get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key) {
                 return BoolValue::Formula(cached.clone());
             }
 
             // Create new formula
             let label = self.allocate_label();
             let formula = BooleanFormula::new(label, FormulaKind::Or(inputs));
-            self.cache.insert(key, formula.clone());
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
@@ -176,7 +179,7 @@ impl BooleanFactory {
     }
 
     /// Creates a NOT gate
-    pub fn not(&mut self, input: BoolValue) -> BoolValue {
+    pub fn not(&self, input: BoolValue) -> BoolValue {
         // Check for trivial cases
         if let BoolValue::Constant(c) = input {
             return self.constant(match c {
@@ -189,14 +192,14 @@ impl BooleanFactory {
         if self.options.sharing {
             let key = CacheKey::Not(input.label());
 
-            if let Some(cached) = self.cache.get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key) {
                 return BoolValue::Formula(cached.clone());
             }
 
             // Create new formula
             let label = self.allocate_label();
             let formula = BooleanFormula::new(label, FormulaKind::Not(Box::new(input.clone())));
-            self.cache.insert(key, formula.clone());
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
@@ -205,7 +208,7 @@ impl BooleanFactory {
     }
 
     /// Creates an if-then-else gate
-    pub fn ite(&mut self, condition: BoolValue, then_val: BoolValue, else_val: BoolValue) -> BoolValue {
+    pub fn ite(&self, condition: BoolValue, then_val: BoolValue, else_val: BoolValue) -> BoolValue {
         // Check for trivial cases
         if let BoolValue::Constant(c) = condition {
             return match c {
@@ -223,7 +226,7 @@ impl BooleanFactory {
         if self.options.sharing {
             let key = CacheKey::Ite(condition.label(), then_val.label(), else_val.label());
 
-            if let Some(cached) = self.cache.get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key) {
                 return BoolValue::Formula(cached.clone());
             }
 
@@ -237,7 +240,7 @@ impl BooleanFactory {
                     else_val: Box::new(else_val.clone()),
                 },
             );
-            self.cache.insert(key, formula.clone());
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
@@ -254,7 +257,7 @@ impl BooleanFactory {
 
     /// Creates an empty boolean matrix with the given dimensions
     /// Following Java: used for quantifier translation
-    pub fn matrix(&mut self, dimensions: Dimensions) -> BooleanMatrix {
+    pub fn matrix(&self, dimensions: Dimensions) -> BooleanMatrix {
         BooleanMatrix::empty(dimensions)
     }
 
@@ -264,43 +267,50 @@ impl BooleanFactory {
     }
 
     /// XOR operation: a XOR b = (a AND NOT b) OR (NOT a AND b)
-    pub fn xor(&mut self, a: BoolValue, b: BoolValue) -> BoolValue {
-        let a_and_not_b = self.and(a.clone(), self.not(b.clone()));
-        let not_a_and_b = self.and(self.not(a), b);
+    pub fn xor(&self, a: BoolValue, b: BoolValue) -> BoolValue {
+        let not_b = self.not(b.clone());
+        let a_and_not_b = self.and(a.clone(), not_b);
+
+        let not_a = self.not(a);
+        let not_a_and_b = self.and(not_a, b);
+
         self.or(a_and_not_b, not_a_and_b)
     }
 
     /// IFF (if and only if): a IFF b = (a AND b) OR (NOT a AND NOT b)
-    pub fn iff(&mut self, a: BoolValue, b: BoolValue) -> BoolValue {
+    pub fn iff(&self, a: BoolValue, b: BoolValue) -> BoolValue {
         let a_and_b = self.and(a.clone(), b.clone());
-        let not_a_and_not_b = self.and(self.not(a), self.not(b));
+        let not_a = self.not(a);
+        let not_b = self.not(b);
+        let not_a_and_not_b = self.and(not_a, not_b);
         self.or(a_and_b, not_a_and_not_b)
     }
 
     /// IMPLIES: a IMPLIES b = NOT a OR b
-    pub fn implies(&mut self, a: BoolValue, b: BoolValue) -> BoolValue {
-        self.or(self.not(a), b)
+    pub fn implies(&self, a: BoolValue, b: BoolValue) -> BoolValue {
+        let not_a = self.not(a);
+        self.or(not_a, b)
     }
 
     /// Full adder sum: a XOR b XOR cin
     /// Returns the sum bit (without carry)
-    pub fn sum(&mut self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
+    pub fn sum(&self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
         let ab_xor = self.xor(a, b);
         self.xor(ab_xor, cin)
     }
 
     /// Full adder carry out: (a AND b) OR (cin AND (a XOR b))
-    pub fn carry(&mut self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
+    pub fn carry(&self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
         let a_and_b = self.and(a.clone(), b.clone());
         let ab_xor = self.xor(a, b);
         let cin_and_xor = self.and(cin, ab_xor);
         self.or(a_and_b, cin_and_xor)
     }
 
-    fn allocate_label(&mut self) -> i32 {
-        let label = self.next_label;
-        self.next_label += 1;
-        label
+    fn allocate_label(&self) -> i32 {
+        let label = self.next_label.get();
+        self.next_label.set(label + 1);
+        label as i32
     }
 }
 
