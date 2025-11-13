@@ -67,12 +67,7 @@ impl<S: rustsat::solvers::Solve> SATSolver for RustSatAdapter<S> {
         let v = Var::new(var - 1);
         // Get the assignment from the solution
         match self.solver.solution(v) {
-            Ok(assignment) => {
-                match assignment.var_value(v) {
-                    TernaryVal::True => true,
-                    _ => false,
-                }
-            }
+            Ok(assignment) => matches!(assignment.var_value(v), TernaryVal::True),
             Err(_) => false,
         }
     }

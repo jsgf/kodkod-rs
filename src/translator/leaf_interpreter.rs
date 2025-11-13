@@ -183,7 +183,7 @@ impl LeafInterpreter {
 
     /// Converts a TupleSet to flat indices for BooleanMatrix
     /// Following Java pattern from LeafInterpreter
-    pub fn tuple_set_to_indices(tuple_set: &TupleSet, universe: &Universe) -> Vec<usize> {
+    pub fn tuple_set_to_indices(tuple_set: &TupleSet, _universe: &Universe) -> Vec<usize> {
         let mut indices = Vec::new();
 
         for tuple in tuple_set.iter() {

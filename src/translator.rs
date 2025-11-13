@@ -54,7 +54,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Main entry point: translate a formula to a boolean value
     /// Following Java: FOL2BoolTranslator visitor methods
     fn translate_formula(&mut self, formula: &Formula) -> BoolValue {
-        let result = match formula {
+        match formula {
             Formula::Constant(b) => {
                 self.interpreter.factory_mut().constant(*b)
             }
@@ -134,14 +134,13 @@ impl<'a> FOL2BoolTranslator<'a> {
                 // For now, return TRUE (conservative approximation)
                 self.interpreter.factory_mut().constant(true)
             }
-        };
-        result
+        }
     }
 
     /// Expression translation
     /// Following Java: FOL2BoolTranslator.visit(Expression)
     fn translate_expression(&mut self, expr: &Expression) -> BooleanMatrix {
-        let result = match expr {
+        match expr {
             Expression::Relation(rel) => {
                 self.interpreter.interpret_relation(rel)
             }
@@ -207,8 +206,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                 }
                 result
             }
-        };
-        result
+        }
     }
 
     /// Quantifier translation

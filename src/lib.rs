@@ -67,13 +67,13 @@ pub mod cnf;
 pub mod solver;
 
 /// Utility collections and helper functions
+/// Integer collections, sparse sequences, and utilities
 pub mod util {
-    //! Integer collections, sparse sequences, and utilities
 }
 
 /// Error types
+/// Error types for kodkod-rs
 pub mod error {
-    //! Error types for kodkod-rs
 
     use thiserror::Error;
 

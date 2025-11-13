@@ -295,7 +295,7 @@ impl Dimensions {
         let mut high = capacity;
 
         while low < high {
-            let mid = (low + high + 1) / 2;
+            let mid = (low + high).div_ceil(2);
             let pow = mid.pow(n);
 
             if pow == capacity {
@@ -686,7 +686,7 @@ impl BooleanMatrix {
         let row_factor = self.dimensions.cols();
         let mut seen_rows = std::collections::HashSet::new();
 
-        for (&idx, _) in &self.cells {
+        for &idx in self.cells.keys() {
             let row = idx / row_factor;
             seen_rows.insert(row);
         }
