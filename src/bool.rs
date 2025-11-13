@@ -711,6 +711,58 @@ impl BooleanMatrix {
         let closure = self.closure(factory);
         closure.union(iden, factory)
     }
+
+    /// Count the number of TRUE entries in this matrix as a boolean circuit
+    /// Returns an Int representing the count via popcount circuit
+    pub fn popcount(&self, factory: &mut BooleanFactory) -> Int {
+        if self.cells.is_empty() {
+            let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+            return Int::constant(0, factory.bitwidth(), one_bit);
+        }
+
+        // Collect all values from the matrix (only non-FALSE entries)
+        let values: Vec<BoolValue> = self.cells.values().cloned().collect();
+
+        if values.is_empty() {
+            let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
+            return Int::constant(0, factory.bitwidth(), one_bit);
+        }
+
+        // Use cascaded full adders to sum the values
+        // Start with the first value in bit 0
+        let mut result_bits: Vec<BoolValue> = vec![values[0].clone()];
+
+        // Add remaining values
+        for val in &values[1..] {
+            // Add current value to the accumulated result
+            let mut new_bits = Vec::new();
+            let mut carry = BoolValue::Constant(BooleanConstant::FALSE);
+
+            // For each bit position, perform full addition
+            for res_bit in result_bits.iter() {
+                // sum = res_bit XOR val XOR carry
+                let sum = factory.sum(res_bit.clone(), val.clone(), carry.clone());
+                new_bits.push(sum);
+
+                // carry = (res_bit AND val) OR (carry AND (res_bit XOR val))
+                carry = factory.carry(res_bit.clone(), val.clone(), carry);
+            }
+
+            // Add final carry as a new bit if non-zero
+            if carry != BoolValue::Constant(BooleanConstant::FALSE) {
+                new_bits.push(carry.clone());
+            }
+
+            result_bits = new_bits;
+        }
+
+        // Pad to factory bitwidth
+        while result_bits.len() < factory.bitwidth() {
+            result_bits.push(BoolValue::Constant(BooleanConstant::FALSE));
+        }
+
+        Int::new(result_bits)
+    }
 }
 
 #[cfg(test)]

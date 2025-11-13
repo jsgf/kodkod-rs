@@ -365,13 +365,10 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             IntExpression::Cardinality(set_expr) => {
-                // Count the number of tuples in the set expression
+                // Count the number of tuples in the set expression using a popcount circuit
                 let matrix = self.translate_expression(set_expr);
-                let count = matrix.density() as i32;
-
                 let factory = self.interpreter.factory_mut();
-                let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
-                Int::constant(count, factory.bitwidth(), one_bit)
+                matrix.popcount(factory)
             }
 
             IntExpression::Binary { left, op, right } => {
