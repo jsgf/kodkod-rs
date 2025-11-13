@@ -23,7 +23,7 @@ fn main() {
     // Puzzle:
     //   1 2 | 3 4
     //   _ _ | _ _
-    //   -----+-----
+    //  -----+-----
     //   _ _ | _ _
     //   4 3 | 2 1
     let puzzle = vec![
@@ -100,10 +100,10 @@ fn print_grid(grid: &[Vec<usize>], n: usize) {
     let r = (n as f64).sqrt() as usize;
     for (i, row) in grid.iter().enumerate() {
         if i > 0 && i % r == 0 {
-            print!("  ");
+            //print!("  ");
             for j in 0..n {
                 if j > 0 && j % r == 0 {
-                    print!("+-");
+                    print!("+");
                 }
                 print!("--");
             }
