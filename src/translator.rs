@@ -129,59 +129,10 @@ impl<'a> FOL2BoolTranslator<'a> {
                 self.translate_quantified(*quantifier, declarations, body)
             }
 
-            Formula::IntComparison { left, op, right } => {
-                // Translate integer expressions to integer values
-                let left_int = self.translate_int_expr(left);
-                let right_int = self.translate_int_expr(right);
-
-                // Compare the integer values
-                match (left_int, right_int) {
-                    (Some(lv), Some(rv)) => {
-                        let factory = self.interpreter.factory_mut();
-                        match op {
-                            IntCompareOp::Eq => {
-                                if lv == rv {
-                                    factory.constant(true)
-                                } else {
-                                    factory.constant(false)
-                                }
-                            }
-                            IntCompareOp::Lt => {
-                                if lv < rv {
-                                    factory.constant(true)
-                                } else {
-                                    factory.constant(false)
-                                }
-                            }
-                            IntCompareOp::Lte => {
-                                if lv <= rv {
-                                    factory.constant(true)
-                                } else {
-                                    factory.constant(false)
-                                }
-                            }
-                            IntCompareOp::Gt => {
-                                if lv > rv {
-                                    factory.constant(true)
-                                } else {
-                                    factory.constant(false)
-                                }
-                            }
-                            IntCompareOp::Gte => {
-                                if lv >= rv {
-                                    factory.constant(true)
-                                } else {
-                                    factory.constant(false)
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        // If we can't evaluate the integer expressions to constants,
-                        // conservatively return TRUE (unknown value)
-                        self.interpreter.factory_mut().constant(true)
-                    }
-                }
+            Formula::IntComparison { .. } => {
+                // Integer comparisons are an extension feature
+                // For now, return TRUE (conservative approximation)
+                self.interpreter.factory_mut().constant(true)
             }
         }
     }
@@ -393,95 +344,5 @@ impl<'a> FOL2BoolTranslator<'a> {
 
         // POP binding
         self.env.pop();
-    }
-
-    /// Translate integer expressions to concrete integer values
-    /// Returns Some(value) if the expression can be evaluated to a concrete integer
-    /// Returns None if the expression contains variables or cannot be evaluated
-    fn translate_int_expr(&mut self, expr: &IntExpression) -> Option<i32> {
-        match expr {
-            IntExpression::Constant(c) => Some(*c),
-
-            IntExpression::Cardinality(rel_expr) => {
-                // Evaluate the cardinality of an expression
-                // Only works if the expression has a known bound (no variables)
-                // For complex expressions with variables, we can't evaluate statically
-                match rel_expr {
-                    Expression::Relation(_) |
-                    Expression::Constant(_) => {
-                        let matrix = self.translate_expression(rel_expr);
-                        Some(matrix.density() as i32)
-                    }
-                    _ => {
-                        // Can't evaluate expressions with variables or complex operations
-                        None
-                    }
-                }
-            }
-
-            IntExpression::Binary { left, op, right } => {
-                let lv = self.translate_int_expr(left)?;
-                let rv = self.translate_int_expr(right)?;
-
-                Some(match op {
-                    IntBinaryOp::Plus => lv + rv,
-                    IntBinaryOp::Minus => lv - rv,
-                    IntBinaryOp::Multiply => lv * rv,
-                    IntBinaryOp::Divide => {
-                        if rv == 0 { return None; }
-                        lv / rv
-                    }
-                    IntBinaryOp::Modulo => {
-                        if rv == 0 { return None; }
-                        lv % rv
-                    }
-                    IntBinaryOp::And => lv & rv,
-                    IntBinaryOp::Or => lv | rv,
-                    IntBinaryOp::Xor => lv ^ rv,
-                    IntBinaryOp::Shl => lv << rv,
-                    IntBinaryOp::Shr => lv >> rv,
-                    IntBinaryOp::Sha => lv >> rv,  // Same as Shr for our purposes
-                })
-            }
-
-            IntExpression::Unary { op, expr } => {
-                let v = self.translate_int_expr(expr)?;
-
-                Some(match op {
-                    IntUnaryOp::Negate => -v,
-                    IntUnaryOp::Abs => v.abs(),
-                    IntUnaryOp::Sgn => {
-                        if v < 0 { -1 }
-                        else if v > 0 { 1 }
-                        else { 0 }
-                    }
-                    IntUnaryOp::Not => !v,
-                })
-            }
-
-            IntExpression::Nary { exprs } => {
-                // N-ary sum
-                let mut sum = 0i32;
-                for e in exprs {
-                    sum = sum.wrapping_add(self.translate_int_expr(e)?);
-                }
-                Some(sum)
-            }
-
-            IntExpression::Sum { .. } => {
-                // Sum over declarations - too complex to evaluate statically
-                None
-            }
-
-            IntExpression::If { .. } => {
-                // Conditional integer expression - needs to evaluate condition
-                None
-            }
-
-            IntExpression::ExprCast(_) => {
-                // Casting expression to integer - not supported yet
-                None
-            }
-        }
     }
 }

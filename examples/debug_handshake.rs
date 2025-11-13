@@ -26,10 +26,23 @@ fn main() {
     let all_binary = factory.all(2);
     bounds.bound(&shaken, factory.none(2), all_binary).unwrap();
 
-    let solver = Solver::new(Options::default());
+    // Test 1: Simple - just count handshakes for a person
+    println!("Test 1: Simple count");
+    let p = Variable::unary("p");
+    let p_expr = Expression::from(p.clone());
+    let p_shaken = p_expr.join(Expression::from(shaken.clone()));
+    let p_count = p_shaken.count();
+    println!("Formula: p.shaken.count() > 0");
+    let formula = p_count.gt(kodkod_rs::ast::IntExpression::constant(0));
 
-    // Test 1: Count with forall (no disj)
-    println!("Test 1: Count with forall (no disjoint)");
+    let solver = Solver::new(Options::default());
+    match solver.solve(&formula, &bounds) {
+        Ok(sol) => println!("Result: {}", if sol.is_sat() { "SAT" } else { "UNSAT" }),
+        Err(e) => println!("Error: {:?}", e),
+    }
+
+    // Test 2: Count with forall (no disj)
+    println!("\nTest 2: Count with forall (no disjoint)");
     let p = Variable::unary("p");
     let p_expr = Expression::from(p.clone());
     let p_count = p_expr.join(Expression::from(shaken.clone())).count();
@@ -47,8 +60,8 @@ fn main() {
         Err(e) => println!("Error: {:?}", e),
     }
 
-    // Test 2: Count comparison with forall and two variables
-    println!("\nTest 2: Count comparison with forall (two vars, no disj)");
+    // Test 3: Count comparison with forall and two variables
+    println!("\nTest 3: Count comparison with forall (two vars, no disj)");
     let p = Variable::unary("p");
     let q = Variable::unary("q");
 
@@ -75,8 +88,8 @@ fn main() {
         Err(e) => println!("Error: {:?}", e),
     }
 
-    // Test 3: Same but with intersection (disjoint-like)
-    println!("\nTest 3: Count with disjoint constraint");
+    // Test 4: Same but with intersection (disjoint-like)
+    println!("\nTest 4: Count with disjoint constraint");
     let p = Variable::unary("p");
     let q = Variable::unary("q");
 
