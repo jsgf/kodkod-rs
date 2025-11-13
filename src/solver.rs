@@ -13,21 +13,12 @@ use rustsat_batsat::BasicSolver;
 use std::time::{Duration, Instant};
 
 /// Solver options
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Options {
     /// Boolean circuit options
     pub bool_options: BoolOptions,
     /// Solver timeout in milliseconds (None = no timeout)
     pub timeout_ms: Option<u64>,
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            bool_options: BoolOptions::default(),
-            timeout_ms: None,
-        }
-    }
 }
 
 /// Main Kodkod solver (uses batsat by default)

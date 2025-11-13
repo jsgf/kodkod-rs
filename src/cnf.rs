@@ -38,14 +38,9 @@ impl CNF {
 }
 
 /// Translates boolean circuits to CNF
+#[derive(Default)]
 pub struct CNFTranslator {
     cnf: CNF,
-}
-
-impl Default for CNFTranslator {
-    fn default() -> Self {
-        Self { cnf: CNF::default() }
-    }
 }
 
 impl CNFTranslator {

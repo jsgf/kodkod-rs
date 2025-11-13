@@ -48,6 +48,7 @@ pub enum Quantifier {
 }
 
 /// A first-order formula
+#[expect(missing_docs)]
 #[derive(Clone, Debug)]
 pub enum Formula {
     /// Constant formula (TRUE or FALSE)

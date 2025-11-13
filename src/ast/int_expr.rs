@@ -58,6 +58,7 @@ pub enum IntCompareOp {
 }
 
 /// An expression that evaluates to an integer
+#[expect(missing_docs)]
 #[derive(Clone, Debug)]
 pub enum IntExpression {
     /// Integer constant

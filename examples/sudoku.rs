@@ -2,12 +2,6 @@
 //!
 //! Encodes Sudoku puzzle as a relational logic problem and solves it.
 //! This version solves 4x4 Sudoku (2x2 regions) for simplicity.
-//!
-//! NOTE: The current implementation has an issue where the complex quantified
-//! formula evaluates to TRUE, causing the solver to return only the given clues
-//! rather than a complete solution. This is a known limitation with the current
-//! translation of complex quantified formulas with joins and differences.
-//! Solution extraction itself works correctly (see examples/simple_solution.rs).
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Instance, Universe};
