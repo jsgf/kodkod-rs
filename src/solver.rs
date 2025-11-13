@@ -30,7 +30,7 @@ impl Default for Options {
     }
 }
 
-/// Main Kodkod solver
+/// Main Kodkod solver (uses batsat by default)
 ///
 /// Translates relational logic formulas to SAT and finds satisfying instances.
 pub struct Solver {
@@ -38,18 +38,27 @@ pub struct Solver {
 }
 
 impl Solver {
-    /// Creates a new solver with the given options
+    /// Creates a new solver with the given options (uses batsat backend)
     pub fn new(options: Options) -> Self {
         Self { options }
     }
 
-    /// Solves a formula with the given bounds
+    /// Solves a formula with the given bounds using batsat backend
     ///
     /// Returns a Solution indicating SAT/UNSAT and containing
     /// statistics and (if SAT) a satisfying instance.
     pub fn solve(&self, formula: &Formula, bounds: &Bounds) -> Result<Solution> {
-        let _start = Instant::now();
+        let mut sat_solver = RustSatAdapter::new(BasicSolver::default());
+        self.solve_with(&mut sat_solver, formula, bounds)
+    }
 
+    /// Solves a formula with a custom SAT solver
+    pub fn solve_with<S: SATSolver>(
+        &self,
+        sat_solver: &mut S,
+        formula: &Formula,
+        bounds: &Bounds,
+    ) -> Result<Solution> {
         // Step 1: Translate formula to boolean circuit
         let translation_start = Instant::now();
         let (bool_circuit, interpreter) = Translator::evaluate(formula, bounds, &self.options.bool_options);
@@ -63,7 +72,6 @@ impl Solver {
 
         // Step 3: Run SAT solver
         let solving_start = Instant::now();
-        let mut sat_solver = RustSatAdapter::new(BasicSolver::default());
         sat_solver.add_variables(cnf.num_variables);
 
         // Add all clauses to the SAT solver
@@ -84,7 +92,7 @@ impl Solver {
 
         if is_sat {
             // Extract solution from SAT model
-            let instance = self.extract_instance(&sat_solver, &interpreter, bounds)?;
+            let instance = self.extract_instance(sat_solver, &interpreter, bounds)?;
             Ok(Solution::Sat { instance, stats })
         } else {
             Ok(Solution::Unsat { stats })
@@ -95,7 +103,7 @@ impl Solver {
     /// Following Java: similar logic in Translator
     fn extract_instance(
         &self,
-        sat_solver: &RustSatAdapter<BasicSolver>,
+        sat_solver: &impl SATSolver,
         interpreter: &LeafInterpreter,
         bounds: &Bounds,
     ) -> Result<Instance> {
