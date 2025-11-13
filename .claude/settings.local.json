@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(for ex in sudoku alloy_pigeonhole alloy_handshake)",
+      "Bash(do echo \"=== Testing $ex ===\")",
+      "Bash(cargo run:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []
