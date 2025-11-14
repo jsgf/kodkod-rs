@@ -63,6 +63,11 @@ impl LeafInterpreter {
         &mut self.factory
     }
 
+    /// Returns a reference to the arena (from the factory)
+    pub fn arena(&self) -> &crate::bool::MatrixArena {
+        self.factory.arena()
+    }
+
     /// Returns a reference to the universe
     pub fn universe(&self) -> &Universe {
         &self.universe

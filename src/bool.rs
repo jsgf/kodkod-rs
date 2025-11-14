@@ -17,12 +17,43 @@
 mod factory;
 pub mod var_allocator;
 pub mod int;
+pub mod arena;
 
 pub use factory::{BooleanFactory, Options};
 pub use var_allocator::VariableAllocator;
 pub use int::Int;
+pub use arena::MatrixArena;
 
 use std::sync::Arc;
+
+/// Index handle for a value stored in the arena
+///
+/// A lightweight copy-able reference to a value allocated in the arena.
+/// Handles are type-safe: Handle<X> cannot be used where Handle<Y> is expected.
+/// Can point to either a single value `Handle<T>` or a slice `Handle<[T]>`.
+/// The actual dereference must happen through the arena with proper lifetime.
+#[derive(Debug, Eq, PartialEq, Hash)]
+pub struct Handle<T: ?Sized> {
+    ptr: *const T,
+}
+
+impl<T: ?Sized> Copy for Handle<T> {}
+
+impl<T: ?Sized> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: ?Sized> Handle<T> {
+    /// Creates a new handle from a pointer.
+    ///
+    /// # Safety
+    /// The pointer must point to a valid value/slice that outlives the handle.
+    pub(crate) unsafe fn new(ptr: *const T) -> Self {
+        Self { ptr }
+    }
+}
 
 /// Trait for all Boolean values
 ///
@@ -148,20 +179,20 @@ struct BooleanFormulaInner {
 /// Formula kind (gate type)
 #[derive(Debug, Clone)]
 pub enum FormulaKind {
-    /// Multi-input AND gate
-    And(Vec<BoolValue>),
-    /// Multi-input OR gate
-    Or(Vec<BoolValue>),
-    /// NOT gate
-    Not(Box<BoolValue>),
-    /// If-then-else gate
+    /// Multi-input AND gate - handle to slice of BoolValues in arena
+    And(Handle<[BoolValue]>),
+    /// Multi-input OR gate - handle to slice of BoolValues in arena
+    Or(Handle<[BoolValue]>),
+    /// NOT gate - handle to BoolValue in arena
+    Not(Handle<BoolValue>),
+    /// If-then-else gate - handles to BoolValues in arena
     Ite {
         /// Condition
-        condition: Box<BoolValue>,
+        condition: Handle<BoolValue>,
         /// Then branch
-        then_val: Box<BoolValue>,
+        then_val: Handle<BoolValue>,
         /// Else branch
-        else_val: Box<BoolValue>,
+        else_val: Handle<BoolValue>,
     },
 }
 

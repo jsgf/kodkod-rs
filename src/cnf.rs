@@ -2,7 +2,7 @@
 //!
 //! Converts boolean gates to CNF clauses using Tseitin transformation.
 
-use crate::bool::{BoolValue, BooleanFormula, FormulaKind};
+use crate::bool::{BoolValue, BooleanFormula, FormulaKind, MatrixArena};
 
 /// CNF representation
 #[derive(Debug, Clone, Default)]
@@ -38,15 +38,18 @@ impl CNF {
 }
 
 /// Translates boolean circuits to CNF
-#[derive(Default)]
-pub struct CNFTranslator {
+pub struct CNFTranslator<'a> {
     cnf: CNF,
+    arena: &'a MatrixArena,
 }
 
-impl CNFTranslator {
+impl<'a> CNFTranslator<'a> {
     /// Creates a new CNF translator
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(arena: &'a MatrixArena) -> Self {
+        Self {
+            cnf: CNF::new(),
+            arena,
+        }
     }
 
     /// Translates a boolean value to CNF
@@ -92,17 +95,23 @@ impl CNFTranslator {
         let output = formula.label();
 
         match formula.kind() {
-            FormulaKind::And(inputs) => {
+            FormulaKind::And(handle) => {
+                let inputs = self.arena.resolve_handle(*handle);
                 self.translate_and(output, inputs);
             }
-            FormulaKind::Or(inputs) => {
+            FormulaKind::Or(handle) => {
+                let inputs = self.arena.resolve_handle(*handle);
                 self.translate_or(output, inputs);
             }
-            FormulaKind::Not(input) => {
+            FormulaKind::Not(handle) => {
+                let input = self.arena.resolve_handle(*handle);
                 self.translate_not(output, input);
             }
             FormulaKind::Ite { condition, then_val, else_val } => {
-                self.translate_ite(output, condition, then_val, else_val);
+                let cond = self.arena.resolve_handle(*condition);
+                let then = self.arena.resolve_handle(*then_val);
+                let else_val = self.arena.resolve_handle(*else_val);
+                self.translate_ite(output, cond, then, else_val);
             }
         }
 

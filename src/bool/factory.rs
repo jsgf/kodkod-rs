@@ -3,7 +3,7 @@
 //! The factory creates boolean values and formulas, with automatic deduplication.
 //! Uses interior mutability (Cell/RefCell) to avoid &mut self everywhere.
 
-use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind};
+use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind, MatrixArena};
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
 
@@ -32,6 +32,8 @@ pub struct BooleanFactory {
     // Key: (kind, input labels) -> cached formula
     cache: RefCell<FxHashMap<CacheKey, BooleanFormula>>,
     bitwidth: usize,
+    // Arena for allocating BoolValue handles
+    arena: MatrixArena,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -56,12 +58,18 @@ impl BooleanFactory {
             options,
             cache: RefCell::new(FxHashMap::default()),
             bitwidth: 32, // Default bitwidth for integers
+            arena: MatrixArena::new(),
         }
     }
 
     /// Returns the number of variables
     pub fn num_variables(&self) -> u32 {
         self.num_variables
+    }
+
+    /// Returns a reference to the arena
+    pub fn arena(&self) -> &MatrixArena {
+        &self.arena
     }
 
     /// Creates a boolean variable
@@ -118,14 +126,16 @@ impl BooleanFactory {
                 return BoolValue::Formula(cached.clone());
             }
 
-            // Create new formula
+            // Create new formula - allocate inputs slice in arena
             let label = self.allocate_label();
-            let formula = BooleanFormula::new(label, FormulaKind::And(inputs));
+            let handle = self.arena.alloc_slice_handle(&inputs);
+            let formula = BooleanFormula::new(label, FormulaKind::And(handle));
             self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
-            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::And(inputs)))
+            let handle = self.arena.alloc_slice_handle(&inputs);
+            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::And(handle)))
         }
     }
 
@@ -167,14 +177,16 @@ impl BooleanFactory {
                 return BoolValue::Formula(cached.clone());
             }
 
-            // Create new formula
+            // Create new formula - allocate inputs slice in arena
             let label = self.allocate_label();
-            let formula = BooleanFormula::new(label, FormulaKind::Or(inputs));
+            let handle = self.arena.alloc_slice_handle(&inputs);
+            let formula = BooleanFormula::new(label, FormulaKind::Or(handle));
             self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
-            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Or(inputs)))
+            let handle = self.arena.alloc_slice_handle(&inputs);
+            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Or(handle)))
         }
     }
 
@@ -196,14 +208,16 @@ impl BooleanFactory {
                 return BoolValue::Formula(cached.clone());
             }
 
-            // Create new formula
+            // Create new formula - allocate input handle in arena
             let label = self.allocate_label();
-            let formula = BooleanFormula::new(label, FormulaKind::Not(Box::new(input.clone())));
+            let handle = self.arena.alloc_handle(input.clone());
+            let formula = BooleanFormula::new(label, FormulaKind::Not(handle));
             self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
-            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Not(Box::new(input))))
+            let handle = self.arena.alloc_handle(input);
+            BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Not(handle)))
         }
     }
 
@@ -230,26 +244,32 @@ impl BooleanFactory {
                 return BoolValue::Formula(cached.clone());
             }
 
-            // Create new formula
+            // Create new formula - allocate value handles in arena
             let label = self.allocate_label();
+            let condition_handle = self.arena.alloc_handle(condition.clone());
+            let then_handle = self.arena.alloc_handle(then_val.clone());
+            let else_handle = self.arena.alloc_handle(else_val.clone());
             let formula = BooleanFormula::new(
                 label,
                 FormulaKind::Ite {
-                    condition: Box::new(condition.clone()),
-                    then_val: Box::new(then_val.clone()),
-                    else_val: Box::new(else_val.clone()),
+                    condition: condition_handle,
+                    then_val: then_handle,
+                    else_val: else_handle,
                 },
             );
             self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
+            let condition_handle = self.arena.alloc_handle(condition);
+            let then_handle = self.arena.alloc_handle(then_val);
+            let else_handle = self.arena.alloc_handle(else_val);
             BoolValue::Formula(BooleanFormula::new(
                 label,
                 FormulaKind::Ite {
-                    condition: Box::new(condition),
-                    then_val: Box::new(then_val),
-                    else_val: Box::new(else_val),
+                    condition: condition_handle,
+                    then_val: then_handle,
+                    else_val: else_handle,
                 },
             ))
         }

@@ -57,7 +57,7 @@ impl Solver {
 
         // Step 2: Convert boolean circuit to CNF
         let cnf_start = Instant::now();
-        let cnf_translator = CNFTranslator::new();
+        let cnf_translator = CNFTranslator::new(interpreter.arena());
         let (_top_level_var, cnf) = cnf_translator.translate(&bool_circuit);
         let cnf_time = cnf_start.elapsed();
 
