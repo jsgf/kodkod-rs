@@ -10,14 +10,14 @@ use crate::bool::{BoolValue, BooleanConstant, BooleanFactory};
 /// Each bit can be a boolean variable or constant.
 /// Bits are indexed from 0 (LSB) to width-1 (sign bit).
 #[derive(Clone, Debug)]
-pub struct Int {
-    bits: Vec<BoolValue>,
+pub struct Int<'arena> {
+    bits: Vec<BoolValue<'arena>>,
 }
 
-impl Int {
+impl<'arena> Int<'arena> {
     /// Creates a new Int with the given bits
     /// bits[0] is LSB, bits[width-1] is sign bit (two's complement)
-    pub fn new(bits: Vec<BoolValue>) -> Self {
+    pub fn new(bits: Vec<BoolValue<'arena>>) -> Self {
         assert!(!bits.is_empty(), "Int must have at least one bit");
         Self { bits }
     }
@@ -25,7 +25,7 @@ impl Int {
     /// Creates an Int from a constant integer value with given bitwidth
     /// The bits are represented using the given boolean value for 1-bits
     /// and FALSE for 0-bits, except the sign bit uses the given value or FALSE
-    pub fn constant(value: i32, bitwidth: usize, one_bit: BoolValue) -> Self {
+    pub fn constant(value: i32, bitwidth: usize, one_bit: BoolValue<'arena>) -> Self {
         let mut bits = Vec::with_capacity(bitwidth);
 
         for i in 0..bitwidth {

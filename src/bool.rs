@@ -7,7 +7,7 @@
 //! - `BooleanValue`: Trait for all boolean values (constants, variables, formulas)
 //! - `BooleanConstant`: TRUE (label 0) or FALSE (label -1)
 //! - `BooleanVariable`: Variables with positive integer labels
-//! - `BoolValue`: Enum encompassing all boolean value types
+//! - `BoolValue<'arena>`: Enum encompassing all boolean value types
 //! - `BooleanFormula`: Boolean gates (AND, OR, NOT, ITE)
 //! - `Operator`: Boolean operators
 //! - `Dimensions`: Matrix dimensions for relation encoding
@@ -25,33 +25,40 @@ pub use int::Int;
 pub use arena::MatrixArena;
 
 use std::sync::Arc;
+use std::marker::PhantomData;
 
 /// Index handle for a value stored in the arena
 ///
-/// A lightweight copy-able reference to a value allocated in the arena.
-/// Handles are type-safe: Handle<X> cannot be used where Handle<Y> is expected.
-/// Can point to either a single value `Handle<T>` or a slice `Handle<[T]>`.
-/// The actual dereference must happen through the arena with proper lifetime.
+/// A lightweight copy-able reference to a value allocated in an arena.
+/// The lifetime parameter `'arena` ties the handle to a specific arena instance,
+/// preventing accidental mixing of handles from different arenas.
+///
+/// Handles are type-safe: `Handle<'a, X>` cannot be used where `Handle<'a, Y>` is expected.
+/// Can point to either a single value `Handle<'arena, T>` or a slice `Handle<'arena, [T]>`.
 #[derive(Debug, Eq, PartialEq, Hash)]
-pub struct Handle<T: ?Sized> {
+pub struct Handle<'arena, T: ?Sized> {
     ptr: *const T,
+    _phantom: PhantomData<&'arena ()>,
 }
 
-impl<T: ?Sized> Copy for Handle<T> {}
+impl<'arena, T: ?Sized> Copy for Handle<'arena, T> {}
 
-impl<T: ?Sized> Clone for Handle<T> {
+impl<'arena, T: ?Sized> Clone for Handle<'arena, T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T: ?Sized> Handle<T> {
+impl<'arena, T: ?Sized> Handle<'arena, T> {
     /// Creates a new handle from a pointer.
     ///
     /// # Safety
-    /// The pointer must point to a valid value/slice that outlives the handle.
+    /// The pointer must point to a valid value that outlives the arena lifetime.
     pub(crate) unsafe fn new(ptr: *const T) -> Self {
-        Self { ptr }
+        Self {
+            ptr,
+            _phantom: PhantomData,
+        }
     }
 }
 
@@ -96,7 +103,7 @@ impl BooleanValue for BooleanConstant {
 }
 
 /// Boolean variable with a positive integer label
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BooleanVariable {
     label: i32,
 }
@@ -125,74 +132,53 @@ impl BooleanValue for BooleanVariable {
 
 /// Boolean formula (gate)
 ///
-/// Formulas are reference-counted for identity-based equality and caching.
-#[derive(Debug, Clone)]
-pub struct BooleanFormula {
-    inner: Arc<BooleanFormulaInner>,
+/// Formulas have identity-based equality using their unique labels.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BooleanFormula<'arena> {
+    label: i32,
+    kind: FormulaKind<'arena>,
 }
 
-impl BooleanFormula {
+impl<'arena> BooleanFormula<'arena> {
     /// Creates a new formula with the given label and kind
-    pub(crate) fn new(label: i32, kind: FormulaKind) -> Self {
-        Self {
-            inner: Arc::new(BooleanFormulaInner { label, kind }),
-        }
+    pub(crate) fn new(label: i32, kind: FormulaKind<'arena>) -> Self {
+        Self { label, kind }
     }
 
     /// Returns the label for this formula
     pub fn label(&self) -> i32 {
-        self.inner.label
+        self.label
     }
 
     /// Returns the kind of this formula
-    pub fn kind(&self) -> &FormulaKind {
-        &self.inner.kind
+    pub fn kind(&self) -> &FormulaKind<'arena> {
+        &self.kind
     }
 }
 
-impl PartialEq for BooleanFormula {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
-    }
-}
-
-impl Eq for BooleanFormula {}
-
-impl std::hash::Hash for BooleanFormula {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.inner).hash(state);
-    }
-}
-
-impl BooleanValue for BooleanFormula {
+impl<'arena> BooleanValue for BooleanFormula<'arena> {
     fn label(&self) -> i32 {
-        self.inner.label
+        self.label
     }
-}
-
-#[derive(Debug)]
-struct BooleanFormulaInner {
-    label: i32,
-    kind: FormulaKind,
 }
 
 /// Formula kind (gate type)
-#[derive(Debug, Clone)]
-pub enum FormulaKind {
-    /// Multi-input AND gate - handle to slice of BoolValues in arena
-    And(Handle<[BoolValue]>),
-    /// Multi-input OR gate - handle to slice of BoolValues in arena
-    Or(Handle<[BoolValue]>),
-    /// NOT gate - handle to BoolValue in arena
-    Not(Handle<BoolValue>),
-    /// If-then-else gate - handles to BoolValues in arena
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FormulaKind<'arena> {
+    /// Multi-input AND gate - handle to slice of BoolValue<'arena>s in arena
+    And(Handle<'arena, [BoolValue<'arena>]>),
+    /// Multi-input OR gate - handle to slice of BoolValue<'arena>s in arena
+    Or(Handle<'arena, [BoolValue<'arena>]>),
+    /// NOT gate - handle to BoolValue<'arena> in arena
+    Not(Handle<'arena, BoolValue<'arena>>),
+    /// If-then-else gate - handles to BoolValue<'arena>s in arena
     Ite {
         /// Condition
-        condition: Handle<BoolValue>,
+        condition: Handle<'arena, BoolValue<'arena>>,
         /// Then branch
-        then_val: Handle<BoolValue>,
+        then_val: Handle<'arena, BoolValue<'arena>>,
         /// Else branch
-        else_val: Handle<BoolValue>,
+        else_val: Handle<'arena, BoolValue<'arena>>,
     },
 }
 
@@ -200,16 +186,16 @@ pub enum FormulaKind {
 ///
 /// Encompasses constants, variables, and formulas.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum BoolValue {
+pub enum BoolValue<'arena> {
     /// Constant (TRUE or FALSE)
     Constant(BooleanConstant),
     /// Variable
     Variable(BooleanVariable),
     /// Formula (gate)
-    Formula(BooleanFormula),
+    Formula(BooleanFormula<'arena>),
 }
 
-impl BoolValue {
+impl<'arena> BoolValue<'arena> {
     /// Returns the label for this value
     pub fn label(&self) -> i32 {
         match self {
@@ -235,26 +221,26 @@ impl BoolValue {
     }
 }
 
-impl BooleanValue for BoolValue {
+impl<'arena> BooleanValue for BoolValue<'arena> {
     fn label(&self) -> i32 {
         self.label()
     }
 }
 
-impl From<BooleanConstant> for BoolValue {
+impl<'arena> From<BooleanConstant> for BoolValue<'arena> {
     fn from(c: BooleanConstant) -> Self {
         BoolValue::Constant(c)
     }
 }
 
-impl From<BooleanVariable> for BoolValue {
+impl<'arena> From<BooleanVariable> for BoolValue<'arena> {
     fn from(v: BooleanVariable) -> Self {
         BoolValue::Variable(v)
     }
 }
 
-impl From<BooleanFormula> for BoolValue {
-    fn from(f: BooleanFormula) -> Self {
+impl<'arena> From<BooleanFormula<'arena>> for BoolValue<'arena> {
+    fn from(f: BooleanFormula<'arena>) -> Self {
         BoolValue::Formula(f)
     }
 }
@@ -349,13 +335,13 @@ impl Dimensions {
 /// Used to encode relations during FOL→Boolean translation.
 /// Implements sparse storage: only non-FALSE entries are stored.
 #[derive(Debug, Clone)]
-pub struct BooleanMatrix {
+pub struct BooleanMatrix<'arena> {
     dimensions: Dimensions,
     /// Sparse storage: only non-FALSE entries (index → value)
-    cells: std::collections::HashMap<usize, BoolValue>,
+    cells: std::collections::HashMap<usize, BoolValue<'arena>>,
 }
 
-impl BooleanMatrix {
+impl<'arena> BooleanMatrix<'arena> {
     /// Creates an empty matrix with the given dimensions (all FALSE)
     pub fn empty(dimensions: Dimensions) -> Self {
         Self {
@@ -398,7 +384,7 @@ impl BooleanMatrix {
 
     /// Sets value at flat index
     /// Following Java: BooleanMatrix.set(int, BooleanValue)
-    pub fn set(&mut self, index: usize, value: BoolValue) {
+    pub fn set(&mut self, index: usize, value: BoolValue<'arena>) {
         if value == BoolValue::Constant(BooleanConstant::FALSE) {
             // Sparse: don't store FALSE
             self.cells.remove(&index);
@@ -409,7 +395,7 @@ impl BooleanMatrix {
 
     /// Gets value at flat index
     /// Following Java: BooleanMatrix.get(int)
-    pub fn get(&self, index: usize) -> BoolValue {
+    pub fn get(&self, index: usize) -> BoolValue<'arena> {
         self.cells
             .get(&index)
             .cloned()
@@ -418,7 +404,7 @@ impl BooleanMatrix {
 
     /// Iterates over (index, value) pairs - ONLY non-FALSE entries
     /// Following Java: BooleanMatrix.iterator()
-    pub fn iter_indexed(&self) -> impl Iterator<Item = (usize, &BoolValue)> + '_ {
+    pub fn iter_indexed(&self) -> impl Iterator<Item = (usize, &BoolValue<'arena>)> + '_ {
         self.cells.iter().map(|(&idx, val)| (idx, val))
     }
 
@@ -429,7 +415,7 @@ impl BooleanMatrix {
     }
 
     /// Gets the element at the given row and column
-    pub fn get_at(&self, row: usize, col: usize) -> Option<BoolValue> {
+    pub fn get_at(&self, row: usize, col: usize) -> Option<BoolValue<'arena>> {
         if row < self.dimensions.rows && col < self.dimensions.cols {
             Some(self.get(row * self.dimensions.cols + col))
         } else {
@@ -624,7 +610,7 @@ impl BooleanMatrix {
 
     /// Helper: Returns conjunction of negated values in range [start, end)
     /// Following Java: BooleanMatrix.nand(int, int)
-    fn nand_row(&self, matrix: &BooleanMatrix, start: usize, end: usize, factory: &mut BooleanFactory) -> BoolValue {
+    fn nand_row(&self, matrix: &BooleanMatrix, start: usize, end: usize, factory: &mut BooleanFactory) -> BoolValue<'arena> {
         let mut acc = Vec::new();
         for idx in start..end {
             if let Some(val) = matrix.cells.get(&idx) {
@@ -640,7 +626,7 @@ impl BooleanMatrix {
 
     /// Check equality: all corresponding entries must be equal
     /// Following Java: BooleanMatrix.eq(BooleanMatrix)
-    pub fn equals(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn equals(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BoolValue<'arena> {
         let subset1 = self.subset(other, factory);
         let subset2 = other.subset(self, factory);
         factory.and(subset1, subset2)
@@ -648,7 +634,7 @@ impl BooleanMatrix {
 
     /// Check subset: all entries in self imply corresponding entries in other
     /// Following Java: BooleanMatrix.subset(BooleanMatrix)
-    pub fn subset(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn subset(&self, other: &BooleanMatrix, factory: &mut BooleanFactory) -> BoolValue<'arena> {
         assert_eq!(self.dimensions, other.dimensions);
         let mut acc = Vec::new();
 
@@ -669,25 +655,25 @@ impl BooleanMatrix {
 
     /// Multiplicity: some (at least one entry is TRUE)
     /// Following Java: BooleanMatrix.some()
-    pub fn some(&self, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn some(&self, factory: &mut BooleanFactory) -> BoolValue<'arena> {
         if self.cells.is_empty() {
             return BoolValue::Constant(BooleanConstant::FALSE);
         }
 
-        let values: Vec<BoolValue> = self.cells.values().cloned().collect();
+        let values: Vec<BoolValue<'arena>> = self.cells.values().cloned().collect();
         factory.or_multi(values)
     }
 
     /// Multiplicity: none (all entries are FALSE)
     /// Following Java: BooleanMatrix.none()
-    pub fn none(&self, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn none(&self, factory: &mut BooleanFactory) -> BoolValue<'arena> {
         let some_val = self.some(factory);
         factory.not(some_val)
     }
 
     /// Multiplicity: one (exactly one entry is TRUE)
     /// Following Java: BooleanMatrix.one()
-    pub fn one(&self, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn one(&self, factory: &mut BooleanFactory) -> BoolValue<'arena> {
         if self.cells.is_empty() {
             return BoolValue::Constant(BooleanConstant::FALSE);
         }
@@ -752,14 +738,14 @@ impl BooleanMatrix {
 
     /// Count the number of TRUE entries in this matrix as a boolean circuit
     /// Returns an Int representing the count via popcount circuit
-    pub fn popcount(&self, factory: &mut BooleanFactory) -> Int {
+    pub fn popcount(&self, factory: &mut BooleanFactory) -> Int<'arena> {
         if self.cells.is_empty() {
             let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
             return Int::constant(0, factory.bitwidth(), one_bit);
         }
 
         // Collect all values from the matrix (only non-FALSE entries)
-        let values: Vec<BoolValue> = self.cells.values().cloned().collect();
+        let values: Vec<BoolValue<'arena>> = self.cells.values().cloned().collect();
 
         if values.is_empty() {
             let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
@@ -768,7 +754,7 @@ impl BooleanMatrix {
 
         // Use cascaded full adders to sum the values
         // Start with the first value in bit 0
-        let mut result_bits: Vec<BoolValue> = vec![values[0].clone()];
+        let mut result_bits: Vec<BoolValue<'arena>> = vec![values[0].clone()];
 
         // Add remaining values
         for val in &values[1..] {

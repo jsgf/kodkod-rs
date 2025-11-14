@@ -2,3 +2,4 @@
 - The Java impl is the reference,
 and the Rust port must be *complete*, *accurate* and *faithful*. *DO NOT* leave stubs, placeholders, mocks, simplifications or any
 other workarounds.
+- Always compile-test everything with `cargo check` and make sure all tests pass (or fail as expected if incomplete) before considering something "done".
