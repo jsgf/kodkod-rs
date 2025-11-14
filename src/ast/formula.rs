@@ -200,6 +200,11 @@ impl Expression {
         }
     }
 
+    /// Expression does not equal another (convenience method)
+    pub fn ne(self, other: Expression) -> Formula {
+        self.equals(other).not()
+    }
+
     /// Expression is subset of another
     pub fn in_set(self, other: Expression) -> Formula {
         Formula::Comparison {

@@ -223,6 +223,64 @@ impl TupleSet {
     pub fn iter(&self) -> impl Iterator<Item = &Tuple> {
         self.tuples.iter()
     }
+
+    /// Adds all tuples from another set to this set
+    pub fn add_all(&mut self, other: &TupleSet) -> Result<()> {
+        if other.universe() != &self.universe {
+            return Err(KodkodError::InvalidArgument(
+                "Tuple sets from different universes".to_string(),
+            ));
+        }
+        if other.arity() != self.arity {
+            return Err(KodkodError::InvalidArgument(format!(
+                "Expected arity {}, got {}",
+                self.arity,
+                other.arity()
+            )));
+        }
+        for tuple in &other.tuples {
+            if !self.tuples.contains(tuple) {
+                self.tuples.push(tuple.clone());
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns the Cartesian product of this set with another
+    pub fn product(&self, other: &TupleSet) -> Result<TupleSet> {
+        if other.universe() != &self.universe {
+            return Err(KodkodError::InvalidArgument(
+                "Tuple sets from different universes".to_string(),
+            ));
+        }
+
+        let new_arity = self.arity + other.arity;
+        let mut result = TupleSet::empty(self.universe.clone(), new_arity);
+
+        for t1 in &self.tuples {
+            for t2 in &other.tuples {
+                let mut atoms = Vec::with_capacity(new_arity);
+                atoms.extend_from_slice(&t1.atom_indices);
+                atoms.extend_from_slice(&t2.atom_indices);
+
+                // Calculate new index
+                let base = self.universe.size();
+                let mut index = 0;
+                for (i, &atom_idx) in atoms.iter().enumerate() {
+                    index += atom_idx * base.pow((new_arity - 1 - i) as u32);
+                }
+
+                let product_tuple = Tuple {
+                    universe: self.universe.clone(),
+                    atom_indices: atoms,
+                    index,
+                };
+                result.tuples.push(product_tuple);
+            }
+        }
+
+        Ok(result)
+    }
 }
 
 /// Factory for creating tuples and tuple sets
@@ -307,6 +365,43 @@ impl TupleFactory {
         }
 
         set
+    }
+
+    /// Creates a tuple set containing all tuples from start to end (inclusive)
+    pub fn range(&self, start: Tuple, end: Tuple) -> Result<TupleSet> {
+        if start.arity() != end.arity() {
+            return Err(KodkodError::InvalidArgument(
+                "Start and end tuples must have the same arity".to_string(),
+            ));
+        }
+
+        let arity = start.arity();
+        let mut set = TupleSet::empty(self.universe.clone(), arity);
+
+        let start_index = start.index;
+        let end_index = end.index;
+
+        if start_index > end_index {
+            return Err(KodkodError::InvalidArgument(
+                "Start index must be <= end index".to_string(),
+            ));
+        }
+
+        for i in start_index..=end_index {
+            if let Ok(tuple) = self.tuple_from_index(arity, i) {
+                let _ = set.add(tuple);
+            }
+        }
+
+        Ok(set)
+    }
+
+    /// Creates a singleton tuple set containing a single atom
+    pub fn set_of(&self, atom: &str) -> Result<TupleSet> {
+        let tuple = self.tuple(&[atom])?;
+        let mut set = TupleSet::empty(self.universe.clone(), 1);
+        set.add(tuple)?;
+        Ok(set)
     }
 
     /// Creates a tuple from an index in n-dimensional space

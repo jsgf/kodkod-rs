@@ -136,6 +136,12 @@ impl Variable {
     pub fn arity(&self) -> usize {
         self.inner.arity
     }
+
+    /// Bind this variable to an expression in a quantifier
+    /// Returns a formula representing "variable in expression"
+    pub fn one_of(self, expression: Expression) -> crate::ast::formula::Formula {
+        Expression::from(self).in_set(expression)
+    }
 }
 
 impl PartialEq for Variable {
@@ -363,6 +369,12 @@ impl Expression {
         }
 
         Expression::Nary { exprs, arity }
+    }
+
+    /// Check membership in a relation (convenience method)
+    /// This is equivalent to `self.in_set(Expression::from(relation))`
+    pub fn in_relation(self, relation: &Relation) -> crate::ast::formula::Formula {
+        self.in_set(Expression::from(relation.clone()))
     }
 }
 
