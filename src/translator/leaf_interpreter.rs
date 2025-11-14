@@ -93,7 +93,7 @@ impl LeafInterpreter {
 
     /// Interprets a relation as a BooleanMatrix
     /// Following Java: LeafInterpreter.interpret(Relation)
-    pub fn interpret_relation(&self, rel: &Relation) -> BooleanMatrix {
+    pub fn interpret_relation(&self, rel: &Relation) -> BooleanMatrix<'_> {
         let lower = self
             .lower_bounds
             .get(rel)
@@ -134,7 +134,7 @@ impl LeafInterpreter {
 
     /// Interprets a constant expression (UNIV, NONE, IDEN, INTS)
     /// Following Java: LeafInterpreter.interpret(ConstantExpression)
-    pub fn interpret_constant(&self, c: ConstantExpr) -> BooleanMatrix {
+    pub fn interpret_constant(&self, c: ConstantExpr) -> BooleanMatrix<'_> {
         let univ_size = self.universe.size();
 
         match c {

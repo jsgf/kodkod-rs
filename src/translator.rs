@@ -68,10 +68,10 @@ impl Translator {
     /// Returns a TranslationResult that wraps both the interpreter and circuit together,
     /// ensuring their lifetimes are tied and cannot be separated.
     pub fn evaluate(formula: &Formula, bounds: &Bounds, options: &Options) -> TranslationResult {
-        let mut interpreter = LeafInterpreter::from_bounds(bounds, options);
+        let interpreter = LeafInterpreter::from_bounds(bounds, options);
 
         let value = {
-            let mut translator = FOL2BoolTranslator::new(&mut interpreter);
+            let translator = FOL2BoolTranslator::new(&interpreter);
             translator.translate_formula(formula)
         };
 
@@ -91,7 +91,7 @@ impl Translator {
 
     /// Approximates a formula as a boolean matrix (not used in main solver)
     pub fn approximate(_formula: &Formula, bounds: &Bounds, options: &Options) -> ApproximationResult {
-        let mut interpreter = LeafInterpreter::from_bounds(bounds, options);
+        let interpreter = LeafInterpreter::from_bounds(bounds, options);
         let capacity = bounds.universe().size();
         let dims = Dimensions::new(1, capacity);
 
@@ -115,12 +115,12 @@ impl Translator {
 /// FOL to Boolean translator
 /// Following Java: FOL2BoolTranslator
 struct FOL2BoolTranslator<'a> {
-    interpreter: &'a mut LeafInterpreter,
+    interpreter: &'a LeafInterpreter,
     env: RefCell<Environment<'a>>,
 }
 
 impl<'a> FOL2BoolTranslator<'a> {
-    fn new(interpreter: &'a mut LeafInterpreter) -> Self {
+    fn new(interpreter: &'a LeafInterpreter) -> Self {
         Self {
             interpreter,
             env: RefCell::new(Environment::empty()),
@@ -225,7 +225,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Expression translation
     /// Following Java: FOL2BoolTranslator.visit(Expression)
-    fn translate_expression(&self, expr: &Expression) -> BooleanMatrix {
+    fn translate_expression(&self, expr: &Expression) -> BooleanMatrix<'a> {
         match expr {
             Expression::Relation(rel) => {
                 self.interpreter.interpret_relation(rel)
@@ -301,7 +301,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         quantifier: Quantifier,
         declarations: &Decls,
         body: &Formula
-    ) -> BoolValue {
+    ) -> BoolValue<'a> {
         match quantifier {
             Quantifier::Some => {
                 let mut acc = Vec::new();
@@ -327,8 +327,8 @@ impl<'a> FOL2BoolTranslator<'a> {
         decls: &Decls,
         formula: &Formula,
         current_decl: usize,
-        decl_constraints: BoolValue,
-        acc: &mut Vec<BoolValue>
+        decl_constraints: BoolValue<'a>,
+        acc: &mut Vec<BoolValue<'a>>
     ) {
         // Base case: all variables bound
         if current_decl >= decls.size() {
@@ -383,8 +383,8 @@ impl<'a> FOL2BoolTranslator<'a> {
         decls: &Decls,
         formula: &Formula,
         current_decl: usize,
-        decl_constraints: BoolValue,
-        acc: &mut Vec<BoolValue>
+        decl_constraints: BoolValue<'a>,
+        acc: &mut Vec<BoolValue<'a>>
     ) {
         // Base case: all variables bound
         if current_decl >= decls.size() {
@@ -433,7 +433,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Integer expression translation
     /// Following Java: FOL2BoolTranslator integer expression handling
-    fn translate_int_expr(&self, expr: &IntExpression) -> Int {
+    fn translate_int_expr(&self, expr: &IntExpression) -> Int<'a> {
         match expr {
             IntExpression::Constant(c) => {
                 let factory = self.interpreter.factory();

@@ -553,7 +553,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Transpose of this matrix
     /// Following Java: BooleanMatrix.transpose()
-    pub fn transpose(&self, _factory: &'arena BooleanFactory) -> BooleanMatrix {
+    pub fn transpose(&self, _factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
         // For a binary relation, transpose only swaps the elements in each pair
         // The capacity (number of tuples) and arity (dimensionality) remain unchanged
         assert_eq!(self.dimensions.arity(), 2, "transpose only works on binary relations");
@@ -610,7 +610,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Helper: Returns conjunction of negated values in range [start, end)
     /// Following Java: BooleanMatrix.nand(int, int)
-    fn nand_row(&self, matrix: &BooleanMatrix, start: usize, end: usize, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
+    fn nand_row(&self, matrix: &BooleanMatrix<'arena>, start: usize, end: usize, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
         let mut acc = Vec::new();
         for idx in start..end {
             if let Some(val) = matrix.cells.get(&idx) {
@@ -699,7 +699,7 @@ impl<'arena> BooleanMatrix<'arena> {
     /// Transitive closure of a binary relation
     /// Following Java: BooleanMatrix.closure()
     /// Computes R^+ = R ∪ (R.R) ∪ (R.R.R) ∪ ... using iterative squaring
-    pub fn closure(&self, factory: &'arena BooleanFactory) -> BooleanMatrix {
+    pub fn closure(&self, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
         assert_eq!(self.dimensions.cols(), 2, "closure requires binary relation");
 
         if self.cells.is_empty() {
@@ -731,7 +731,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Reflexive transitive closure
     /// Following Java: R* = IDEN ∪ R^+
-    pub fn reflexive_closure(&self, factory: &'arena BooleanFactory, iden: &BooleanMatrix) -> BooleanMatrix {
+    pub fn reflexive_closure(&self, factory: &'arena BooleanFactory, iden: &BooleanMatrix<'arena>) -> BooleanMatrix<'arena> {
         let closure = self.closure(factory);
         closure.union(iden, factory)
     }

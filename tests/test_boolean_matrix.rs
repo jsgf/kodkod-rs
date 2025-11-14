@@ -18,7 +18,7 @@ fn test_transpose_binary_relation_simple() {
     matrix.set(1, val_true.clone());
     matrix.set(2, val_true.clone());
 
-    let transposed = matrix.transpose(&mut factory);
+    let transposed = matrix.transpose(&factory);
 
     assert_eq!(transposed.dimensions().capacity(), matrix.dimensions().capacity());
     assert_eq!(transposed.dimensions().arity(), matrix.dimensions().arity());
@@ -35,7 +35,7 @@ fn test_transpose_binary_relation_asymmetric() {
     let val_true = BoolValue::Constant(BooleanConstant::TRUE);
     matrix.set(1, val_true.clone());
 
-    let transposed = matrix.transpose(&mut factory);
+    let transposed = matrix.transpose(&factory);
 
     let val_10 = transposed.get(3);
     assert_eq!(val_10, BoolValue::Constant(BooleanConstant::TRUE));
@@ -50,7 +50,7 @@ fn test_transpose_preserves_dimensions() {
     let mut factory = BooleanFactory::new(4, Options::default());
     let matrix = BooleanMatrix::empty(dims);
 
-    let transposed = matrix.transpose(&mut factory);
+    let transposed = matrix.transpose(&factory);
 
     assert_eq!(transposed.dimensions().capacity(), matrix.dimensions().capacity());
     assert_eq!(transposed.dimensions().arity(), matrix.dimensions().arity());
@@ -67,8 +67,8 @@ fn test_transpose_double_transpose_identity() {
     matrix.set(4, val_true.clone());
     matrix.set(7, val_true.clone());
 
-    let transposed_once = matrix.transpose(&mut factory);
-    let transposed_twice = transposed_once.transpose(&mut factory);
+    let transposed_once = matrix.transpose(&factory);
+    let transposed_twice = transposed_once.transpose(&factory);
 
     assert_eq!(transposed_twice.get(1), matrix.get(1));
     assert_eq!(transposed_twice.get(4), matrix.get(4));
@@ -81,7 +81,7 @@ fn test_transpose_empty_relation() {
     let mut factory = BooleanFactory::new(2, Options::default());
     let matrix = BooleanMatrix::empty(dims);
 
-    let transposed = matrix.transpose(&mut factory);
+    let transposed = matrix.transpose(&factory);
 
     for i in 0..4 {
         assert_eq!(transposed.get(i), BoolValue::Constant(BooleanConstant::FALSE));
@@ -98,7 +98,7 @@ fn test_equals_same_matrix() {
     matrix.set(1, val_true.clone());
     matrix.set(2, val_true.clone());
 
-    let result = matrix.equals(&matrix, &mut factory);
+    let result = matrix.equals(&matrix, &factory);
     assert_eq!(result, BoolValue::Constant(BooleanConstant::TRUE));
 }
 
@@ -114,7 +114,7 @@ fn test_equals_different_matrices() {
     matrix1.set(1, val_true.clone());
     matrix2.set(2, val_true.clone());
 
-    let result = matrix1.equals(&matrix2, &mut factory);
+    let result = matrix1.equals(&matrix2, &factory);
     assert_ne!(result, BoolValue::Constant(BooleanConstant::TRUE));
 }
 
@@ -129,8 +129,8 @@ fn test_equals_transposed_symmetric() {
     matrix.set(1, val_true.clone());
     matrix.set(3, val_true.clone());
 
-    let transposed = matrix.transpose(&mut factory);
-    let result = matrix.equals(&transposed, &mut factory);
+    let transposed = matrix.transpose(&factory);
+    let result = matrix.equals(&transposed, &factory);
 
     assert_eq!(result, BoolValue::Constant(BooleanConstant::TRUE));
 }
@@ -147,7 +147,7 @@ fn test_union_simple() {
     matrix1.set(1, val_true.clone());
     matrix2.set(2, val_true.clone());
 
-    let union = matrix1.union(&matrix2, &mut factory);
+    let union = matrix1.union(&matrix2, &factory);
 
     assert_eq!(union.get(1), BoolValue::Constant(BooleanConstant::TRUE));
     assert_eq!(union.get(2), BoolValue::Constant(BooleanConstant::TRUE));
@@ -167,7 +167,7 @@ fn test_intersection_simple() {
     matrix2.set(2, val_true.clone());
     matrix2.set(3, val_true.clone());
 
-    let intersection = matrix1.intersection(&matrix2, &mut factory);
+    let intersection = matrix1.intersection(&matrix2, &factory);
 
     assert_eq!(intersection.get(2), BoolValue::Constant(BooleanConstant::TRUE));
     assert_eq!(intersection.get(1), BoolValue::Constant(BooleanConstant::FALSE));
@@ -186,7 +186,7 @@ fn test_difference_simple() {
     matrix1.set(2, val_true.clone());
     matrix2.set(2, val_true.clone());
 
-    let diff = matrix1.difference(&matrix2, &mut factory);
+    let diff = matrix1.difference(&matrix2, &factory);
 
     assert_eq!(diff.get(1), BoolValue::Constant(BooleanConstant::TRUE));
     assert_eq!(diff.get(2), BoolValue::Constant(BooleanConstant::FALSE));
@@ -201,7 +201,7 @@ fn test_closure_reflexive_property() {
     let val_true = BoolValue::Constant(BooleanConstant::TRUE);
     matrix.set(1, val_true.clone());
 
-    let closed = matrix.closure(&mut factory);
+    let closed = matrix.closure(&factory);
 
     assert_eq!(closed.get(1), BoolValue::Constant(BooleanConstant::TRUE));
 }
@@ -212,7 +212,7 @@ fn test_product_dimensions() {
     let mut factory = BooleanFactory::new(2, Options::default());
     let matrix = BooleanMatrix::empty(dims);
 
-    let product = matrix.product(&matrix, &mut factory);
+    let product = matrix.product(&matrix, &factory);
 
     assert_eq!(product.dimensions().arity(), 4);
     assert_eq!(product.dimensions().capacity(), 16);
@@ -225,5 +225,5 @@ fn test_transpose_non_binary_panics() {
     let mut factory = BooleanFactory::new(2, Options::default());
     let matrix = BooleanMatrix::empty(dims);
 
-    let _ = matrix.transpose(&mut factory);
+    let _ = matrix.transpose(&factory);
 }

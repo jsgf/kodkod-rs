@@ -37,13 +37,13 @@ impl MatrixArena {
     }
 
     /// Allocates a value and returns a handle to it
-    pub(crate) fn alloc_handle<T>(&self, value: T) -> super::Handle<T> {
+    pub(crate) fn alloc_handle<T>(&self, value: T) -> super::Handle<'_, T> {
         let boxed = self.bump.alloc(value);
         unsafe { super::Handle::new(boxed as *const T) }
     }
 
     /// Allocates a slice and returns a handle to it
-    pub(crate) fn alloc_slice_handle<T>(&self, slice: &[T]) -> super::Handle<[T]>
+    pub(crate) fn alloc_slice_handle<T>(&self, slice: &[T]) -> super::Handle<'_, [T]>
     where
         T: Clone,
     {
