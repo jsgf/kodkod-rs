@@ -58,9 +58,9 @@ impl LeafInterpreter {
         }
     }
 
-    /// Returns a mutable reference to the factory
-    pub fn factory_mut(&mut self) -> &mut BooleanFactory {
-        &mut self.factory
+    /// Returns a reference to the factory (has interior mutability)
+    pub fn factory(&self) -> &BooleanFactory {
+        &self.factory
     }
 
     /// Returns a reference to the arena (from the factory)
@@ -93,7 +93,7 @@ impl LeafInterpreter {
 
     /// Interprets a relation as a BooleanMatrix
     /// Following Java: LeafInterpreter.interpret(Relation)
-    pub fn interpret_relation(&mut self, rel: &Relation) -> BooleanMatrix {
+    pub fn interpret_relation(&self, rel: &Relation) -> BooleanMatrix {
         let lower = self
             .lower_bounds
             .get(rel)
@@ -114,7 +114,7 @@ impl LeafInterpreter {
         );
 
         let mut matrix =
-            BooleanMatrix::with_bounds(dims, &mut self.factory, &upper_indices, &lower_indices);
+            BooleanMatrix::with_bounds(dims, &self.factory, &upper_indices, &lower_indices);
 
         // Assign variables to tuples in (upper - lower)
         if let Some(var_range) = self.var_ranges.get(rel) {
@@ -134,7 +134,7 @@ impl LeafInterpreter {
 
     /// Interprets a constant expression (UNIV, NONE, IDEN, INTS)
     /// Following Java: LeafInterpreter.interpret(ConstantExpression)
-    pub fn interpret_constant(&mut self, c: ConstantExpr) -> BooleanMatrix {
+    pub fn interpret_constant(&self, c: ConstantExpr) -> BooleanMatrix {
         let univ_size = self.universe.size();
 
         match c {
@@ -144,7 +144,7 @@ impl LeafInterpreter {
                 let all_indices: Vec<usize> = (0..univ_size).collect();
                 BooleanMatrix::with_bounds(
                     dims,
-                    &mut self.factory,
+                    &self.factory,
                     &all_indices,
                     &all_indices, // All TRUE
                 )
@@ -155,7 +155,7 @@ impl LeafInterpreter {
                 let dims = Dimensions::new(univ_size, 1);
                 BooleanMatrix::with_bounds(
                     dims,
-                    &mut self.factory,
+                    &self.factory,
                     &[], // No indices
                     &[],
                 )
@@ -171,7 +171,7 @@ impl LeafInterpreter {
                 }
                 BooleanMatrix::with_bounds(
                     dims,
-                    &mut self.factory,
+                    &self.factory,
                     &iden_indices,
                     &iden_indices, // All TRUE
                 )
@@ -181,7 +181,7 @@ impl LeafInterpreter {
                 // Integer atoms are an extension feature
                 // Return empty set (correct for relational-only problems)
                 let dims = Dimensions::new(univ_size, 1);
-                BooleanMatrix::with_bounds(dims, &mut self.factory, &[], &[])
+                BooleanMatrix::with_bounds(dims, &self.factory, &[], &[])
             }
         }
     }

@@ -53,7 +53,7 @@ impl<'arena> Int<'arena> {
     }
 
     /// Returns the bit at the given index (LSB = 0)
-    pub fn bit(&self, i: usize) -> BoolValue {
+    pub fn bit(&self, i: usize) -> BoolValue<'arena> {
         if i < self.bits.len() {
             self.bits[i].clone()
         } else {
@@ -94,9 +94,9 @@ impl<'arena> Int<'arena> {
 
     /// Returns a boolean circuit encoding the equality comparison
     /// Follows Java: TwosComplementInt.eq()
-    pub fn eq(&self, other: &Int, factory: &'_ mut BooleanFactory) -> BoolValue {
+    pub fn eq(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
         let width = self.width().max(other.width());
-        let mut comparisons = Vec::new();
+        let mut comparisons: Vec<BoolValue<'arena>> = Vec::new();
 
         for i in 0..width {
             let a = self.bit(i);
@@ -115,14 +115,14 @@ impl<'arena> Int<'arena> {
     /// Returns a boolean circuit encoding the less-than-or-equal comparison
     /// Follows Java: TwosComplementInt.lte()
     /// Uses ripple comparator starting from MSB
-    pub fn lte(&self, other: &Int, factory: &'_ mut BooleanFactory) -> BoolValue {
+    pub fn lte(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
         let width = self.width().max(other.width());
         if width == 0 {
             return BoolValue::Constant(BooleanConstant::TRUE);
         }
 
         let last = width - 1;
-        let mut constraints = Vec::new();
+        let mut constraints: Vec<BoolValue<'arena>> = Vec::new();
 
         // Start with sign bit: other.sign_bit => this.sign_bit
         // (if other is negative, this must be negative)
@@ -151,7 +151,7 @@ impl<'arena> Int<'arena> {
     /// Returns a boolean circuit encoding the less-than comparison
     /// Follows Java: TwosComplementInt.lt()
     /// a < b iff (a <= b) and (a != b)
-    pub fn lt(&self, other: &Int, factory: &'_ mut BooleanFactory) -> BoolValue {
+    pub fn lt(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
         let leq = self.lte(other, factory);
         let eq = self.eq(other, factory);
         let not_eq = factory.not(eq);
@@ -160,9 +160,9 @@ impl<'arena> Int<'arena> {
 
     /// Returns a boolean circuit encoding the addition
     /// Follows Java: TwosComplementInt.plus()
-    pub fn plus(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn plus(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
         let width = (self.width().max(other.width()) + 1).min(factory.bitwidth());
-        let mut result_bits = Vec::with_capacity(width);
+        let mut result_bits: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
         let mut carry = BoolValue::Constant(BooleanConstant::FALSE);
 
         for i in 0..width {
@@ -183,9 +183,9 @@ impl<'arena> Int<'arena> {
     /// Returns a boolean circuit encoding the subtraction
     /// Follows Java: TwosComplementInt.minus()
     /// a - b = a + (-b) = a + (~b + 1)
-    pub fn minus(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn minus(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
         let width = (self.width().max(other.width()) + 1).min(factory.bitwidth());
-        let mut result_bits = Vec::with_capacity(width);
+        let mut result_bits: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
         let mut carry = BoolValue::Constant(BooleanConstant::TRUE); // Start with 1 for two's complement
 
         for i in 0..width {
@@ -204,44 +204,44 @@ impl<'arena> Int<'arena> {
     }
 
     /// Bitwise AND operation
-    pub fn and(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn and(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
         let width = self.width().max(other.width());
-        let bits = (0..width)
+        let bits: Vec<BoolValue<'arena>> = (0..width)
             .map(|i| factory.and(self.bit(i), other.bit(i)))
             .collect();
         Int::new(bits)
     }
 
     /// Bitwise OR operation
-    pub fn or(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn or(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
         let width = self.width().max(other.width());
-        let bits = (0..width)
+        let bits: Vec<BoolValue<'arena>> = (0..width)
             .map(|i| factory.or(self.bit(i), other.bit(i)))
             .collect();
         Int::new(bits)
     }
 
     /// Bitwise XOR operation
-    pub fn xor(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn xor(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
         let width = self.width().max(other.width());
-        let bits = (0..width)
+        let bits: Vec<BoolValue<'arena>> = (0..width)
             .map(|i| factory.xor(self.bit(i), other.bit(i)))
             .collect();
         Int::new(bits)
     }
 
     /// Bitwise NOT operation
-    pub fn not(&self, factory: &'_ mut BooleanFactory) -> Int {
-        let bits = self.bits.iter()
+    pub fn not(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
+        let bits: Vec<BoolValue<'arena>> = self.bits.iter()
             .map(|b| factory.not(b.clone()))
             .collect();
         Int::new(bits)
     }
 
     /// Left shift by a constant amount
-    pub fn shift_left(&self, shift: usize) -> Int {
+    pub fn shift_left(&self, shift: usize) -> Int<'arena> {
         let width = self.width();
-        let mut bits = Vec::with_capacity(width);
+        let mut bits: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
 
         for i in 0..width {
             if i < shift {
@@ -255,9 +255,9 @@ impl<'arena> Int<'arena> {
     }
 
     /// Right shift by a constant amount (zero extension)
-    pub fn shift_right(&self, shift: usize) -> Int {
+    pub fn shift_right(&self, shift: usize) -> Int<'arena> {
         let width = self.width();
-        let mut bits = Vec::with_capacity(width);
+        let mut bits: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
 
         for i in 0..width {
             if i + shift < width {
@@ -271,10 +271,10 @@ impl<'arena> Int<'arena> {
     }
 
     /// Arithmetic right shift (sign extension)
-    pub fn shift_right_arithmetic(&self, shift: usize) -> Int {
+    pub fn shift_right_arithmetic(&self, shift: usize) -> Int<'arena> {
         let width = self.width();
         let sign_bit = self.bit(width - 1);
-        let mut bits = Vec::with_capacity(width);
+        let mut bits: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
 
         for i in 0..width {
             if i + shift < width {
@@ -288,13 +288,13 @@ impl<'arena> Int<'arena> {
     }
 
     /// Absolute value
-    pub fn abs(&self, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn abs(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
         // If negative (sign bit set), negate; otherwise return as is
         let sign_bit = self.bit(self.width() - 1);
         let negated = self.negate(factory);
 
         // Use ite: if negative, use negated; else use self
-        let mut result_bits = Vec::with_capacity(self.width());
+        let mut result_bits: Vec<BoolValue<'arena>> = Vec::with_capacity(self.width());
         for i in 0..self.width() {
             let self_bit = self.bit(i);
             let neg_bit = negated.bit(i);
@@ -306,16 +306,16 @@ impl<'arena> Int<'arena> {
     }
 
     /// Negate (two's complement negation: ~x + 1)
-    pub fn negate(&self, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn negate(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
         let ones = self.not(factory);
         let one = Int::new(vec![BoolValue::Constant(BooleanConstant::TRUE)]);
         ones.plus(&one, factory)
     }
 
     /// Sign of the integer: -1 if negative, 0 if zero, 1 if positive
-    pub fn sign(&self, factory: &'_ mut BooleanFactory) -> Int {
+    pub fn sign(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
         // Check if zero: all bits are FALSE
-        let mut all_zero = vec![BoolValue::Constant(BooleanConstant::TRUE)];
+        let mut all_zero: Vec<BoolValue<'arena>> = vec![BoolValue::Constant(BooleanConstant::TRUE)];
         for bit in &self.bits {
             all_zero.push(factory.not(bit.clone()));
         }

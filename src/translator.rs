@@ -69,15 +69,22 @@ impl Translator {
     pub fn evaluate(formula: &Formula, bounds: &Bounds, options: &Options) -> TranslationResult {
         let mut interpreter = LeafInterpreter::from_bounds(bounds, options);
 
-        // Create translator with borrowed interpreter
-        let result = {
+        let value = {
             let mut translator = FOL2BoolTranslator::new(&mut interpreter);
             translator.translate_formula(formula)
         };
 
+        // SAFETY: The value contains no borrows - all BoolValue variants are either Constants,
+        // Variables, or Formulas with handles to arena data. The arena is owned by the factory
+        // which is owned by the interpreter in the result. We transmute to 'static since the
+        // data will outlive any intermediate borrows.
+        let value_static = unsafe {
+            std::mem::transmute::<BoolValue, BoolValue<'static>>(value)
+        };
+
         TranslationResult {
             interpreter,
-            value: result,
+            value: value_static,
         }
     }
 
@@ -88,13 +95,18 @@ impl Translator {
         let dims = Dimensions::new(1, capacity);
 
         let matrix = {
-            let factory = interpreter.factory_mut();
+            let factory = interpreter.factory();
             factory.matrix(dims)
+        };
+
+        // SAFETY: Same as evaluate() - matrix contains no direct borrows, only handles to arena data
+        let matrix_static = unsafe {
+            std::mem::transmute::<BooleanMatrix, BooleanMatrix<'static>>(matrix)
         };
 
         ApproximationResult {
             interpreter,
-            matrix,
+            matrix: matrix_static,
         }
     }
 }
@@ -116,16 +128,16 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Main entry point: translate a formula to a boolean value
     /// Following Java: FOL2BoolTranslator visitor methods
-    fn translate_formula(&mut self, formula: &Formula) -> BoolValue {
+    fn translate_formula(&mut self, formula: &Formula) -> BoolValue<'a> {
         match formula {
             Formula::Constant(b) => {
-                self.interpreter.factory_mut().constant(*b)
+                self.interpreter.factory().constant(*b)
             }
 
             Formula::Binary { left, op, right } => {
                 let l = self.translate_formula(left);
                 let r = self.translate_formula(right);
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
                 match op {
                     BinaryFormulaOp::And => factory.and(l, r),
                     BinaryFormulaOp::Or => factory.or(l, r),
@@ -149,7 +161,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                     .map(|f| self.translate_formula(f))
                     .collect();
 
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
                 match op {
                     BinaryFormulaOp::And => factory.and_multi(translated),
                     BinaryFormulaOp::Or => factory.or_multi(translated),
@@ -159,13 +171,14 @@ impl<'a> FOL2BoolTranslator<'a> {
 
             Formula::Not(inner) => {
                 let val = self.translate_formula(inner);
-                self.interpreter.factory_mut().not(val)
+                self.interpreter.factory().not(val)
             }
 
             Formula::Comparison { left, right, op } => {
-                let left_matrix = self.translate_expression(left);
-                let right_matrix = self.translate_expression(right);
-                let factory = self.interpreter.factory_mut();
+                let (left_matrix, right_matrix) = {
+                    (self.translate_expression(left), self.translate_expression(right))
+                };
+                let factory = self.interpreter.factory();
 
                 match op {
                     CompareOp::Equals => left_matrix.equals(&right_matrix, factory),
@@ -175,7 +188,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
             Formula::Multiplicity { mult, expr } => {
                 let matrix = self.translate_expression(expr);
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
                 match mult {
                     Multiplicity::Some => matrix.some(factory),
                     Multiplicity::No => matrix.none(factory),
@@ -193,9 +206,10 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             Formula::IntComparison { left, op, right } => {
-                let left_int = self.translate_int_expr(left);
-                let right_int = self.translate_int_expr(right);
-                let factory = self.interpreter.factory_mut();
+                let (left_int, right_int) = {
+                    (self.translate_int_expr(left), self.translate_int_expr(right))
+                };
+                let factory = self.interpreter.factory();
 
                 match op {
                     IntCompareOp::Eq => left_int.eq(&right_int, factory),
@@ -210,7 +224,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Expression translation
     /// Following Java: FOL2BoolTranslator.visit(Expression)
-    fn translate_expression(&mut self, expr: &Expression) -> BooleanMatrix {
+    fn translate_expression(&self, expr: &Expression) -> BooleanMatrix {
         match expr {
             Expression::Relation(rel) => {
                 self.interpreter.interpret_relation(rel)
@@ -227,9 +241,10 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             Expression::Binary { left, op, right, .. } => {
-                let left_matrix = self.translate_expression(left);
-                let right_matrix = self.translate_expression(right);
-                let factory = self.interpreter.factory_mut();
+                let (left_matrix, right_matrix) = {
+                    (self.translate_expression(left), self.translate_expression(right))
+                };
+                let factory = self.interpreter.factory();
 
                 match op {
                     BinaryOp::Union => left_matrix.union(&right_matrix, factory),
@@ -242,21 +257,19 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             Expression::Unary { op, expr } => {
+                let factory = self.interpreter.factory();
                 match op {
                     UnaryOp::Transpose => {
                         let matrix = self.translate_expression(expr);
-                        let factory = self.interpreter.factory_mut();
                         matrix.transpose(factory)
                     }
                     UnaryOp::Closure => {
                         let matrix = self.translate_expression(expr);
-                        let factory = self.interpreter.factory_mut();
                         matrix.closure(factory)
                     }
                     UnaryOp::ReflexiveClosure => {
                         let matrix = self.translate_expression(expr);
                         let iden = self.interpreter.interpret_constant(ConstantExpr::Iden);
-                        let factory = self.interpreter.factory_mut();
                         matrix.reflexive_closure(factory, &iden)
                     }
                 }
@@ -272,7 +285,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                 let mut result = self.translate_expression(&exprs[0]);
                 for expr in &exprs[1..] {
                     let matrix = self.translate_expression(expr);
-                    let factory = self.interpreter.factory_mut();
+                    let factory = self.interpreter.factory();
                     result = result.union(&matrix, factory);
                 }
                 result
@@ -294,14 +307,14 @@ impl<'a> FOL2BoolTranslator<'a> {
                 self.translate_exists(declarations, body, 0,
                                      BoolValue::Constant(BooleanConstant::TRUE),
                                      &mut acc);
-                self.interpreter.factory_mut().or_multi(acc)
+                self.interpreter.factory().or_multi(acc)
             }
             Quantifier::All => {
                 let mut acc = Vec::new();
                 self.translate_forall(declarations, body, 0,
                                      BoolValue::Constant(BooleanConstant::FALSE),
                                      &mut acc);
-                self.interpreter.factory_mut().and_multi(acc)
+                self.interpreter.factory().and_multi(acc)
             }
         }
     }
@@ -319,7 +332,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         // Base case: all variables bound
         if current_decl >= decls.size() {
             let formula_val = self.translate_formula(formula);
-            let factory = self.interpreter.factory_mut();
+            let factory = self.interpreter.factory();
             let result = factory.and(decl_constraints.clone(), formula_val);
             acc.push(result);
             return;
@@ -331,7 +344,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         let domain = self.translate_expression(decl.expression());
 
         // Create ground matrix for this variable
-        let mut ground_value = self.interpreter.factory_mut().matrix(*domain.dimensions());
+        let mut ground_value = self.interpreter.factory().matrix(*domain.dimensions());
 
         // PUSH binding
         self.env.extend(var.clone(), ground_value.clone());
@@ -349,7 +362,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             *self.env.lookup_mut(&var).unwrap() = ground_value.clone();
 
             // Recurse with updated constraints
-            let factory = self.interpreter.factory_mut();
+            let factory = self.interpreter.factory();
             let new_constraints = factory.and(value.clone(), decl_constraints.clone());
 
             self.translate_exists(decls, formula, current_decl + 1, new_constraints, acc);
@@ -375,7 +388,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         // Base case: all variables bound
         if current_decl >= decls.size() {
             let formula_val = self.translate_formula(formula);
-            let factory = self.interpreter.factory_mut();
+            let factory = self.interpreter.factory();
             // forall: decl_constraints ∨ formula
             // (NOT following my earlier comment - following Java exactly)
             let result = factory.or(decl_constraints.clone(), formula_val);
@@ -389,7 +402,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         let domain = self.translate_expression(decl.expression());
 
         // Create ground matrix
-        let mut ground_value = self.interpreter.factory_mut().matrix(*domain.dimensions());
+        let mut ground_value = self.interpreter.factory().matrix(*domain.dimensions());
 
         // PUSH binding
         self.env.extend(var.clone(), ground_value.clone());
@@ -404,7 +417,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             *self.env.lookup_mut(&var).unwrap() = ground_value.clone();
 
             // forall: ¬entry.value() ∨ declConstraints
-            let factory = self.interpreter.factory_mut();
+            let factory = self.interpreter.factory();
             let not_value = factory.not(value.clone());
             let new_constraints = factory.or(not_value, decl_constraints.clone());
 
@@ -422,7 +435,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     fn translate_int_expr(&mut self, expr: &IntExpression) -> Int {
         match expr {
             IntExpression::Constant(c) => {
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
                 let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
                 Int::constant(*c, factory.bitwidth(), one_bit)
             }
@@ -430,14 +443,14 @@ impl<'a> FOL2BoolTranslator<'a> {
             IntExpression::Cardinality(set_expr) => {
                 // Count the number of tuples in the set expression using a popcount circuit
                 let matrix = self.translate_expression(set_expr);
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
                 matrix.popcount(factory)
             }
 
             IntExpression::Binary { left, op, right } => {
                 let left_int = self.translate_int_expr(left);
                 let right_int = self.translate_int_expr(right);
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
 
                 match op {
                     IntBinaryOp::Plus => left_int.plus(&right_int, factory),
@@ -512,7 +525,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
             IntExpression::Unary { op, expr } => {
                 let int_val = self.translate_int_expr(expr);
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
 
                 match op {
                     IntUnaryOp::Negate => int_val.negate(factory),
@@ -526,7 +539,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                 let cond_val = self.translate_formula(condition);
                 let then_int = self.translate_int_expr(then_expr);
                 let else_int = self.translate_int_expr(else_expr);
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
 
                 // Build result bit-by-bit using ite
                 let mut result_bits = Vec::new();
@@ -542,7 +555,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             IntExpression::Nary { exprs } => {
                 // N-ary sum
                 if exprs.is_empty() {
-                    let factory = self.interpreter.factory_mut();
+                    let factory = self.interpreter.factory();
                     let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
                     return Int::constant(0, factory.bitwidth(), one_bit);
                 }
@@ -550,7 +563,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                 let mut result = self.translate_int_expr(&exprs[0]);
                 for expr in &exprs[1..] {
                     let int_val = self.translate_int_expr(expr);
-                    let factory = self.interpreter.factory_mut();
+                    let factory = self.interpreter.factory();
                     result = result.plus(&int_val, factory);
                 }
                 result
@@ -558,14 +571,14 @@ impl<'a> FOL2BoolTranslator<'a> {
 
             IntExpression::Sum { .. } => {
                 // Sum over declarations not yet supported
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
                 let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
                 Int::constant(0, factory.bitwidth(), one_bit)
             }
 
             IntExpression::ExprCast(_) => {
                 // Cast expression not yet supported
-                let factory = self.interpreter.factory_mut();
+                let factory = self.interpreter.factory();
                 let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
                 Int::constant(0, factory.bitwidth(), one_bit)
             }

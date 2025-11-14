@@ -1,5 +1,5 @@
 - This is a Rust port of kodkod from Java. The reference source is in ../kodkod. It should always be used to verify functionality and implementation.
-- The Java impl is the reference,
-and the Rust port must be *complete*, *accurate* and *faithful*. *DO NOT* leave stubs, placeholders, mocks, simplifications or any
-other workarounds.
+- The Java impl is the reference, and the Rust port must be *complete*, *accurate* and *faithful*. *DO NOT* leave stubs, placeholders, mocks, simplifications or any other workarounds.
+- Any test which relies on incomplete/simplified/placeholder/mock implementation should *FAIL* until the implementation is completed.
 - Always compile-test everything with `cargo check` and make sure all tests pass (or fail as expected if incomplete) before considering something "done".
+- When dealing with an Arena, any reference, direct or indirect, exposed to the API user via a public API *MUST* have a lifetime which ties it to that arena. UNDER NO CIRCUMSTANCES should the user EVER see a 'static lifetime reference, directly or indirectly (ie embedded in something else).
