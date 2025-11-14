@@ -12,6 +12,7 @@ pub use environment::Environment;
 use crate::ast::*;
 use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Int, Options};
 use crate::instance::Bounds;
+use std::cell::RefCell;
 
 /// Result of translating a formula to a boolean circuit
 ///
@@ -115,20 +116,20 @@ impl Translator {
 /// Following Java: FOL2BoolTranslator
 struct FOL2BoolTranslator<'a> {
     interpreter: &'a mut LeafInterpreter,
-    env: Environment<'a>,
+    env: RefCell<Environment<'a>>,
 }
 
 impl<'a> FOL2BoolTranslator<'a> {
     fn new(interpreter: &'a mut LeafInterpreter) -> Self {
         Self {
             interpreter,
-            env: Environment::empty(),
+            env: RefCell::new(Environment::empty()),
         }
     }
 
     /// Main entry point: translate a formula to a boolean value
     /// Following Java: FOL2BoolTranslator visitor methods
-    fn translate_formula(&mut self, formula: &Formula) -> BoolValue<'a> {
+    fn translate_formula(&self, formula: &Formula) -> BoolValue<'a> {
         match formula {
             Formula::Constant(b) => {
                 self.interpreter.factory().constant(*b)
@@ -231,7 +232,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             Expression::Variable(var) => {
-                self.env.lookup(var)
+                self.env.borrow().lookup(var)
                     .cloned()
                     .unwrap_or_else(|| panic!("Unbound variable: {}", var.name()))
             }
@@ -296,7 +297,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Quantifier translation
     /// Following Java: FOL2BoolTranslator.visit(QuantifiedFormula)
     fn translate_quantified(
-        &mut self,
+        &self,
         quantifier: Quantifier,
         declarations: &Decls,
         body: &Formula
@@ -322,7 +323,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Existential quantification (FOLLOWING JAVA EXACTLY)
     /// Following Java: FOL2BoolTranslator.some(...)
     fn translate_exists(
-        &mut self,
+        &self,
         decls: &Decls,
         formula: &Formula,
         current_decl: usize,
@@ -347,7 +348,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         let mut ground_value = self.interpreter.factory().matrix(*domain.dimensions());
 
         // PUSH binding
-        self.env.extend(var.clone(), ground_value.clone());
+        self.env.borrow_mut().extend(var.clone(), ground_value.clone());
 
         // ITERATE over each tuple in domain
         let indices: Vec<(usize, BoolValue)> = domain.iter_indexed()
@@ -359,7 +360,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
 
             // Update environment
-            *self.env.lookup_mut(&var).unwrap() = ground_value.clone();
+            *self.env.borrow_mut().lookup_mut(&var).unwrap() = ground_value.clone();
 
             // Recurse with updated constraints
             let factory = self.interpreter.factory();
@@ -372,13 +373,13 @@ impl<'a> FOL2BoolTranslator<'a> {
         }
 
         // POP binding
-        self.env.pop();
+        self.env.borrow_mut().pop();
     }
 
     /// Universal quantification (FOLLOWING JAVA EXACTLY)
     /// Following Java: FOL2BoolTranslator.all(...)
     fn translate_forall(
-        &mut self,
+        &self,
         decls: &Decls,
         formula: &Formula,
         current_decl: usize,
@@ -405,7 +406,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         let mut ground_value = self.interpreter.factory().matrix(*domain.dimensions());
 
         // PUSH binding
-        self.env.extend(var.clone(), ground_value.clone());
+        self.env.borrow_mut().extend(var.clone(), ground_value.clone());
 
         // ITERATE
         let indices: Vec<(usize, BoolValue)> = domain.iter_indexed()
@@ -414,7 +415,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
         for (index, value) in indices {
             ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
-            *self.env.lookup_mut(&var).unwrap() = ground_value.clone();
+            *self.env.borrow_mut().lookup_mut(&var).unwrap() = ground_value.clone();
 
             // forall: ¬entry.value() ∨ declConstraints
             let factory = self.interpreter.factory();
@@ -427,12 +428,12 @@ impl<'a> FOL2BoolTranslator<'a> {
         }
 
         // POP binding
-        self.env.pop();
+        self.env.borrow_mut().pop();
     }
 
     /// Integer expression translation
     /// Following Java: FOL2BoolTranslator integer expression handling
-    fn translate_int_expr(&mut self, expr: &IntExpression) -> Int {
+    fn translate_int_expr(&self, expr: &IntExpression) -> Int {
         match expr {
             IntExpression::Constant(c) => {
                 let factory = self.interpreter.factory();
