@@ -225,7 +225,8 @@ mod tests {
 
     #[test]
     fn translate_constant() {
-        let translator = CNFTranslator::new();
+        let arena = crate::bool::MatrixArena::new();
+        let translator = CNFTranslator::new(&arena);
         let value = BoolValue::Constant(BooleanConstant::TRUE);
         let (_label, cnf) = translator.translate(&value);
 
@@ -235,7 +236,8 @@ mod tests {
 
     #[test]
     fn translate_variable() {
-        let translator = CNFTranslator::new();
+        let arena = crate::bool::MatrixArena::new();
+        let translator = CNFTranslator::new(&arena);
         let value = BoolValue::Variable(BooleanVariable::new(5));
         let (label, cnf) = translator.translate(&value);
 
@@ -247,12 +249,13 @@ mod tests {
 
     #[test]
     fn translate_and_gate() {
+        let arena = crate::bool::MatrixArena::new();
         let mut factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
         let and = factory.and(v1, v2);
 
-        let translator = CNFTranslator::new();
+        let translator = CNFTranslator::new(&arena);
         let (_label, cnf) = translator.translate(&and);
 
         // Should have clauses for AND encoding plus assertion
@@ -262,12 +265,13 @@ mod tests {
 
     #[test]
     fn translate_or_gate() {
+        let arena = crate::bool::MatrixArena::new();
         let mut factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
         let or = factory.or(v1, v2);
 
-        let translator = CNFTranslator::new();
+        let translator = CNFTranslator::new(&arena);
         let (_label, cnf) = translator.translate(&or);
 
         // Should have clauses for OR encoding plus assertion
@@ -277,11 +281,12 @@ mod tests {
 
     #[test]
     fn translate_not_gate() {
+        let arena = crate::bool::MatrixArena::new();
         let mut factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let not = factory.not(v1);
 
-        let translator = CNFTranslator::new();
+        let translator = CNFTranslator::new(&arena);
         let (_label, cnf) = translator.translate(&not);
 
         // Should have clauses for NOT encoding plus assertion
@@ -291,6 +296,7 @@ mod tests {
 
     #[test]
     fn translate_complex_formula() {
+        let arena = crate::bool::MatrixArena::new();
         let mut factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
@@ -300,7 +306,7 @@ mod tests {
         let and = factory.and(v1, v2);
         let formula = factory.or(and, v3);
 
-        let translator = CNFTranslator::new();
+        let translator = CNFTranslator::new(&arena);
         let (_label, cnf) = translator.translate(&formula);
 
         // Should produce multiple clauses

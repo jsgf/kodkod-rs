@@ -837,10 +837,12 @@ mod tests {
 
     #[test]
     fn boolean_formula() {
+        let arena = MatrixArena::new();
         let v1 = BoolValue::Variable(BooleanVariable::new(1));
         let v2 = BoolValue::Variable(BooleanVariable::new(2));
 
-        let formula = BooleanFormula::new(10, FormulaKind::And(vec![v1, v2]));
+        let handle = arena.alloc_slice_handle(&[v1, v2]);
+        let formula = BooleanFormula::new(10, FormulaKind::And(handle));
         assert_eq!(formula.label(), 10);
     }
 
