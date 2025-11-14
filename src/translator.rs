@@ -13,26 +13,89 @@ use crate::ast::*;
 use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Int, Options};
 use crate::instance::Bounds;
 
+/// Result of translating a formula to a boolean circuit
+///
+/// Wraps both the interpreter and the resulting value together to maintain the invariant
+/// that BoolValue must always be associated with its corresponding interpreter/arena.
+pub struct TranslationResult {
+    interpreter: LeafInterpreter,
+    value: BoolValue<'static>,
+}
+
+impl TranslationResult {
+    /// Returns a reference to the interpreter (for solution extraction)
+    pub fn interpreter(&self) -> &LeafInterpreter {
+        &self.interpreter
+    }
+
+    /// Returns a reference to the boolean circuit value
+    /// The lifetime is tied to the result, ensuring the value cannot be separated from the interpreter
+    pub fn value(&self) -> &BoolValue<'_> {
+        &self.value
+    }
+}
+
+/// Result of approximating a formula as a boolean matrix
+///
+/// Wraps both the interpreter and the resulting matrix together to maintain the invariant
+/// that BooleanMatrix must always be associated with its corresponding interpreter/arena.
+pub struct ApproximationResult {
+    interpreter: LeafInterpreter,
+    matrix: BooleanMatrix<'static>,
+}
+
+impl ApproximationResult {
+    /// Returns a reference to the interpreter
+    pub fn interpreter(&self) -> &LeafInterpreter {
+        &self.interpreter
+    }
+
+    /// Returns a reference to the boolean matrix
+    /// The lifetime is tied to the result, ensuring the matrix cannot be separated from the interpreter
+    pub fn matrix(&self) -> &BooleanMatrix<'_> {
+        &self.matrix
+    }
+}
+
 /// Translator for FOL formulas to boolean circuits
 pub struct Translator;
 
 impl Translator {
-    /// Evaluates a formula to a single boolean value
+    /// Evaluates a formula to a boolean circuit with its interpreter
     /// Following Java: Translator.translate()
-    /// Returns the boolean circuit and the interpreter (for solution extraction)
-    pub fn evaluate(formula: &Formula, bounds: &Bounds, options: &Options) -> (BoolValue, LeafInterpreter) {
+    ///
+    /// Returns a TranslationResult that wraps both the interpreter and circuit together,
+    /// ensuring their lifetimes are tied and cannot be separated.
+    pub fn evaluate(formula: &Formula, bounds: &Bounds, options: &Options) -> TranslationResult {
         let mut interpreter = LeafInterpreter::from_bounds(bounds, options);
-        let mut translator = FOL2BoolTranslator::new(&mut interpreter);
-        let circuit = translator.translate_formula(formula);
-        (circuit, interpreter)
+
+        // Create translator with borrowed interpreter
+        let result = {
+            let mut translator = FOL2BoolTranslator::new(&mut interpreter);
+            translator.translate_formula(formula)
+        };
+
+        TranslationResult {
+            interpreter,
+            value: result,
+        }
     }
 
     /// Approximates a formula as a boolean matrix (not used in main solver)
-    pub fn approximate(_formula: &Formula, bounds: &Bounds, options: &Options) -> BooleanMatrix {
+    pub fn approximate(_formula: &Formula, bounds: &Bounds, options: &Options) -> ApproximationResult {
         let mut interpreter = LeafInterpreter::from_bounds(bounds, options);
         let capacity = bounds.universe().size();
         let dims = Dimensions::new(1, capacity);
-        interpreter.factory_mut().matrix(dims)
+
+        let matrix = {
+            let factory = interpreter.factory_mut();
+            factory.matrix(dims)
+        };
+
+        ApproximationResult {
+            interpreter,
+            matrix,
+        }
     }
 }
 
@@ -40,7 +103,7 @@ impl Translator {
 /// Following Java: FOL2BoolTranslator
 struct FOL2BoolTranslator<'a> {
     interpreter: &'a mut LeafInterpreter,
-    env: Environment,
+    env: Environment<'a>,
 }
 
 impl<'a> FOL2BoolTranslator<'a> {

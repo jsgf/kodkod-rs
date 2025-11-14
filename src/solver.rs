@@ -52,13 +52,15 @@ impl Solver {
     ) -> Result<Solution> {
         // Step 1: Translate formula to boolean circuit
         let translation_start = Instant::now();
-        let (bool_circuit, interpreter) = Translator::evaluate(formula, bounds, &self.options.bool_options);
+        let translation_result = Translator::evaluate(formula, bounds, &self.options.bool_options);
         let translation_time = translation_start.elapsed();
 
         // Step 2: Convert boolean circuit to CNF
         let cnf_start = Instant::now();
+        let bool_circuit = translation_result.value();
+        let interpreter = translation_result.interpreter();
         let cnf_translator = CNFTranslator::new(interpreter.arena());
-        let (_top_level_var, cnf) = cnf_translator.translate(&bool_circuit);
+        let (_top_level_var, cnf) = cnf_translator.translate(bool_circuit);
         let cnf_time = cnf_start.elapsed();
 
         // Step 3: Run SAT solver

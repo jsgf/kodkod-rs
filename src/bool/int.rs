@@ -94,7 +94,7 @@ impl<'arena> Int<'arena> {
 
     /// Returns a boolean circuit encoding the equality comparison
     /// Follows Java: TwosComplementInt.eq()
-    pub fn eq(&self, other: &Int, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn eq(&self, other: &Int, factory: &'_ mut BooleanFactory) -> BoolValue {
         let width = self.width().max(other.width());
         let mut comparisons = Vec::new();
 
@@ -115,7 +115,7 @@ impl<'arena> Int<'arena> {
     /// Returns a boolean circuit encoding the less-than-or-equal comparison
     /// Follows Java: TwosComplementInt.lte()
     /// Uses ripple comparator starting from MSB
-    pub fn lte(&self, other: &Int, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn lte(&self, other: &Int, factory: &'_ mut BooleanFactory) -> BoolValue {
         let width = self.width().max(other.width());
         if width == 0 {
             return BoolValue::Constant(BooleanConstant::TRUE);
@@ -151,7 +151,7 @@ impl<'arena> Int<'arena> {
     /// Returns a boolean circuit encoding the less-than comparison
     /// Follows Java: TwosComplementInt.lt()
     /// a < b iff (a <= b) and (a != b)
-    pub fn lt(&self, other: &Int, factory: &mut BooleanFactory) -> BoolValue {
+    pub fn lt(&self, other: &Int, factory: &'_ mut BooleanFactory) -> BoolValue {
         let leq = self.lte(other, factory);
         let eq = self.eq(other, factory);
         let not_eq = factory.not(eq);
@@ -160,7 +160,7 @@ impl<'arena> Int<'arena> {
 
     /// Returns a boolean circuit encoding the addition
     /// Follows Java: TwosComplementInt.plus()
-    pub fn plus(&self, other: &Int, factory: &mut BooleanFactory) -> Int {
+    pub fn plus(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
         let width = (self.width().max(other.width()) + 1).min(factory.bitwidth());
         let mut result_bits = Vec::with_capacity(width);
         let mut carry = BoolValue::Constant(BooleanConstant::FALSE);
@@ -183,7 +183,7 @@ impl<'arena> Int<'arena> {
     /// Returns a boolean circuit encoding the subtraction
     /// Follows Java: TwosComplementInt.minus()
     /// a - b = a + (-b) = a + (~b + 1)
-    pub fn minus(&self, other: &Int, factory: &mut BooleanFactory) -> Int {
+    pub fn minus(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
         let width = (self.width().max(other.width()) + 1).min(factory.bitwidth());
         let mut result_bits = Vec::with_capacity(width);
         let mut carry = BoolValue::Constant(BooleanConstant::TRUE); // Start with 1 for two's complement
@@ -204,7 +204,7 @@ impl<'arena> Int<'arena> {
     }
 
     /// Bitwise AND operation
-    pub fn and(&self, other: &Int, factory: &mut BooleanFactory) -> Int {
+    pub fn and(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
         let width = self.width().max(other.width());
         let bits = (0..width)
             .map(|i| factory.and(self.bit(i), other.bit(i)))
@@ -213,7 +213,7 @@ impl<'arena> Int<'arena> {
     }
 
     /// Bitwise OR operation
-    pub fn or(&self, other: &Int, factory: &mut BooleanFactory) -> Int {
+    pub fn or(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
         let width = self.width().max(other.width());
         let bits = (0..width)
             .map(|i| factory.or(self.bit(i), other.bit(i)))
@@ -222,7 +222,7 @@ impl<'arena> Int<'arena> {
     }
 
     /// Bitwise XOR operation
-    pub fn xor(&self, other: &Int, factory: &mut BooleanFactory) -> Int {
+    pub fn xor(&self, other: &Int, factory: &'_ mut BooleanFactory) -> Int {
         let width = self.width().max(other.width());
         let bits = (0..width)
             .map(|i| factory.xor(self.bit(i), other.bit(i)))
@@ -231,7 +231,7 @@ impl<'arena> Int<'arena> {
     }
 
     /// Bitwise NOT operation
-    pub fn not(&self, factory: &mut BooleanFactory) -> Int {
+    pub fn not(&self, factory: &'_ mut BooleanFactory) -> Int {
         let bits = self.bits.iter()
             .map(|b| factory.not(b.clone()))
             .collect();
@@ -288,7 +288,7 @@ impl<'arena> Int<'arena> {
     }
 
     /// Absolute value
-    pub fn abs(&self, factory: &mut BooleanFactory) -> Int {
+    pub fn abs(&self, factory: &'_ mut BooleanFactory) -> Int {
         // If negative (sign bit set), negate; otherwise return as is
         let sign_bit = self.bit(self.width() - 1);
         let negated = self.negate(factory);
@@ -306,14 +306,14 @@ impl<'arena> Int<'arena> {
     }
 
     /// Negate (two's complement negation: ~x + 1)
-    pub fn negate(&self, factory: &mut BooleanFactory) -> Int {
+    pub fn negate(&self, factory: &'_ mut BooleanFactory) -> Int {
         let ones = self.not(factory);
         let one = Int::new(vec![BoolValue::Constant(BooleanConstant::TRUE)]);
         ones.plus(&one, factory)
     }
 
     /// Sign of the integer: -1 if negative, 0 if zero, 1 if positive
-    pub fn sign(&self, factory: &mut BooleanFactory) -> Int {
+    pub fn sign(&self, factory: &'_ mut BooleanFactory) -> Int {
         // Check if zero: all bits are FALSE
         let mut all_zero = vec![BoolValue::Constant(BooleanConstant::TRUE)];
         for bit in &self.bits {

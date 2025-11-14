@@ -24,7 +24,6 @@ pub use var_allocator::VariableAllocator;
 pub use int::Int;
 pub use arena::MatrixArena;
 
-use std::sync::Arc;
 use std::marker::PhantomData;
 
 /// Index handle for a value stored in the arena

@@ -91,14 +91,14 @@ impl BooleanFactory {
     }
 
     /// Creates a boolean variable
-    pub fn variable(&self, label: i32) -> BoolValue {
+    pub fn variable<'arena>(&'arena self, label: i32) -> BoolValue<'arena> {
         assert!(label > 0 && label <= self.num_variables as i32,
                 "Variable label must be in range 1..={}", self.num_variables);
         BoolValue::Variable(BooleanVariable::new(label))
     }
 
     /// Creates a constant
-    pub fn constant(&self, value: bool) -> BoolValue {
+    pub fn constant<'arena>(&'arena self, value: bool) -> BoolValue<'arena> {
         BoolValue::Constant(if value {
             BooleanConstant::TRUE
         } else {
@@ -107,12 +107,12 @@ impl BooleanFactory {
     }
 
     /// Creates an AND gate
-    pub fn and<'arena>(&self, left: BoolValue<'arena>, right: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn and<'arena>(&'arena self, left: BoolValue<'arena>, right: BoolValue<'arena>) -> BoolValue<'arena> {
         self.and_multi(vec![left, right])
     }
 
     /// Creates a multi-input AND gate
-    pub fn and_multi<'arena>(&self, mut inputs: Vec<BoolValue<'arena>>) -> BoolValue<'arena> {
+    pub fn and_multi<'arena>(&'arena self, mut inputs: Vec<BoolValue<'arena>>) -> BoolValue<'arena> {
         if inputs.is_empty() {
             return self.constant(true);
         }
@@ -158,12 +158,12 @@ impl BooleanFactory {
     }
 
     /// Creates an OR gate
-    pub fn or<'arena>(&self, left: BoolValue<'arena>, right: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn or<'arena>(&'arena self, left: BoolValue<'arena>, right: BoolValue<'arena>) -> BoolValue<'arena> {
         self.or_multi(vec![left, right])
     }
 
     /// Creates a multi-input OR gate
-    pub fn or_multi<'arena>(&self, mut inputs: Vec<BoolValue<'arena>>) -> BoolValue<'arena> {
+    pub fn or_multi<'arena>(&'arena self, mut inputs: Vec<BoolValue<'arena>>) -> BoolValue<'arena> {
         if inputs.is_empty() {
             return self.constant(false);
         }
@@ -209,7 +209,7 @@ impl BooleanFactory {
     }
 
     /// Creates a NOT gate
-    pub fn not<'arena>(&self, input: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn not<'arena>(&'arena self, input: BoolValue<'arena>) -> BoolValue<'arena> {
         // Check for trivial cases
         if let BoolValue::Constant(c) = input {
             return self.constant(match c {
@@ -240,7 +240,7 @@ impl BooleanFactory {
     }
 
     /// Creates an if-then-else gate
-    pub fn ite<'arena>(&self, condition: BoolValue<'arena>, then_val: BoolValue<'arena>, else_val: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn ite<'arena>(&'arena self, condition: BoolValue<'arena>, then_val: BoolValue<'arena>, else_val: BoolValue<'arena>) -> BoolValue<'arena> {
         // Check for trivial cases
         if let BoolValue::Constant(c) = condition {
             return match c {
@@ -295,7 +295,7 @@ impl BooleanFactory {
 
     /// Creates an empty boolean matrix with the given dimensions
     /// Following Java: used for quantifier translation
-    pub fn matrix(&self, dimensions: Dimensions) -> BooleanMatrix<'_> {
+    pub fn matrix<'arena>(&'arena self, dimensions: Dimensions) -> BooleanMatrix<'arena> {
         BooleanMatrix::empty(dimensions)
     }
 
@@ -305,7 +305,7 @@ impl BooleanFactory {
     }
 
     /// XOR operation: a XOR b = (a AND NOT b) OR (NOT a AND b)
-    pub fn xor<'arena>(&self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn xor<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
         let not_b = self.not(b.clone());
         let a_and_not_b = self.and(a.clone(), not_b);
 
@@ -316,7 +316,7 @@ impl BooleanFactory {
     }
 
     /// IFF (if and only if): a IFF b = (a AND b) OR (NOT a AND NOT b)
-    pub fn iff<'arena>(&self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn iff<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
         let a_and_b = self.and(a.clone(), b.clone());
         let not_a = self.not(a);
         let not_b = self.not(b);
@@ -325,20 +325,20 @@ impl BooleanFactory {
     }
 
     /// IMPLIES: a IMPLIES b = NOT a OR b
-    pub fn implies<'arena>(&self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn implies<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
         let not_a = self.not(a);
         self.or(not_a, b)
     }
 
     /// Full adder sum: a XOR b XOR cin
     /// Returns the sum bit (without carry)
-    pub fn sum<'arena>(&self, a: BoolValue<'arena>, b: BoolValue<'arena>, cin: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn sum<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>, cin: BoolValue<'arena>) -> BoolValue<'arena> {
         let ab_xor = self.xor(a, b);
         self.xor(ab_xor, cin)
     }
 
     /// Full adder carry out: (a AND b) OR (cin AND (a XOR b))
-    pub fn carry<'arena>(&self, a: BoolValue<'arena>, b: BoolValue<'arena>, cin: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn carry<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>, cin: BoolValue<'arena>) -> BoolValue<'arena> {
         let a_and_b = self.and(a.clone(), b.clone());
         let ab_xor = self.xor(a, b);
         let cin_and_xor = self.and(cin, ab_xor);

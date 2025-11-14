@@ -8,12 +8,12 @@ use crate::bool::BooleanMatrix;
 /// Stack-based environment for quantified variable bindings
 ///
 /// Following Java: Environment
-pub struct Environment {
+pub struct Environment<'arena> {
     /// Stack of (variable, value) bindings
-    bindings: Vec<(Variable, BooleanMatrix)>,
+    bindings: Vec<(Variable, BooleanMatrix<'arena>)>,
 }
 
-impl Environment {
+impl<'arena> Environment<'arena> {
     /// Creates an empty environment
     pub fn empty() -> Self {
         Self {
@@ -23,7 +23,7 @@ impl Environment {
 
     /// Pushes a new binding (for entering quantifier scope)
     /// Following Java: Environment.extend(Variable, T)
-    pub fn extend(&mut self, var: Variable, value: BooleanMatrix) {
+    pub fn extend(&mut self, var: Variable, value: BooleanMatrix<'arena>) {
         self.bindings.push((var, value));
     }
 
@@ -35,7 +35,7 @@ impl Environment {
 
     /// Looks up a variable in the environment (searches from top to bottom)
     /// Following Java: Environment.lookup(Variable)
-    pub fn lookup(&self, var: &Variable) -> Option<&BooleanMatrix> {
+    pub fn lookup(&self, var: &Variable) -> Option<&BooleanMatrix<'arena>> {
         // Search backwards (most recent binding first)
         for (v, value) in self.bindings.iter().rev() {
             if v == var {
@@ -46,7 +46,7 @@ impl Environment {
     }
 
     /// Looks up a variable mutably in the environment
-    pub fn lookup_mut(&mut self, var: &Variable) -> Option<&mut BooleanMatrix> {
+    pub fn lookup_mut(&mut self, var: &Variable) -> Option<&mut BooleanMatrix<'arena>> {
         // Search backwards (most recent binding first)
         for (v, value) in self.bindings.iter_mut().rev() {
             if v == var {
