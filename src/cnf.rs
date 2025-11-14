@@ -3,6 +3,7 @@
 //! Converts boolean gates to CNF clauses using Tseitin transformation.
 
 use crate::bool::{BoolValue, BooleanFormula, FormulaKind, MatrixArena};
+use std::collections::HashSet;
 
 /// CNF representation
 #[derive(Debug, Clone, Default)]
@@ -41,6 +42,8 @@ impl CNF {
 pub struct CNFTranslator<'a> {
     cnf: CNF,
     arena: &'a MatrixArena,
+    /// Track which formulas have already been translated (by label)
+    visited: HashSet<i32>,
 }
 
 impl<'a> CNFTranslator<'a> {
@@ -49,6 +52,7 @@ impl<'a> CNFTranslator<'a> {
         Self {
             cnf: CNF::new(),
             arena,
+            visited: HashSet::new(),
         }
     }
 
@@ -93,6 +97,12 @@ impl<'a> CNFTranslator<'a> {
     /// Translates a boolean formula using Tseitin transformation
     fn translate_formula(&mut self, formula: &BooleanFormula) -> i32 {
         let output = formula.label();
+
+        // Skip if already translated
+        if self.visited.contains(&output) {
+            return output;
+        }
+        self.visited.insert(output);
 
         match formula.kind() {
             FormulaKind::And(handle) => {

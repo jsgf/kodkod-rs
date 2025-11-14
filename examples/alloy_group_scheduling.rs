@@ -203,7 +203,7 @@ fn main() {
     // Solve
     let solve_start = Instant::now();
     let solution = solver.solve(&formula, &bounds).expect("Solver failed");
-    let solve_time = solve_start.elapsed();
+    let _solve_time = solve_start.elapsed();
 
     println!(
         "Result: {}\n",
