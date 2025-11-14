@@ -274,6 +274,37 @@ mod tests {
     }
 
     #[test]
+    fn translate_shared_subexpressions() {
+        // Test that memoization works: shared subexpressions should be translated only once
+        // Create circuit: (v1 AND v2) OR (v1 AND v2)
+        // Without memoization, (v1 AND v2) would be translated twice
+        let arena = crate::bool::MatrixArena::new();
+        let mut factory = BooleanFactory::new(10, Options::default());
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        // Create shared subexpression
+        let and = factory.and(v1.clone(), v2);
+
+        // Use the same AND gate in two places
+        let or = factory.or(and.clone(), and.clone());
+
+        let translator = CNFTranslator::new(&arena);
+        let (_label, cnf) = translator.translate(&or);
+
+        // With memoization: AND gate translated once, OR gate uses its label
+        // Expected clauses:
+        // - AND gate: 3 clauses (Tseitin encoding)
+        // - OR gate: 3 clauses (Tseitin encoding with 2 identical inputs)
+        // - Top-level assertion: 1 clause
+        // Total: ~7 clauses
+        //
+        // Without memoization, the AND would be translated twice, giving ~10+ clauses
+        assert!(cnf.num_clauses() < 10, "Memoization should prevent duplicate translation");
+        assert!(cnf.num_clauses() >= 4, "Should have at least AND + OR + assertion clauses");
+    }
+
+    #[test]
     fn translate_or_gate() {
         let arena = crate::bool::MatrixArena::new();
         let mut factory = BooleanFactory::new(10, Options::default());
