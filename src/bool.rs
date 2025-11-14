@@ -133,7 +133,8 @@ impl BooleanValue for BooleanVariable {
 /// Boolean formula (gate)
 ///
 /// Formulas have identity-based equality using their unique labels.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Small enough (40 bytes) to be Copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BooleanFormula<'arena> {
     label: i32,
     kind: FormulaKind<'arena>,
