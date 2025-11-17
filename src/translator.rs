@@ -235,6 +235,12 @@ impl<'a> FOL2BoolTranslator<'a> {
                     IntCompareOp::Gte => right_int.lte(&left_int, factory),
                 }
             }
+
+            Formula::RelationPredicate(pred) => {
+                // Convert predicate to explicit constraints and translate
+                let constraints = pred.to_constraints();
+                self.translate_formula(&constraints)
+            }
         }
     }
 

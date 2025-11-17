@@ -95,6 +95,11 @@ pub trait FormulaVisitor {
                 self.visit_int_expression(right);
                 self.visit_int_comparison(formula)
             }
+            Formula::RelationPredicate(pred) => {
+                // Convert to constraints and visit that
+                let constraints = pred.to_constraints();
+                self.visit_formula(&constraints)
+            }
         }
     }
 

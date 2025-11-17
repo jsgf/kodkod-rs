@@ -1,7 +1,156 @@
 //! Formula types for first-order logic
 
 use super::int_expr::{IntCompareOp, IntExpression};
-use super::{Expression, Variable};
+use super::{Expression, Relation, Variable};
+
+/// Relation predicate names
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelationPredicateName {
+    /// Acyclic predicate - relation has no cycles
+    Acyclic,
+    /// Total ordering predicate - relation is a total order
+    TotalOrdering,
+    /// Function predicate - relation is a total function
+    Function,
+}
+
+/// Relation predicates - special constraints on binary relations
+#[derive(Debug, Clone, PartialEq)]
+pub enum RelationPredicate {
+    /// Acyclic predicate: relation.closure() & IDEN = empty
+    Acyclic {
+        /// The binary relation that must be acyclic
+        relation: Relation,
+    },
+    /// Total ordering predicate: relation orders a set with first/last elements
+    TotalOrdering {
+        /// The binary relation representing the ordering
+        relation: Relation,
+        /// The set of atoms being ordered
+        ordered: Relation,
+        /// The first element in the ordering
+        first: Relation,
+        /// The last element in the ordering
+        last: Relation,
+    },
+    /// Function predicate: relation is a total function
+    Function {
+        /// The binary relation that must be a function
+        relation: Relation,
+    },
+}
+
+impl RelationPredicate {
+    /// Returns the name of this predicate
+    pub fn name(&self) -> RelationPredicateName {
+        match self {
+            RelationPredicate::Acyclic { .. } => RelationPredicateName::Acyclic,
+            RelationPredicate::TotalOrdering { .. } => RelationPredicateName::TotalOrdering,
+            RelationPredicate::Function { .. } => RelationPredicateName::Function,
+        }
+    }
+
+    /// Returns the primary relation constrained by this predicate
+    pub fn relation(&self) -> &Relation {
+        match self {
+            RelationPredicate::Acyclic { relation } => relation,
+            RelationPredicate::TotalOrdering { relation, .. } => relation,
+            RelationPredicate::Function { relation } => relation,
+        }
+    }
+
+    /// Converts this predicate to explicit constraints
+    pub fn to_constraints(&self) -> Formula {
+        match self {
+            RelationPredicate::Acyclic { relation } => {
+                // acyclic <=> no (relation.closure() & IDEN)
+                let closure = Expression::from(relation.clone()).closure();
+                let iden = Expression::IDEN;
+                closure.intersection(iden).no()
+            }
+            RelationPredicate::TotalOrdering {
+                relation,
+                ordered,
+                first,
+                last,
+            } => {
+                // one first && one last && last in ordered
+                let f0 = Expression::from(first.clone())
+                    .one()
+                    .and(Expression::from(last.clone()).one())
+                    .and(Expression::from(last.clone()).in_set(Expression::from(ordered.clone())));
+
+                // ordered = first.*relation
+                let f1 = Expression::from(ordered.clone()).equals(
+                    Expression::from(first.clone())
+                        .join(Expression::from(relation.clone()).reflexive_closure()),
+                );
+
+                // no relation.first && no last.relation
+                let f2 = Expression::from(relation.clone())
+                    .join(Expression::from(first.clone()))
+                    .no()
+                    .and(
+                        Expression::from(last.clone())
+                            .join(Expression::from(relation.clone()))
+                            .no(),
+                    );
+
+                // all e: ordered - last | one e.relation
+                let e = Variable::unary(&format!("e{}", relation.name()));
+                let f3 = Formula::forall(
+                    Decls::from(Decl::one_of(
+                        e.clone(),
+                        Expression::from(ordered.clone())
+                            .difference(Expression::from(last.clone())),
+                    )),
+                    Expression::from(e).join(Expression::from(relation.clone())).one(),
+                );
+
+                Formula::and(Formula::and(f0, f1), Formula::and(f2, f3))
+            }
+            RelationPredicate::Function { relation } => {
+                // function <=> all x: univ | lone x.relation
+                let x = Variable::unary(&format!("x{}", relation.name()));
+                Formula::forall(
+                    Decls::from(Decl::one_of(x.clone(), Expression::UNIV)),
+                    Expression::from(x).join(Expression::from(relation.clone())).lone(),
+                )
+            }
+        }
+    }
+
+    /// Creates an acyclic predicate
+    pub fn acyclic(relation: Relation) -> Self {
+        assert_eq!(relation.arity(), 2, "Acyclic requires a binary relation");
+        RelationPredicate::Acyclic { relation }
+    }
+
+    /// Creates a total ordering predicate
+    pub fn total_ordering(
+        relation: Relation,
+        ordered: Relation,
+        first: Relation,
+        last: Relation,
+    ) -> Self {
+        assert_eq!(relation.arity(), 2, "TotalOrdering requires a binary relation");
+        assert_eq!(ordered.arity(), 1, "ordered must be unary");
+        assert_eq!(first.arity(), 1, "first must be unary");
+        assert_eq!(last.arity(), 1, "last must be unary");
+        RelationPredicate::TotalOrdering {
+            relation,
+            ordered,
+            first,
+            last,
+        }
+    }
+
+    /// Creates a function predicate
+    pub fn function(relation: Relation) -> Self {
+        assert_eq!(relation.arity(), 2, "Function requires a binary relation");
+        RelationPredicate::Function { relation }
+    }
+}
 
 /// Operators for binary formulas
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,6 +238,8 @@ pub enum Formula {
         op: IntCompareOp,
         right: Box<IntExpression>,
     },
+    /// Relation predicate (acyclic, total ordering, function)
+    RelationPredicate(RelationPredicate),
 }
 
 impl Formula {

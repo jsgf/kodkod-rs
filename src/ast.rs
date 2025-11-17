@@ -8,6 +8,7 @@ pub mod visitor;
 
 pub use formula::{
     BinaryFormulaOp, CompareOp, Decl, Decls, Formula, Multiplicity, Quantifier,
+    RelationPredicate, RelationPredicateName,
 };
 pub use int_expr::{IntBinaryOp, IntCompareOp, IntExpression, IntUnaryOp};
 pub use visitor::{ExpressionVisitor, FormulaVisitor};
