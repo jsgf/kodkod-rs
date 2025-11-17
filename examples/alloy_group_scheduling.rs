@@ -91,59 +91,9 @@ fn main() {
         .unwrap();
     bounds.bound_exactly(&round, round_range.clone());
 
-    // Assignments with symmetry breaking bounds
-    // Lower bound: force specific people into group 0 for each round
-    let mut lower_assign = factory.none(3);
-    for i in 0..num_rounds {
-        // p0 is in g0 for every round
-        lower_assign
-            .add(factory.tuple(&["p0", &format!("r{}", i), "g0"]).unwrap())
-            .unwrap();
-
-        // For each round i, persons p[i*(ng-1)+1] through p[(i+1)*(ng-1)] are in g0
-        let start = i * (num_groups - 1) + 1;
-        let end = (i + 1) * (num_groups - 1);
-        if start <= end && end < num_persons {
-            let person_range = factory
-                .range(
-                    factory.tuple(&[&format!("p{}", start)]).unwrap(),
-                    factory.tuple(&[&format!("p{}", end)]).unwrap(),
-                )
-                .unwrap();
-            let round_set = factory.set_of(&format!("r{}", i)).unwrap();
-            let group_set = factory.set_of("g0").unwrap();
-
-            let product = person_range
-                .product(&round_set)
-                .unwrap()
-                .product(&group_set)
-                .unwrap();
-            lower_assign.add_all(&product).unwrap();
-        }
-    }
-
-    // Upper bound: lower bound + all assignments for p1..p(num_persons-1)
-    let mut upper_assign = factory.none(3);
-    upper_assign.add_all(&lower_assign).unwrap();
-
-    if num_persons > 1 {
-        let persons_1_to_end = factory
-            .range(
-                factory.tuple(&["p1"]).unwrap(),
-                factory
-                    .tuple(&[&format!("p{}", num_persons - 1)])
-                    .unwrap(),
-            )
-            .unwrap();
-        let all_assignments = persons_1_to_end
-            .product(&round_range)
-            .unwrap()
-            .product(&group_range)
-            .unwrap();
-        upper_assign.add_all(&all_assignments).unwrap();
-    }
-
-    bounds.bound(&assign, lower_assign, upper_assign);
+    // Assignments - try without symmetry breaking first
+    let all_assign = factory.all(3);
+    bounds.bound(&assign, factory.none(3), all_assign);
 
     let build_time = start.elapsed();
 
