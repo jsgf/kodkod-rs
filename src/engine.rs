@@ -1,6 +1,9 @@
 //! SAT solver trait and implementations
 
 pub mod rustsat_adapter;
+pub mod symmetry_detector;
+
+pub use symmetry_detector::SymmetryDetector;
 
 /// Core SAT solver trait
 ///

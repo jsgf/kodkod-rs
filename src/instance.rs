@@ -2,7 +2,7 @@
 //!
 //! These types define the domain of discourse and bindings for relations.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -222,6 +222,14 @@ impl TupleSet {
     /// Returns an iterator over the tuples in this set
     pub fn iter(&self) -> impl Iterator<Item = &Tuple> {
         self.tuples.iter()
+    }
+
+    /// Returns a set of the indices of all tuples in this set
+    ///
+    /// Used for symmetry detection. The indices represent positions
+    /// in the n-dimensional tuple space of the universe.
+    pub fn index_view(&self) -> BTreeSet<usize> {
+        self.tuples.iter().map(|t| t.index()).collect()
     }
 
     /// Adds all tuples from another set to this set
@@ -533,6 +541,16 @@ impl Bounds {
         let min = *self.int_bounds.keys().min()?;
         let max = *self.int_bounds.keys().max()?;
         Some((min, max))
+    }
+
+    /// Returns an iterator over all integers with bounds
+    pub fn int_keys(&self) -> impl Iterator<Item = i32> + '_ {
+        self.int_bounds.keys().copied()
+    }
+
+    /// Returns the exact bound for an integer (for symmetry detection)
+    pub fn exact_int_bound(&self, i: i32) -> Option<&TupleSet> {
+        self.int_bounds.get(&i)
     }
 }
 

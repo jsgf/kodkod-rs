@@ -13,12 +13,28 @@ use rustsat_batsat::BasicSolver;
 use std::time::{Duration, Instant};
 
 /// Solver options
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Options {
     /// Boolean circuit options
     pub bool_options: BoolOptions,
     /// Solver timeout in milliseconds (None = no timeout)
     pub timeout_ms: Option<u64>,
+    /// Symmetry breaking bound (0 = disabled, default = 20)
+    ///
+    /// Controls the maximum length of the lex-leader symmetry breaking
+    /// predicate (SBP) that will be generated. Higher values break more
+    /// symmetries but may increase overhead. Set to 0 to disable.
+    pub symmetry_breaking: i32,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            bool_options: BoolOptions::default(),
+            timeout_ms: None,
+            symmetry_breaking: 20,
+        }
+    }
 }
 
 /// Main Kodkod solver (uses batsat by default)
@@ -314,6 +330,7 @@ mod tests {
         let options = Options {
             bool_options: BoolOptions::default(),
             timeout_ms: Some(5000),
+            symmetry_breaking: 20,
         };
 
         let solver = Solver::new(options);
