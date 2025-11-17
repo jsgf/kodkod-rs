@@ -2,11 +2,10 @@
 //!
 //! Breaks symmetries detected in bounds by generating lex-leader predicates.
 
-use crate::bool::{BoolValue, BooleanFactory, BooleanConstant, Operator};
+use crate::bool::{BoolValue, BooleanFactory, BooleanConstant};
 use crate::engine::symmetry_detector::{SymmetryDetector, IntSet};
 use crate::instance::Bounds;
 use crate::translator::LeafInterpreter;
-use crate::ast::Relation;
 
 /// Breaks symmetries for a given problem
 pub struct SymmetryBreaker {
