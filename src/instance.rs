@@ -450,6 +450,7 @@ impl TupleFactory {
 ///
 /// The lower bound specifies tuples that must be in the relation,
 /// while the upper bound specifies tuples that may be in the relation.
+#[derive(Clone)]
 pub struct Bounds {
     universe: Universe,
     lower_bounds: HashMap<Relation, TupleSet>,

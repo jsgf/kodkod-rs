@@ -67,12 +67,27 @@ impl Translator {
     ///
     /// Returns a TranslationResult that wraps both the interpreter and circuit together,
     /// ensuring their lifetimes are tied and cannot be separated.
-    pub fn evaluate(formula: &Formula, bounds: &Bounds, options: &Options) -> TranslationResult {
+    pub fn evaluate(
+        formula: &Formula,
+        bounds: &Bounds,
+        options: &Options,
+        symmetry_breaking: i32,
+    ) -> TranslationResult {
         let interpreter = LeafInterpreter::from_bounds(bounds, options);
 
         let value = {
             let translator = FOL2BoolTranslator::new(&interpreter);
-            translator.translate_formula(formula)
+            let mut circuit = translator.translate_formula(formula);
+
+            // Generate and conjoin symmetry breaking predicate if enabled
+            if symmetry_breaking > 0 {
+                let mut breaker = crate::engine::SymmetryBreaker::new(bounds.clone());
+                let sbp = breaker.generate_sbp(&interpreter, symmetry_breaking);
+                let factory = interpreter.factory();
+                circuit = factory.and(circuit, sbp);
+            }
+
+            circuit
         };
 
         // SAFETY: The value contains no borrows - all BoolValue variants are either Constants,

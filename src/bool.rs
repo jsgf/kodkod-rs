@@ -423,6 +423,12 @@ impl<'arena> BooleanMatrix<'arena> {
         }
     }
 
+    /// Gets the element at the given row and column, returning FALSE if out of bounds
+    pub fn get_row_col(&self, row: usize, col: usize) -> BoolValue<'arena> {
+        self.get_at(row, col)
+            .unwrap_or(BoolValue::Constant(BooleanConstant::FALSE))
+    }
+
     /// Union (OR) of two matrices
     /// Following Java: BooleanMatrix.or(BooleanMatrix)
     pub fn union(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
