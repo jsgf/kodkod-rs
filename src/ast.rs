@@ -195,7 +195,7 @@ pub enum UnaryOp {
 
 /// A relational expression
 #[expect(missing_docs)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expression {
     /// A relation (leaf)
     Relation(Relation),

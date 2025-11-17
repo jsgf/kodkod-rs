@@ -15,7 +15,7 @@ pub enum RelationPredicateName {
 }
 
 /// Relation predicates - special constraints on binary relations
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RelationPredicate {
     /// Acyclic predicate: relation.closure() & IDEN = empty
     Acyclic {
@@ -198,7 +198,7 @@ pub enum Quantifier {
 
 /// A first-order formula
 #[expect(missing_docs)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Formula {
     /// Constant formula (TRUE or FALSE)
     Constant(bool),
@@ -399,7 +399,7 @@ impl Expression {
 }
 
 /// A variable declaration (e.g., "x: Expression")
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Decl {
     variable: Variable,
     multiplicity: Multiplicity,
@@ -452,7 +452,7 @@ impl Decl {
 }
 
 /// A sequence of variable declarations
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Decls {
     declarations: Vec<Decl>,
 }

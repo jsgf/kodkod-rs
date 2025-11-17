@@ -444,6 +444,17 @@ impl TupleFactory {
             index,
         })
     }
+
+    /// Creates a TupleSet from a set of tuple indices
+    /// Following Java: TupleFactory.setOf(arity, IntSet)
+    pub fn tuple_set_from_indices(&self, arity: usize, indices: &std::collections::BTreeSet<usize>) -> Result<TupleSet> {
+        let mut set = TupleSet::empty(self.universe.clone(), arity);
+        for &index in indices {
+            let tuple = self.tuple_from_index(arity, index)?;
+            set.add(tuple)?;
+        }
+        Ok(set)
+    }
 }
 
 /// Bounds map relations to lower and upper bounds on their contents
@@ -472,6 +483,11 @@ impl Bounds {
     /// Returns the universe
     pub fn universe(&self) -> &Universe {
         &self.universe
+    }
+
+    /// Returns the tuple factory for this bounds
+    pub fn factory(&self) -> TupleFactory {
+        self.universe.factory()
     }
 
     /// Sets both lower and upper bounds for a relation
