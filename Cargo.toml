@@ -24,6 +24,7 @@ bumpalo = "3.19"
 bumpalo-herd = "0.1"
 # Fast hashing for HashMaps
 ahash = "0.8"
+rand = "0.8"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

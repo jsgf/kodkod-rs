@@ -452,6 +452,45 @@ impl TupleFactory {
         Ok(set)
     }
 
+    /// Creates an n-dimensional rectangular region
+    /// Following Java: TupleFactory.area(Tuple, Tuple)
+    ///
+    /// Returns the Cartesian product of ranges [upperLeft[i]..lowerRight[i]] for each dimension i
+    pub fn area(&self, upper_left: Tuple, lower_right: Tuple) -> Result<TupleSet> {
+        if upper_left.universe() != &self.universe || lower_right.universe() != &self.universe {
+            return Err(KodkodError::InvalidArgument(
+                "tuples must be from this universe".to_string(),
+            ));
+        }
+        if upper_left.arity() != lower_right.arity() {
+            return Err(KodkodError::InvalidArgument(
+                "tuples must have the same arity".to_string(),
+            ));
+        }
+
+        // Start with the first dimension's range
+        let start_atom = self.universe.atom(upper_left.atom_index(0).unwrap()).unwrap();
+        let end_atom = self.universe.atom(lower_right.atom_index(0).unwrap()).unwrap();
+
+        let start_tuple = self.tuple(&[start_atom])?;
+        let end_tuple = self.tuple(&[end_atom])?;
+        let mut result = self.range(start_tuple, end_tuple)?;
+
+        // Product with each subsequent dimension's range
+        for i in 1..upper_left.arity() {
+            let start_atom = self.universe.atom(upper_left.atom_index(i).unwrap()).unwrap();
+            let end_atom = self.universe.atom(lower_right.atom_index(i).unwrap()).unwrap();
+
+            let start_tuple = self.tuple(&[start_atom])?;
+            let end_tuple = self.tuple(&[end_atom])?;
+            let dim_range = self.range(start_tuple, end_tuple)?;
+
+            result = result.product(&dim_range)?;
+        }
+
+        Ok(result)
+    }
+
     /// Creates a tuple from an index in n-dimensional space
     pub fn tuple_from_index(&self, arity: usize, index: usize) -> Result<Tuple> {
         let base = self.universe.size();
@@ -583,6 +622,28 @@ impl Bounds {
                 self.int_bounds.insert(i, set);
             }
         }
+    }
+
+    /// Sets the exact bound for an integer
+    /// Following Java: Bounds.boundExactly(int i, TupleSet ibound)
+    pub fn bound_exactly_int(&mut self, i: i32, tuples: TupleSet) -> Result<()> {
+        if tuples.universe() != &self.universe {
+            return Err(KodkodError::InvalidArgument(
+                "Tuple set must be from the same universe".to_string(),
+            ));
+        }
+        if tuples.arity() != 1 {
+            return Err(KodkodError::InvalidArgument(
+                "Integer bound must have arity 1".to_string(),
+            ));
+        }
+        if tuples.size() != 1 {
+            return Err(KodkodError::InvalidArgument(
+                "Integer bound must contain exactly one tuple".to_string(),
+            ));
+        }
+        self.int_bounds.insert(i, tuples);
+        Ok(())
     }
 
     /// Returns the tuple set for an integer

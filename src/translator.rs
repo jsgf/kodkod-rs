@@ -290,14 +290,15 @@ impl<'a> FOL2BoolTranslator<'a> {
                 };
                 let factory = self.interpreter.factory();
 
-                match op {
+                let result = match op {
                     BinaryOp::Union => left_matrix.union(&right_matrix, factory),
                     BinaryOp::Intersection => left_matrix.intersection(&right_matrix, factory),
                     BinaryOp::Difference => left_matrix.difference(&right_matrix, factory),
                     BinaryOp::Override => left_matrix.override_with(&right_matrix, factory),
                     BinaryOp::Join => left_matrix.join(&right_matrix, factory),
                     BinaryOp::Product => left_matrix.product(&right_matrix, factory),
-                }
+                };
+                result
             }
 
             Expression::Unary { op, expr } => {

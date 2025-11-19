@@ -4,7 +4,7 @@ use super::int_expr::{IntCompareOp, IntExpression};
 use super::{Expression, Relation, Variable};
 
 /// Relation predicate names
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RelationPredicateName {
     /// Acyclic predicate - relation has no cycles
     Acyclic,
@@ -37,6 +37,10 @@ pub enum RelationPredicate {
     Function {
         /// The binary relation that must be a function
         relation: Relation,
+        /// Domain of the function
+        domain: Expression,
+        /// Range of the function
+        range: Expression,
     },
 }
 
@@ -55,7 +59,7 @@ impl RelationPredicate {
         match self {
             RelationPredicate::Acyclic { relation } => relation,
             RelationPredicate::TotalOrdering { relation, .. } => relation,
-            RelationPredicate::Function { relation } => relation,
+            RelationPredicate::Function { relation, .. } => relation,
         }
     }
 
@@ -109,13 +113,18 @@ impl RelationPredicate {
 
                 Formula::and(Formula::and(f0, f1), Formula::and(f2, f3))
             }
-            RelationPredicate::Function { relation } => {
-                // function <=> all x: univ | lone x.relation
+            RelationPredicate::Function { relation, domain, range } => {
+                // function <=> relation in domain->range && all x: domain | one x.relation
+                let domain_to_range = domain.clone().product(range.clone());
+                let f0 = Expression::from(relation.clone()).in_set(domain_to_range);
+
                 let x = Variable::unary(&format!("x{}", relation.name()));
-                Formula::forall(
-                    Decls::from(Decl::one_of(x.clone(), Expression::UNIV)),
-                    Expression::from(x).join(Expression::from(relation.clone())).lone(),
-                )
+                let f1 = Formula::forall(
+                    Decls::from(Decl::one_of(x.clone(), domain.clone())),
+                    Expression::from(x).join(Expression::from(relation.clone())).one(),
+                );
+
+                f0.and(f1)
             }
         }
     }
@@ -146,14 +155,17 @@ impl RelationPredicate {
     }
 
     /// Creates a function predicate
-    pub fn function(relation: Relation) -> Self {
+    /// Following Java: Relation.function(Expression domain, Expression range)
+    pub fn function(relation: Relation, domain: Expression, range: Expression) -> Self {
         assert_eq!(relation.arity(), 2, "Function requires a binary relation");
-        RelationPredicate::Function { relation }
+        assert_eq!(domain.arity(), 1, "Domain must be unary");
+        assert_eq!(range.arity(), 1, "Range must be unary");
+        RelationPredicate::Function { relation, domain, range }
     }
 }
 
 /// Operators for binary formulas
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryFormulaOp {
     /// Logical AND
     And,
@@ -166,7 +178,7 @@ pub enum BinaryFormulaOp {
 }
 
 /// Comparison operators for expressions
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompareOp {
     /// Set equality
     Equals,
@@ -175,7 +187,7 @@ pub enum CompareOp {
 }
 
 /// Multiplicity operators
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Multiplicity {
     /// At least one element (some)
     Some,
@@ -188,7 +200,7 @@ pub enum Multiplicity {
 }
 
 /// Quantifiers
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Quantifier {
     /// Universal quantification (forall)
     All,
@@ -198,7 +210,7 @@ pub enum Quantifier {
 
 /// A first-order formula
 #[expect(missing_docs)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Formula {
     /// Constant formula (TRUE or FALSE)
     Constant(bool),
@@ -339,6 +351,16 @@ impl Formula {
             body: Box::new(body),
         }
     }
+
+    /// If-then-else for integer expressions
+    /// Following Java: Formula.thenElse(IntExpression, IntExpression)
+    pub fn then_else_int(self, then_expr: IntExpression, else_expr: IntExpression) -> IntExpression {
+        IntExpression::If {
+            condition: Box::new(self),
+            then_expr: Box::new(then_expr),
+            else_expr: Box::new(else_expr),
+        }
+    }
 }
 
 impl Expression {
@@ -411,7 +433,7 @@ impl Formula {
 }
 
 /// A variable declaration (e.g., "x: Expression")
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Decl {
     variable: Variable,
     multiplicity: Multiplicity,
@@ -464,7 +486,7 @@ impl Decl {
 }
 
 /// A sequence of variable declarations
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Decls {
     declarations: Vec<Decl>,
 }

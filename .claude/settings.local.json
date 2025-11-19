@@ -28,7 +28,13 @@
       "Bash(time timeout 120 cargo run:*)",
       "Bash(cargo build:*)",
       "Bash(time target/release/examples/ring_election:*)",
-      "Bash(time timeout 60 cargo run:*)"
+      "Bash(time timeout 60 cargo run:*)",
+      "Bash(1)",
+      "Bash(javac:*)",
+      "Bash(timeout 5 cargo run:*)",
+      "Bash(RUST_LOG=off perf record:*)",
+      "Bash(time target/release/examples/abstract_world_definitions:*)",
+      "Bash(comm -23:*)"
     ],
     "deny": [],
     "ask": []

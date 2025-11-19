@@ -40,12 +40,14 @@ impl Toughnut {
         let xy = Expression::from(y.clone())
             .join(Expression::from(x.clone()).join(Expression::from(self.covered.clone())));
 
+        eprintln!("DEBUG: Building symm formula");
         // Covering relation is symmetric
         let symm = Formula::forall(d.clone(),
             xy.clone().product(Expression::from(x.clone()).product(Expression::from(y.clone())))
                 .in_set(Expression::from(self.covered.clone()))
         );
 
+        eprintln!("DEBUG: Building covering formula");
         // Each pair of cells on the board should be covered
         // by a domino, which also covers ONE of its neighbors
         let x_neighbors = self.prev(Expression::from(x.clone()))
@@ -60,6 +62,7 @@ impl Toughnut {
             xy.clone().one().and(xy.in_set(x_neighbors.union(y_neighbors)))
         );
 
+        eprintln!("DEBUG: Combining symm and covering");
         symm.and(covering)
     }
 
@@ -112,10 +115,11 @@ impl Toughnut {
 fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("=== Toughnut - Domino Covering Problem ===\n");
 
-    let n = 8; // 8x8 board
+    let n = 4; // 4x4 board
     let model = Toughnut::new();
-    let options = Options::default();
+    let mut options = Options::default();
 
+    // Enable verbose to see what's happening
     println!("Test: Can we cover a {}x{} board with dominoes (opposite corners removed)?", n, n);
     println!("Formula: covering predicate\n");
 
@@ -125,6 +129,16 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("Debug: Checking bounds...");
     if let Some(covered_upper) = bounds.upper_bound(&model.covered) {
         println!("  covered upper bound: {} tuples (arity {})", covered_upper.size(), covered_upper.arity());
+        // Show first few tuples
+        for (i, tuple) in covered_upper.iter().take(5).enumerate() {
+            print!("    tuple {}: ", i);
+            for j in 0..tuple.arity() {
+                if let Some(atom) = tuple.atom(j) {
+                    print!("{} ", atom);
+                }
+            }
+            println!();
+        }
     }
     if let Some(covered_lower) = bounds.lower_bound(&model.covered) {
         println!("  covered lower bound: {} tuples", covered_lower.size());
@@ -134,14 +148,25 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     }
     if let Some(ord_bound) = bounds.upper_bound(&model.ord) {
         println!("  ord bound: {} tuples (arity {})", ord_bound.size(), ord_bound.arity());
+        for tuple in ord_bound.iter() {
+            print!("    ");
+            for j in 0..tuple.arity() {
+                if let Some(atom) = tuple.atom(j) {
+                    print!("{} ", atom);
+                }
+            }
+            println!();
+        }
     }
 
+    println!("\nBuilding formula...");
     let formula = model.check_below_too_double_prime();
 
+    println!("Solving...");
     let solver = Solver::new(options);
     let solution = solver.solve(&formula, &bounds)?;
 
-    println!("Result: {}", if solution.is_sat() { "SAT (covering exists)" } else { "UNSAT (no covering)" });
+    println!("\nResult: {}", if solution.is_sat() { "SAT (covering exists)" } else { "UNSAT (no covering)" });
     let stats = solution.statistics();
     println!("  Variables: {}, Clauses: {}", stats.num_variables(), stats.num_clauses());
     println!("  Translation: {}ms, Solving: {}ms, Total: {}ms",

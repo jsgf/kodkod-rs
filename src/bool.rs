@@ -535,7 +535,8 @@ impl<'arena> BooleanMatrix<'arena> {
                         let k = (i / b) * c + j % c;
                         // Accumulate OR
                         let existing = result.get(k);
-                        result.set(k, factory.or(existing, product));
+                        let new_val = factory.or(existing.clone(), product.clone());
+                        result.set(k, new_val);
                     }
                 }
             }
@@ -679,14 +680,16 @@ impl<'arena> BooleanMatrix<'arena> {
         }
 
         let values: Vec<BoolValue<'arena>> = self.cells.values().cloned().collect();
-        factory.or_multi(values)
+        let result = factory.or_multi(values);
+        result
     }
 
     /// Multiplicity: none (all entries are FALSE)
     /// Following Java: BooleanMatrix.none()
     pub fn none(&self, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
         let some_val = self.some(factory);
-        factory.not(some_val)
+        let result = factory.not(some_val);
+        result
     }
 
     /// Multiplicity: one (exactly one entry is TRUE)

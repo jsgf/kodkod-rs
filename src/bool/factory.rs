@@ -13,11 +13,16 @@ use std::mem;
 pub struct Options {
     /// Enable sharing of boolean formulas (default: true)
     pub sharing: bool,
+    /// Bitwidth for integer encoding (default: 32)
+    pub bitwidth: usize,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { sharing: true }
+        Self {
+            sharing: true,
+            bitwidth: 32,
+        }
     }
 }
 
@@ -56,9 +61,9 @@ impl BooleanFactory {
             num_variables,
             // Start labels after variables (variables are 1..=num_variables)
             next_label: Cell::new(num_variables + 1),
+            bitwidth: options.bitwidth,
             options,
             cache: RefCell::new(FxHashMap::default()),
-            bitwidth: 32, // Default bitwidth for integers
             arena: MatrixArena::new(),
         }
     }

@@ -69,6 +69,14 @@ impl Relation {
     pub fn arity(&self) -> usize {
         self.inner.arity
     }
+
+    /// Creates a function predicate for this relation
+    /// Following Java: Relation.function(Expression domain, Expression range)
+    /// Returns a formula stating that this relation is a total function from domain to range
+    pub fn function(self, domain: Expression, range: Expression) -> crate::ast::formula::Formula {
+        use crate::ast::formula::{Formula, RelationPredicate};
+        Formula::RelationPredicate(RelationPredicate::function(self, domain, range))
+    }
 }
 
 // Identity equality - two relations are equal iff they're the same Arc
@@ -166,7 +174,7 @@ impl fmt::Debug for Variable {
 }
 
 /// Operators for binary expressions
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOp {
     /// Relational composition/join
     Join,
@@ -183,7 +191,7 @@ pub enum BinaryOp {
 }
 
 /// Operators for unary expressions
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     /// Transpose of a binary relation
     Transpose,
@@ -195,7 +203,7 @@ pub enum UnaryOp {
 
 /// A relational expression
 #[expect(missing_docs)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Expression {
     /// A relation (leaf)
     Relation(Relation),
@@ -382,6 +390,19 @@ impl Expression {
     /// This is equivalent to `self.in_set(Expression::from(relation))`
     pub fn in_relation(self, relation: &Relation) -> crate::ast::formula::Formula {
         self.in_set(Expression::from(relation.clone()))
+    }
+
+    /// Sum of integer atoms in this expression (cast to IntExpression)
+    /// Following Java: Expression.sum() - returns the sum of integer atoms
+    /// Note: For cardinality use `count()`, for quantified sum use `sum_over(decls)`
+    pub fn sum_int(self) -> IntExpression {
+        IntExpression::ExprCast(self)
+    }
+
+    /// Cardinality of this expression
+    /// Following Java: Expression.cardinality() - returns #this
+    pub fn cardinality(self) -> IntExpression {
+        IntExpression::Cardinality(self)
     }
 }
 

@@ -3,7 +3,7 @@
 use super::{Decls, Expression, Formula};
 
 /// Binary operators for integer expressions
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntBinaryOp {
     /// Addition
     Plus,
@@ -30,7 +30,7 @@ pub enum IntBinaryOp {
 }
 
 /// Unary operators for integer expressions
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntUnaryOp {
     /// Negation
     Negate,
@@ -43,7 +43,7 @@ pub enum IntUnaryOp {
 }
 
 /// Integer comparison operators
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntCompareOp {
     /// Equal
     Eq,
@@ -59,7 +59,7 @@ pub enum IntCompareOp {
 
 /// An expression that evaluates to an integer
 #[expect(missing_docs)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum IntExpression {
     /// Integer constant
     Constant(i32),
