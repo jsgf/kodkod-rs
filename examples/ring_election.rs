@@ -295,14 +295,15 @@ impl RingElection {
             process_bound.product(&process_bound)?.product(&time_bound)?)?;
         bounds.bound(&self.elected, factory.none(2), process_bound.product(&time_bound)?)?;
 
+        // Ordering relations: pord, pfirst, plast can be any subset of process bounds
         bounds.bound(&self.pord, factory.none(2), process_bound.product(&process_bound)?)?;
-        bounds.bound_exactly(&self.pfirst, process_bound.clone())?;
-        bounds.bound_exactly(&self.plast, process_bound)?;
+        bounds.bound(&self.pfirst, factory.none(1), process_bound.clone())?;
+        bounds.bound(&self.plast, factory.none(1), process_bound)?;
 
         bounds.bound_exactly(&self.time, time_bound.clone())?;
         bounds.bound(&self.tord, factory.none(2), time_bound.product(&time_bound)?)?;
-        bounds.bound_exactly(&self.tfirst, time_bound.clone())?;
-        bounds.bound_exactly(&self.tlast, time_bound)?;
+        bounds.bound(&self.tfirst, factory.none(1), time_bound.clone())?;
+        bounds.bound(&self.tlast, factory.none(1), time_bound)?;
 
         Ok(bounds)
     }
@@ -314,39 +315,57 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     let model = RingElection::new();
     let options = Options::default();
 
-    // Java version checks: 3 Process, 7 Time
     let processes = 3;
     let times = 7;
 
-    println!("Check AtMostOneElected for {} Process, {} Time", processes, times);
-    println!("Formula: invariants && !atMostOneElected\n");
+    println!("Testing with {} Process, {} Time\n", processes, times);
 
-    let formula = model.check_at_most_one_elected();
+    // Start with just declarations to see if bounds work
+    println!("Test 1: Just declarations");
+    let formula1 = model.declarations();
     let bounds = model.bounds(processes, times)?;
-
-    println!("Solving...");
     let solver = Solver::new(options);
-    let solution = solver.solve(&formula, &bounds)?;
+    let solution = solver.solve(&formula1, &bounds)?;
+    println!("  Result: {} (vars: {}, clauses: {})",
+        if solution.is_sat() { "SAT" } else { "UNSAT" },
+        solution.statistics().num_variables(),
+        solution.statistics().num_clauses());
 
-    println!("Result: {}", if solution.is_sat() { "SAT (counterexample found)" } else { "UNSAT (property holds)" });
+    // Add ring constraint
+    println!("\nTest 2: Declarations + ring");
+    let formula2 = model.declarations().and(model.ring());
+    let solution2 = solver.solve(&formula2, &bounds)?;
+    println!("  Result: {} (vars: {}, clauses: {})",
+        if solution2.is_sat() { "SAT" } else { "UNSAT" },
+        solution2.statistics().num_variables(),
+        solution2.statistics().num_clauses());
 
-    if solution.is_sat() {
-        let stats = solution.statistics();
-        println!("\nCounterexample statistics:");
-        println!("  Variables: {}", stats.num_variables());
-        println!("  Clauses: {}", stats.num_clauses());
-        println!("  Translation time: {}ms", stats.translation_time());
-        println!("  Solving time: {}ms", stats.solving_time());
-        println!("  Total time: {}ms", stats.total_time());
-    } else {
-        let stats = solution.statistics();
-        println!("\nVerification statistics:");
-        println!("  Variables: {}", stats.num_variables());
-        println!("  Clauses: {}", stats.num_clauses());
-        println!("  Translation time: {}ms", stats.translation_time());
-        println!("  Solving time: {}ms", stats.solving_time());
-        println!("  Total time: {}ms", stats.total_time());
-    }
+    // Add traces
+    println!("\nTest 3: Declarations + ring + traces");
+    let formula3 = model.declarations().and(model.ring()).and(model.traces());
+    let solution3 = solver.solve(&formula3, &bounds)?;
+    println!("  Result: {} (vars: {}, clauses: {})",
+        if solution3.is_sat() { "SAT" } else { "UNSAT" },
+        solution3.statistics().num_variables(),
+        solution3.statistics().num_clauses());
+
+    // Full invariants
+    println!("\nTest 4: Full invariants");
+    let formula4 = model.invariants();
+    let solution4 = solver.solve(&formula4, &bounds)?;
+    println!("  Result: {} (vars: {}, clauses: {})",
+        if solution4.is_sat() { "SAT" } else { "UNSAT" },
+        solution4.statistics().num_variables(),
+        solution4.statistics().num_clauses());
+
+    // The actual check
+    println!("\nTest 5: Check AtMostOneElected (invariants && !atMostOneElected)");
+    let formula5 = model.check_at_most_one_elected();
+    let solution5 = solver.solve(&formula5, &bounds)?;
+    println!("  Result: {} (vars: {}, clauses: {})",
+        if solution5.is_sat() { "SAT (counterexample)" } else { "UNSAT (property holds)" },
+        solution5.statistics().num_variables(),
+        solution5.statistics().num_clauses());
 
     Ok(())
 }
