@@ -96,6 +96,172 @@ impl RingElection {
         Formula::forall(Decls::from(Decl::one_of(p, Expression::from(self.process.clone()))), body)
     }
 
+    /// pred step (t, t': Time, p: Process) {
+    ///   let from = p.toSend, to = p.succ.toSend |
+    ///    some id: from.t {
+    ///     from.t' = from.t - id
+    ///     to.t' = to.t + (id - PO/prevs(p.succ)) } }
+    fn step(&self, t1: Expression, t2: Expression, p: Expression) -> Formula {
+        let from = p.clone().join(Expression::from(self.to_send.clone()));
+        let to = p.clone().join(Expression::from(self.succ.clone()))
+            .join(Expression::from(self.to_send.clone()));
+
+        let id = Variable::unary("id");
+        let prevs = p.join(Expression::from(self.succ.clone()))
+            .join(Expression::from(self.pord.clone()).transpose().closure());
+
+        let f1 = from.clone().join(t2.clone())
+            .equals(from.clone().join(t1.clone()).difference(Expression::from(id.clone())));
+        let f2 = to.clone().join(t2.clone())
+            .equals(to.clone().join(t1.clone()).union(Expression::from(id.clone()).difference(prevs)));
+
+        let body = f1.and(f2);
+        Formula::exists(Decls::from(Decl::one_of(id, from.join(t1))), body)
+    }
+
+    /// pred skip (t, t': Time, p: Process) {p.toSend.t = p.toSend.t'}
+    fn skip(&self, t1: Expression, t2: Expression, p: Expression) -> Formula {
+        p.clone().join(Expression::from(self.to_send.clone())).join(t1)
+            .equals(p.join(Expression::from(self.to_send.clone())).join(t2))
+    }
+
+    /// fact Traces {
+    ///   init (TO/first ())
+    ///   all t: Time - TO/last() | let t' = TO/next (t) |
+    ///    all p: Process | step (t, t', p) or step (t, t', succ.p) or skip (t, t', p) }
+    fn traces(&self) -> Formula {
+        let t1 = Variable::unary("t");
+        let t2 = Expression::from(t1.clone()).join(Expression::from(self.tord.clone()));
+        let p = Variable::unary("p");
+
+        let f = self.step(Expression::from(t1.clone()), t2.clone(), Expression::from(p.clone()))
+            .or(self.step(Expression::from(t1.clone()), t2.clone(),
+                Expression::from(self.succ.clone()).join(Expression::from(p.clone()))))
+            .or(self.skip(Expression::from(t1.clone()), t2, Expression::from(p.clone())));
+
+        let f_all = Formula::forall(
+            Decls::from(Decl::one_of(p, Expression::from(self.process.clone()))),
+            f
+        );
+        let f_all_times = Formula::forall(
+            Decls::from(Decl::one_of(t1, Expression::from(self.time.clone())
+                .difference(Expression::from(self.tlast.clone())))),
+            f_all
+        );
+
+        self.init(Expression::from(self.tfirst.clone())).and(f_all_times)
+    }
+
+    /// fact DefineElected {
+    ///   no elected.TO/first()
+    ///   all t: Time - TO/first()|
+    ///    elected.t = {p: Process | p in p.toSend.t - p.toSend.(TO/prev(t))} }
+    fn define_elected(&self) -> Formula {
+        let f1 = Expression::from(self.elected.clone())
+            .join(Expression::from(self.tfirst.clone()))
+            .no();
+
+        let t = Variable::unary("t");
+        let p = Variable::unary("p");
+
+        let condition = Expression::from(p.clone()).in_set(
+            Expression::from(p.clone()).join(Expression::from(self.to_send.clone()))
+                .join(Expression::from(t.clone()))
+                .difference(
+                    Expression::from(p.clone()).join(Expression::from(self.to_send.clone()))
+                        .join(Expression::from(t.clone()).join(Expression::from(self.tord.clone()).transpose()))
+                )
+        );
+
+        let comprehension = condition.comprehension(
+            Decls::from(Decl::one_of(p, Expression::from(self.process.clone())))
+        );
+
+        let f2 = Expression::from(self.elected.clone()).join(Expression::from(t.clone()))
+            .equals(comprehension);
+
+        let f2_all = Formula::forall(
+            Decls::from(Decl::one_of(t, Expression::from(self.time.clone())
+                .difference(Expression::from(self.tfirst.clone())))),
+            f2
+        );
+
+        f1.and(f2_all)
+    }
+
+    /// pred progress () {
+    ///   all t: Time - TO/last() | let t' = TO/next (t) |
+    ///    some Process.toSend.t => some p: Process | not skip (t, t', p) }
+    fn progress(&self) -> Formula {
+        let t1 = Variable::unary("t");
+        let t2 = Expression::from(t1.clone()).join(Expression::from(self.tord.clone()));
+        let p = Variable::unary("p");
+
+        let condition = Expression::from(self.process.clone())
+            .join(Expression::from(self.to_send.clone()))
+            .join(Expression::from(t1.clone()))
+            .some();
+
+        let consequent = Formula::exists(
+            Decls::from(Decl::one_of(p.clone(), Expression::from(self.process.clone()))),
+            self.skip(Expression::from(t1.clone()), t2, Expression::from(p)).not()
+        );
+
+        let f1 = condition.implies(consequent);
+
+        Formula::forall(
+            Decls::from(Decl::one_of(t1, Expression::from(self.time.clone())
+                .difference(Expression::from(self.tlast.clone())))),
+            f1
+        )
+    }
+
+    /// pred looplessPath () {no disj t, t': Time | toSend.t = toSend.t'}
+    fn loopless_path(&self) -> Formula {
+        let t1 = Variable::unary("t");
+        let t2 = Variable::unary("t'");
+
+        let f1 = Expression::from(t1.clone()).intersection(Expression::from(t2.clone())).some()
+            .or(Expression::from(self.to_send.clone()).join(Expression::from(t1.clone()))
+                .equals(Expression::from(self.to_send.clone()).join(Expression::from(t2.clone())))
+                .not());
+
+        Formula::forall(
+            Decls::from(Decl::one_of(t1, Expression::from(self.time.clone())))
+                .and(Decl::one_of(t2, Expression::from(self.time.clone()))),
+            f1
+        )
+    }
+
+    /// assert AtLeastOneElected { progress () => some elected.Time }
+    fn at_least_one_elected(&self) -> Formula {
+        self.progress().implies(
+            Expression::from(self.elected.clone())
+                .join(Expression::from(self.time.clone()))
+                .some()
+        )
+    }
+
+    /// assert AtMostOneElected {lone elected.Time}
+    fn at_most_one_elected(&self) -> Formula {
+        Expression::from(self.elected.clone())
+            .join(Expression::from(self.time.clone()))
+            .lone()
+    }
+
+    /// Returns the declarations and facts of the model
+    fn invariants(&self) -> Formula {
+        self.declarations()
+            .and(self.ring())
+            .and(self.traces())
+            .and(self.define_elected())
+    }
+
+    /// Returns the conjunction of the invariants and the negation of atMostOneElected
+    fn check_at_most_one_elected(&self) -> Formula {
+        self.invariants().and(self.at_most_one_elected().not())
+    }
+
     /// Returns bounds for the given scope
     fn bounds(&self, processes: usize, times: usize) -> Result<Bounds, kodkod_rs::error::KodkodError> {
         let mut atoms = Vec::new();
@@ -148,26 +314,38 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     let model = RingElection::new();
     let options = Options::default();
 
-    // Test with larger scope to stress translation
-    let processes = 5;
-    let times = 5;
+    // Java version checks: 3 Process, 7 Time
+    let processes = 3;
+    let times = 7;
 
-    println!("Configuration: {} processes, {} time steps", processes, times);
+    println!("Check AtMostOneElected for {} Process, {} Time", processes, times);
+    println!("Formula: invariants && !atMostOneElected\n");
 
-    let formula = model.declarations()
-        .and(model.ring())
-        .and(model.init(Expression::from(model.tfirst.clone())));
+    let formula = model.check_at_most_one_elected();
     let bounds = model.bounds(processes, times)?;
 
     println!("Solving...");
     let solver = Solver::new(options);
     let solution = solver.solve(&formula, &bounds)?;
 
-    println!("Result: {}", if solution.is_sat() { "SAT" } else { "UNSAT" });
+    println!("Result: {}", if solution.is_sat() { "SAT (counterexample found)" } else { "UNSAT (property holds)" });
 
     if solution.is_sat() {
         let stats = solution.statistics();
-        println!("Variables: {}, Clauses: {}", stats.num_variables(), stats.num_clauses());
+        println!("\nCounterexample statistics:");
+        println!("  Variables: {}", stats.num_variables());
+        println!("  Clauses: {}", stats.num_clauses());
+        println!("  Translation time: {}ms", stats.translation_time());
+        println!("  Solving time: {}ms", stats.solving_time());
+        println!("  Total time: {}ms", stats.total_time());
+    } else {
+        let stats = solution.statistics();
+        println!("\nVerification statistics:");
+        println!("  Variables: {}", stats.num_variables());
+        println!("  Clauses: {}", stats.num_clauses());
+        println!("  Translation time: {}ms", stats.translation_time());
+        println!("  Solving time: {}ms", stats.solving_time());
+        println!("  Total time: {}ms", stats.total_time());
     }
 
     Ok(())
