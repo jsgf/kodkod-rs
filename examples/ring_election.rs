@@ -315,57 +315,49 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     let model = RingElection::new();
     let options = Options::default();
 
-    let processes = 3;
-    let times = 7;
+    // Test 1: check AtMostOneElected for 3 Process, 7 Time (from Alloy line 65)
+    println!("Test 1: Check AtMostOneElected for 3 Process, 7 Time");
+    println!("Formula: invariants && !atMostOneElected\n");
 
-    println!("Testing with {} Process, {} Time\n", processes, times);
+    let formula1 = model.check_at_most_one_elected();
+    let bounds1 = model.bounds(3, 7)?;
 
-    // Start with just declarations to see if bounds work
-    println!("Test 1: Just declarations");
-    let formula1 = model.declarations();
-    let bounds = model.bounds(processes, times)?;
     let solver = Solver::new(options);
-    let solution = solver.solve(&formula1, &bounds)?;
-    println!("  Result: {} (vars: {}, clauses: {})",
-        if solution.is_sat() { "SAT" } else { "UNSAT" },
-        solution.statistics().num_variables(),
-        solution.statistics().num_clauses());
+    let solution1 = solver.solve(&formula1, &bounds1)?;
 
-    // Add ring constraint
-    println!("\nTest 2: Declarations + ring");
-    let formula2 = model.declarations().and(model.ring());
-    let solution2 = solver.solve(&formula2, &bounds)?;
-    println!("  Result: {} (vars: {}, clauses: {})",
-        if solution2.is_sat() { "SAT" } else { "UNSAT" },
-        solution2.statistics().num_variables(),
-        solution2.statistics().num_clauses());
+    println!("Result: {}", if solution1.is_sat() { "SAT (counterexample found)" } else { "UNSAT (property holds)" });
+    let stats1 = solution1.statistics();
+    println!("  Variables: {}, Clauses: {}", stats1.num_variables(), stats1.num_clauses());
+    println!("  Translation: {}ms, Solving: {}ms, Total: {}ms\n",
+        stats1.translation_time(), stats1.solving_time(), stats1.total_time());
 
-    // Add traces
-    println!("\nTest 3: Declarations + ring + traces");
-    let formula3 = model.declarations().and(model.ring()).and(model.traces());
-    let solution3 = solver.solve(&formula3, &bounds)?;
-    println!("  Result: {} (vars: {}, clauses: {})",
-        if solution3.is_sat() { "SAT" } else { "UNSAT" },
-        solution3.statistics().num_variables(),
-        solution3.statistics().num_clauses());
+    // Test 2: check AtLeastOneElected with progress (from Alloy line 59)
+    println!("Test 2: Check AtLeastOneElected (with progress) for 3 Process, 7 Time");
+    println!("Formula: invariants && !(progress => some elected.Time)\n");
 
-    // Full invariants
-    println!("\nTest 4: Full invariants");
-    let formula4 = model.invariants();
-    let solution4 = solver.solve(&formula4, &bounds)?;
-    println!("  Result: {} (vars: {}, clauses: {})",
-        if solution4.is_sat() { "SAT" } else { "UNSAT" },
-        solution4.statistics().num_variables(),
-        solution4.statistics().num_clauses());
+    let formula2 = model.invariants().and(model.at_least_one_elected().not());
+    let bounds2 = model.bounds(3, 7)?;
+    let solution2 = solver.solve(&formula2, &bounds2)?;
 
-    // The actual check
-    println!("\nTest 5: Check AtMostOneElected (invariants && !atMostOneElected)");
-    let formula5 = model.check_at_most_one_elected();
-    let solution5 = solver.solve(&formula5, &bounds)?;
-    println!("  Result: {} (vars: {}, clauses: {})",
-        if solution5.is_sat() { "SAT (counterexample)" } else { "UNSAT (property holds)" },
-        solution5.statistics().num_variables(),
-        solution5.statistics().num_clauses());
+    println!("Result: {}", if solution2.is_sat() { "SAT (counterexample found)" } else { "UNSAT (property holds)" });
+    let stats2 = solution2.statistics();
+    println!("  Variables: {}, Clauses: {}", stats2.num_variables(), stats2.num_clauses());
+    println!("  Translation: {}ms, Solving: {}ms, Total: {}ms\n",
+        stats2.translation_time(), stats2.solving_time(), stats2.total_time());
+
+    // Test 3: run looplessPath for smaller scope (13 Time is too slow)
+    println!("Test 3: Run looplessPath for 7 Time, 3 Process");
+    println!("Formula: invariants && looplessPath\n");
+
+    let formula3 = model.invariants().and(model.loopless_path());
+    let bounds3 = model.bounds(3, 7)?;
+    let solution3 = solver.solve(&formula3, &bounds3)?;
+
+    println!("Result: {}", if solution3.is_sat() { "SAT (instance found)" } else { "UNSAT (no instance)" });
+    let stats3 = solution3.statistics();
+    println!("  Variables: {}, Clauses: {}", stats3.num_variables(), stats3.num_clauses());
+    println!("  Translation: {}ms, Solving: {}ms, Total: {}ms",
+        stats3.translation_time(), stats3.solving_time(), stats3.total_time());
 
     Ok(())
 }
