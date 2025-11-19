@@ -2,7 +2,8 @@
 //!
 //! These types define the domain of discourse and bindings for relations.
 
-use std::collections::{HashMap, BTreeSet};
+use rustc_hash::FxHashMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -21,7 +22,7 @@ pub struct Universe {
 
 struct UniverseInner {
     atoms: Vec<String>,
-    indices: HashMap<String, usize>,
+    indices: FxHashMap<String, usize>,
 }
 
 impl Universe {
@@ -37,7 +38,7 @@ impl Universe {
         }
 
         let mut atom_vec = Vec::with_capacity(atoms.len());
-        let mut indices = HashMap::new();
+        let mut indices = FxHashMap::default();
 
         for (i, &atom) in atoms.iter().enumerate() {
             let atom_string = atom.to_string();
@@ -464,9 +465,9 @@ impl TupleFactory {
 #[derive(Clone)]
 pub struct Bounds {
     universe: Universe,
-    lower_bounds: HashMap<Relation, TupleSet>,
-    upper_bounds: HashMap<Relation, TupleSet>,
-    int_bounds: HashMap<i32, TupleSet>,
+    lower_bounds: FxHashMap<Relation, TupleSet>,
+    upper_bounds: FxHashMap<Relation, TupleSet>,
+    int_bounds: FxHashMap<i32, TupleSet>,
 }
 
 impl Bounds {
@@ -474,9 +475,9 @@ impl Bounds {
     pub fn new(universe: Universe) -> Self {
         Self {
             universe,
-            lower_bounds: HashMap::new(),
-            upper_bounds: HashMap::new(),
-            int_bounds: HashMap::new(),
+            lower_bounds: FxHashMap::default(),
+            upper_bounds: FxHashMap::default(),
+            int_bounds: FxHashMap::default(),
         }
     }
 
@@ -575,7 +576,7 @@ impl Bounds {
 #[derive(Debug)]
 pub struct Instance {
     universe: Universe,
-    relations: HashMap<Relation, TupleSet>,
+    relations: FxHashMap<Relation, TupleSet>,
 }
 
 impl Instance {
@@ -583,7 +584,7 @@ impl Instance {
     pub fn new(universe: Universe) -> Self {
         Self {
             universe,
-            relations: HashMap::new(),
+            relations: FxHashMap::default(),
         }
     }
 

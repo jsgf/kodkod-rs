@@ -12,6 +12,7 @@ pub use environment::Environment;
 use crate::ast::*;
 use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Int, Options};
 use crate::instance::Bounds;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
 /// Result of translating a formula to a boolean circuit
@@ -132,6 +133,9 @@ impl Translator {
 struct FOL2BoolTranslator<'a> {
     interpreter: &'a LeafInterpreter,
     env: RefCell<Environment<'a>>,
+    // Phase 1 leaf caching: cache relation and constant interpretations
+    relation_cache: RefCell<FxHashMap<Relation, BooleanMatrix<'a>>>,
+    constant_cache: RefCell<FxHashMap<ConstantExpr, BooleanMatrix<'a>>>,
 }
 
 impl<'a> FOL2BoolTranslator<'a> {
@@ -139,6 +143,8 @@ impl<'a> FOL2BoolTranslator<'a> {
         Self {
             interpreter,
             env: RefCell::new(Environment::empty()),
+            relation_cache: RefCell::new(FxHashMap::default()),
+            constant_cache: RefCell::new(FxHashMap::default()),
         }
     }
 
@@ -249,7 +255,15 @@ impl<'a> FOL2BoolTranslator<'a> {
     fn translate_expression(&self, expr: &Expression) -> BooleanMatrix<'a> {
         match expr {
             Expression::Relation(rel) => {
-                self.interpreter.interpret_relation(rel)
+                // Check cache first
+                if let Some(cached) = self.relation_cache.borrow().get(rel) {
+                    return cached.clone();
+                }
+
+                // Interpret and cache
+                let matrix = self.interpreter.interpret_relation(rel);
+                self.relation_cache.borrow_mut().insert(rel.clone(), matrix.clone());
+                matrix
             }
 
             Expression::Variable(var) => {
@@ -259,7 +273,15 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             Expression::Constant(c) => {
-                self.interpreter.interpret_constant(*c)
+                // Check cache first
+                if let Some(cached) = self.constant_cache.borrow().get(c) {
+                    return cached.clone();
+                }
+
+                // Interpret and cache
+                let matrix = self.interpreter.interpret_constant(*c);
+                self.constant_cache.borrow_mut().insert(*c, matrix.clone());
+                matrix
             }
 
             Expression::Binary { left, op, right, .. } => {

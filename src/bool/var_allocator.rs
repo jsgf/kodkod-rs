@@ -4,7 +4,7 @@
 //! Following Java: kodkod.engine.fol2sat.LeafInterpreter.allocateVars
 
 use crate::ast::Relation;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::ops::Range;
 
 /// Allocates SAT variables for relation tuples
@@ -13,7 +13,7 @@ use std::ops::Range;
 /// Variables are allocated for tuples in (upperBound - lowerBound)
 pub struct VariableAllocator {
     next_var: u32,
-    relation_vars: HashMap<Relation, Range<u32>>,
+    relation_vars: FxHashMap<Relation, Range<u32>>,
 }
 
 impl VariableAllocator {
@@ -21,7 +21,7 @@ impl VariableAllocator {
     pub fn new() -> Self {
         Self {
             next_var: 1, // Variables start at 1 (following Java/DIMACS convention)
-            relation_vars: HashMap::new(),
+            relation_vars: FxHashMap::default(),
         }
     }
 

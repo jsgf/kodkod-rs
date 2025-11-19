@@ -24,6 +24,7 @@ pub use var_allocator::VariableAllocator;
 pub use int::Int;
 pub use arena::MatrixArena;
 
+use rustc_hash::FxHashMap;
 use std::marker::PhantomData;
 
 /// Index handle for a value stored in the arena
@@ -338,7 +339,7 @@ impl Dimensions {
 pub struct BooleanMatrix<'arena> {
     dimensions: Dimensions,
     /// Sparse storage: only non-FALSE entries (index → value)
-    cells: std::collections::HashMap<usize, BoolValue<'arena>>,
+    cells: FxHashMap<usize, BoolValue<'arena>>,
 }
 
 impl<'arena> BooleanMatrix<'arena> {
@@ -346,7 +347,7 @@ impl<'arena> BooleanMatrix<'arena> {
     pub fn empty(dimensions: Dimensions) -> Self {
         Self {
             dimensions,
-            cells: std::collections::HashMap::new(),
+            cells: FxHashMap::default(),
         }
     }
 
@@ -363,7 +364,7 @@ impl<'arena> BooleanMatrix<'arena> {
         all_indices: &[usize],
         true_indices: &[usize],
     ) -> Self {
-        let mut cells = std::collections::HashMap::new();
+        let mut cells = FxHashMap::default();
 
         // Mark lower bound indices as TRUE
         for &idx in true_indices {

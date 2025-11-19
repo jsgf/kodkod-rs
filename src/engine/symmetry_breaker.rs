@@ -7,7 +7,7 @@ use crate::bool::{BoolValue, BooleanFactory, BooleanConstant};
 use crate::engine::symmetry_detector::{SymmetryDetector, IntSet};
 use crate::instance::Bounds;
 use crate::translator::LeafInterpreter;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// Breaks symmetries for a given problem
 pub struct SymmetryBreaker {
@@ -193,8 +193,8 @@ impl SymmetryBreaker {
         &mut self,
         predicates: &[RelationPredicate],
         aggressive: bool,
-    ) -> HashMap<RelationPredicate, Formula> {
-        let mut broken = HashMap::new();
+    ) -> FxHashMap<RelationPredicate, Formula> {
+        let mut broken = FxHashMap::default();
 
         // Sort predicates by relation name for deterministic order
         let mut sorted_preds: Vec<&RelationPredicate> = predicates.iter().collect();

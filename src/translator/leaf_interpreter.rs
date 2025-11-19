@@ -8,7 +8,7 @@ use crate::bool::{
     VariableAllocator,
 };
 use crate::instance::{Bounds, TupleSet, Universe};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::ops::Range;
 
 /// Interprets leaf expressions (Relations, Constants) as BooleanMatrices
@@ -17,9 +17,9 @@ use std::ops::Range;
 pub struct LeafInterpreter {
     factory: BooleanFactory,
     universe: Universe,
-    var_ranges: HashMap<Relation, Range<u32>>,
-    lower_bounds: HashMap<Relation, TupleSet>,
-    upper_bounds: HashMap<Relation, TupleSet>,
+    var_ranges: FxHashMap<Relation, Range<u32>>,
+    lower_bounds: FxHashMap<Relation, TupleSet>,
+    upper_bounds: FxHashMap<Relation, TupleSet>,
 }
 
 impl LeafInterpreter {
@@ -27,9 +27,9 @@ impl LeafInterpreter {
     /// Following Java: LeafInterpreter constructor
     pub fn from_bounds(bounds: &Bounds, options: &Options) -> Self {
         let mut allocator = VariableAllocator::new();
-        let mut var_ranges = HashMap::new();
-        let mut lower_bounds = HashMap::new();
-        let mut upper_bounds = HashMap::new();
+        let mut var_ranges = FxHashMap::default();
+        let mut lower_bounds = FxHashMap::default();
+        let mut upper_bounds = FxHashMap::default();
 
         // Collect bounds and allocate variables for each relation
         for relation in bounds.relations() {
@@ -75,19 +75,19 @@ impl LeafInterpreter {
 
     /// Returns the variable ranges for all relations
     /// Used for solution extraction from SAT model
-    pub fn variable_ranges(&self) -> &HashMap<Relation, Range<u32>> {
+    pub fn variable_ranges(&self) -> &FxHashMap<Relation, Range<u32>> {
         &self.var_ranges
     }
 
     /// Returns the lower bounds for all relations
     /// Used for solution extraction
-    pub fn lower_bounds(&self) -> &HashMap<Relation, TupleSet> {
+    pub fn lower_bounds(&self) -> &FxHashMap<Relation, TupleSet> {
         &self.lower_bounds
     }
 
     /// Returns the upper bounds for all relations
     /// Used for solution extraction
-    pub fn upper_bounds(&self) -> &HashMap<Relation, TupleSet> {
+    pub fn upper_bounds(&self) -> &FxHashMap<Relation, TupleSet> {
         &self.upper_bounds
     }
 

@@ -4,7 +4,8 @@
 //! Given a Bounds object, computes the coarsest partition of the universe such that
 //! every tupleset can be expressed as a union of cross-products of sets from the partition.
 
-use std::collections::{BTreeSet, HashMap};
+use rustc_hash::FxHashMap;
+use std::collections::BTreeSet;
 use crate::instance::Bounds;
 
 /// Type alias for IntSet (ordered set of atom indices)
@@ -57,7 +58,7 @@ impl SymmetryDetector {
             return; // nothing more to do
         }
 
-        let mut range2domain: HashMap<IntSet, IntSet> = HashMap::new();
+        let mut range2domain: FxHashMap<IntSet, IntSet> = FxHashMap::default();
 
         // Refine the partitions based on the bounds for each integer
         // Collect keys first to avoid borrowing issues
@@ -107,7 +108,7 @@ impl SymmetryDetector {
         &mut self,
         set: &IntSet,
         arity: usize,
-        range2domain: &mut HashMap<IntSet, IntSet>,
+        range2domain: &mut FxHashMap<IntSet, IntSet>,
     ) {
         if arity == 1 {
             self.refine_partitions_simple(set);

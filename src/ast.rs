@@ -223,7 +223,7 @@ pub enum Expression {
 }
 
 /// Constant expressions
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConstantExpr {
     /// Universal relation (all atoms)
     Univ,
