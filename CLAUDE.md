@@ -3,3 +3,5 @@
 - Any test which relies on incomplete/simplified/placeholder/mock implementation should *FAIL* until the implementation is completed.
 - Always compile-test everything with `cargo check` and make sure all tests pass (or fail as expected if incomplete) before considering something "done".
 - When dealing with an Arena, any reference, direct or indirect, exposed to the API user via a public API *MUST* have a lifetime which ties it to that arena. UNDER NO CIRCUMSTANCES should the user EVER see a 'static lifetime reference, directly or indirectly (ie embedded in something else).
+- IMPORTANT: If you can't port an example either because there's a problem in the Rust implementation, or there's a missing feature, then *YOU MUST* fix the bug, or complete the feature. *DO NOT* just go on to the next example. *YOU MUST* use the Java implementation as reference.
+- Use a tight timeout before running any example if you don't know how long it will take.

@@ -255,6 +255,45 @@ impl TupleSet {
         Ok(())
     }
 
+    /// Removes a tuple from this set
+    /// Following Java: TupleSet.remove(Tuple)
+    pub fn remove(&mut self, tuple: &Tuple) -> bool {
+        if tuple.universe() != &self.universe || tuple.arity() != self.arity {
+            return false;
+        }
+        if let Some(pos) = self.tuples.iter().position(|t| t == tuple) {
+            self.tuples.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns a new tuple set containing tuples in this set but not in other
+    /// Following Java: Set difference operation
+    pub fn difference(&self, other: &TupleSet) -> Result<TupleSet> {
+        if other.universe() != &self.universe {
+            return Err(KodkodError::InvalidArgument(
+                "Tuple sets from different universes".to_string(),
+            ));
+        }
+        if other.arity() != self.arity {
+            return Err(KodkodError::InvalidArgument(format!(
+                "Expected arity {}, got {}",
+                self.arity,
+                other.arity()
+            )));
+        }
+
+        let mut result = TupleSet::empty(self.universe.clone(), self.arity);
+        for tuple in &self.tuples {
+            if !other.tuples.contains(tuple) {
+                result.tuples.push(tuple.clone());
+            }
+        }
+        Ok(result)
+    }
+
     /// Returns the Cartesian product of this set with another
     pub fn product(&self, other: &TupleSet) -> Result<TupleSet> {
         if other.universe() != &self.universe {
