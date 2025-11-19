@@ -37,6 +37,9 @@ pub trait ExpressionVisitor {
                 }
                 self.visit_nary(expr)
             }
+            Expression::Comprehension { declarations, formula } => {
+                self.visit_comprehension(expr, declarations, formula)
+            }
         }
     }
 
@@ -57,6 +60,9 @@ pub trait ExpressionVisitor {
 
     /// Visit an n-ary expression (after visiting children)
     fn visit_nary(&mut self, expr: &Expression) -> Self::Output;
+
+    /// Visit a comprehension expression
+    fn visit_comprehension(&mut self, expr: &Expression, declarations: &Decls, formula: &Formula) -> Self::Output;
 }
 
 /// A visitor that can traverse formulas and return values
@@ -188,6 +194,10 @@ impl ExpressionVisitor for ExpressionCounter {
     }
 
     fn visit_nary(&mut self, _: &Expression) {
+        self.count += 1;
+    }
+
+    fn visit_comprehension(&mut self, _: &Expression, _: &Decls, _: &Formula) {
         self.count += 1;
     }
 }

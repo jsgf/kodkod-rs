@@ -275,6 +275,17 @@ impl Dimensions {
         Self { rows, cols }
     }
 
+    /// Creates square dimensions for a relation of given arity over a universe
+    /// Following Java: Dimensions.square(universe_size, arity)
+    /// Capacity = universe_size^arity
+    pub fn square(universe_size: usize, arity: usize) -> Self {
+        let capacity = universe_size.pow(arity as u32);
+        Self {
+            rows: capacity,
+            cols: arity,
+        }
+    }
+
     /// Returns the number of rows
     pub fn rows(&self) -> usize {
         self.rows

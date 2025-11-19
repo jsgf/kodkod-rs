@@ -220,6 +220,11 @@ pub enum Expression {
         exprs: Vec<Expression>,
         arity: usize,
     },
+    /// Set comprehension {decls | formula}
+    Comprehension {
+        declarations: Decls,
+        formula: Box<Formula>,
+    },
 }
 
 /// Constant expressions
@@ -259,6 +264,7 @@ impl Expression {
             Expression::Binary { arity, .. } => *arity,
             Expression::Unary { .. } => 2,
             Expression::Nary { arity, .. } => *arity,
+            Expression::Comprehension { declarations, .. } => declarations.size(),
         }
     }
 

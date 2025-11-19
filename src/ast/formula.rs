@@ -398,6 +398,18 @@ impl Expression {
     }
 }
 
+impl Formula {
+    /// Creates a set comprehension expression from this formula
+    /// Following Java: Formula.comprehension(Decls)
+    /// Returns {declarations | self}
+    pub fn comprehension(self, declarations: Decls) -> Expression {
+        Expression::Comprehension {
+            declarations,
+            formula: Box::new(self),
+        }
+    }
+}
+
 /// A variable declaration (e.g., "x: Expression")
 #[derive(Clone, Debug, PartialEq)]
 pub struct Decl {

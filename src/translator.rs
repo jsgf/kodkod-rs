@@ -334,6 +334,16 @@ impl<'a> FOL2BoolTranslator<'a> {
                 }
                 result
             }
+
+            Expression::Comprehension { declarations, formula } => {
+                // { decls | formula }
+                let usize = self.interpreter.universe().size();
+                let dims = Dimensions::square(usize, declarations.size());
+                let mut result = self.interpreter.factory().matrix(dims);
+                self.translate_comprehension(declarations, formula.as_ref(), 0,
+                    BoolValue::Constant(BooleanConstant::TRUE), 0, &mut result);
+                result
+            }
         }
     }
 
@@ -467,6 +477,68 @@ impl<'a> FOL2BoolTranslator<'a> {
 
             self.translate_forall(decls, formula, current_decl + 1, new_constraints, acc);
 
+            ground_value.set(index, BoolValue::Constant(BooleanConstant::FALSE));
+        }
+
+        // POP binding
+        self.env.borrow_mut().pop();
+    }
+
+    /// Comprehension translation
+    /// Following Java: FOL2BoolTranslator.comprehension(...)
+    /// Translates { decls | formula } to a boolean matrix
+    fn translate_comprehension(
+        &self,
+        decls: &Decls,
+        formula: &Formula,
+        current_decl: usize,
+        decl_constraints: BoolValue<'a>,
+        partial_index: usize,
+        matrix: &mut BooleanMatrix<'a>
+    ) {
+        let factory = self.interpreter.factory();
+
+        // Base case: all variables bound, evaluate formula and set matrix cell
+        if current_decl >= decls.size() {
+            let formula_val = self.translate_formula(formula);
+            let result = factory.and(decl_constraints.clone(), formula_val);
+            matrix.set(partial_index, result);
+            return;
+        }
+
+        // Get current declaration
+        let decl = decls.iter().nth(current_decl).unwrap();
+        let var = decl.variable();
+        let domain = self.translate_expression(decl.expression());
+
+        // Calculate position multiplier for this level
+        let usize = self.interpreter.universe().size();
+        let position = usize.pow((decls.size() - current_decl - 1) as u32);
+
+        // Create ground matrix for this variable
+        let mut ground_value = factory.matrix(*domain.dimensions());
+
+        // PUSH binding
+        self.env.borrow_mut().extend(var.clone(), ground_value.clone());
+
+        // ITERATE over domain
+        let indices: Vec<(usize, BoolValue)> = domain.iter_indexed()
+            .map(|(idx, val)| (idx, val.clone()))
+            .collect();
+
+        for (index, value) in indices {
+            // Set this index to TRUE
+            ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
+
+            // Update environment
+            *self.env.borrow_mut().lookup_mut(&var).unwrap() = ground_value.clone();
+
+            // Recurse with updated constraints and partial index
+            let new_constraints = factory.and(value.clone(), decl_constraints.clone());
+            self.translate_comprehension(decls, formula, current_decl + 1,
+                new_constraints, partial_index + index * position, matrix);
+
+            // Reset this index to FALSE
             ground_value.set(index, BoolValue::Constant(BooleanConstant::FALSE));
         }
 
