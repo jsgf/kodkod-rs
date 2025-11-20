@@ -67,7 +67,7 @@ fn main() {
                 .unwrap(),
         )
         .unwrap();
-    bounds.bound_exactly(&person, person_range);
+    bounds.bound_exactly(&person, person_range).expect("Failed to bind person");
 
     // Bind group to g0..g(num_groups-1)
     let group_range = factory
@@ -78,7 +78,7 @@ fn main() {
                 .unwrap(),
         )
         .unwrap();
-    bounds.bound_exactly(&group, group_range.clone());
+    bounds.bound_exactly(&group, group_range.clone()).expect("Failed to bind group");
 
     // Bind round to r0..r(num_rounds-1)
     let round_range = factory
@@ -89,11 +89,11 @@ fn main() {
                 .unwrap(),
         )
         .unwrap();
-    bounds.bound_exactly(&round, round_range.clone());
+    bounds.bound_exactly(&round, round_range.clone()).expect("Failed to bind round");
 
     // Assignments - try without symmetry breaking first
     let all_assign = factory.all(3);
-    bounds.bound(&assign, factory.none(3), all_assign);
+    bounds.bound(&assign, factory.none(3), all_assign).expect("Failed to bind assign");
 
     let build_time = start.elapsed();
 

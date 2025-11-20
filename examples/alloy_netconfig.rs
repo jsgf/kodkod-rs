@@ -40,15 +40,15 @@ fn main() {
 
     // All hosts
     let all_hosts = factory.all(1);
-    bounds.bound_exactly(&host, all_hosts);
+    bounds.bound_exactly(&host, all_hosts).expect("Failed to bind host");
 
     // Links: any pair of distinct hosts can be linked
     let all_pairs = factory.all(2);
-    bounds.bound(&link, factory.none(2), all_pairs);
+    bounds.bound(&link, factory.none(2), all_pairs).expect("Failed to bind link");
 
     // Active hosts: subset of hosts
     let all_active = factory.all(1);
-    bounds.bound(&active, factory.none(1), all_active);
+    bounds.bound(&active, factory.none(1), all_active).expect("Failed to bind active");
 
     let build_time = start.elapsed();
 
@@ -117,7 +117,7 @@ fn main() {
     // Solve
     let solve_start = Instant::now();
     let solution = solver.solve(&formula, &bounds).expect("Solver failed");
-    let solve_time = solve_start.elapsed();
+    let _solve_time = solve_start.elapsed();
 
     println!(
         "Result: {}\n",
