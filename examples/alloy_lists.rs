@@ -225,7 +225,6 @@ impl Lists {
     /// Returns the bounds for the given scope
     fn bounds(&self, scope: usize) -> Result<Bounds, kodkod_rs::error::KodkodError> {
         assert!(scope > 0);
-        let n = scope * 2;
 
         let mut atoms = Vec::new();
         for i in 0..scope {

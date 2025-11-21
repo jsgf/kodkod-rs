@@ -181,16 +181,16 @@ impl DNACuts {
         for i in 0..n {
             let base_idx = rng.gen_range(0..4);
             let base_atom = ["A", "T", "G", "C"][base_idx];
-            random_sequence.add(factory.tuple(&[&format!("Link{}", i), base_atom])?);
+            random_sequence.add(factory.tuple(&[&format!("Link{}", i), base_atom])?)?;
         }
         bounds.bound_exactly(&self.base_rel, random_sequence)?;
 
         // Partner relation
         let mut partners = factory.none(2);
-        partners.add(factory.tuple(&["A", "T"])?);
-        partners.add(factory.tuple(&["T", "A"])?);
-        partners.add(factory.tuple(&["G", "C"])?);
-        partners.add(factory.tuple(&["C", "G"])?);
+        partners.add(factory.tuple(&["A", "T"])?)?;
+        partners.add(factory.tuple(&["T", "A"])?)?;
+        partners.add(factory.tuple(&["G", "C"])?)?;
+        partners.add(factory.tuple(&["C", "G"])?)?;
         bounds.bound_exactly(&self.partner, partners)?;
 
         // Link ordering
@@ -199,7 +199,7 @@ impl DNACuts {
             link_ord.add(factory.tuple(&[
                 &format!("Link{}", i - 1),
                 &format!("Link{}", i)
-            ])?);
+            ])?)?;
         }
         bounds.bound_exactly(&self.next, link_ord)?;
 

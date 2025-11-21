@@ -117,7 +117,7 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
 
     let n = 4; // 4x4 board
     let model = Toughnut::new();
-    let mut options = Options::default();
+    let options = Options::default();
 
     // Enable verbose to see what's happening
     println!("Test: Can we cover a {}x{} board with dominoes (opposite corners removed)?", n, n);
