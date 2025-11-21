@@ -62,6 +62,12 @@ impl<'arena> Int<'arena> {
         }
     }
 
+    /// Returns the two's complement bits
+    /// Following Java: TwosComplementInt.twosComplementBits()
+    pub fn twos_complement_bits(&self) -> &[BoolValue<'arena>] {
+        &self.bits
+    }
+
     /// Returns true if all bits are constants
     pub fn is_constant(&self) -> bool {
         self.bits.iter().all(|b| matches!(b, BoolValue::Constant(_)))
@@ -74,18 +80,20 @@ impl<'arena> Int<'arena> {
         }
 
         let mut result = 0i32;
+        let width = self.bits.len();
+        let sign_bit_index = width - 1;
+
         for (i, bit) in self.bits.iter().enumerate() {
             if let BoolValue::Constant(c) = bit {
                 let is_true = *c == BooleanConstant::TRUE;
-                if i < 31 {
+                if i == sign_bit_index {
+                    // Sign bit - if set, this is negative
                     if is_true {
-                        result |= 1 << i;
+                        // Set all bits from sign_bit_index to 31 to handle sign extension
+                        result |= (-1i32) << sign_bit_index;
                     }
-                } else if i == 31 {
-                    // Sign bit
-                    if is_true {
-                        result |= 1i32 << 31;
-                    }
+                } else if is_true {
+                    result |= 1 << i;
                 }
             }
         }
@@ -289,66 +297,133 @@ impl<'arena> Int<'arena> {
 
     /// Absolute value
     pub fn abs(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
-        // If negative (sign bit set), negate; otherwise return as is
+        // Following Java: choice(factory.not(sign_bit), negate())
+        // If positive (sign bit is 0), return self; otherwise return negated
         let sign_bit = self.bit(self.width() - 1);
+        let not_sign = factory.not(sign_bit);
         let negated = self.negate(factory);
 
-        // Use ite: if negative, use negated; else use self
-        let mut result_bits: Vec<BoolValue<'arena>> = Vec::with_capacity(self.width());
-        for i in 0..self.width() {
+        // choice: if not_sign, use self; else use negated
+        let width = self.width().max(negated.width());
+        let mut result_bits: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
+        for i in 0..width {
             let self_bit = self.bit(i);
             let neg_bit = negated.bit(i);
-            // ite(sign_bit, neg_bit, self_bit)
-            result_bits.push(factory.ite(sign_bit.clone(), neg_bit, self_bit));
+            // ite(not_sign, self_bit, neg_bit)
+            result_bits.push(factory.ite(not_sign.clone(), self_bit, neg_bit));
         }
 
         Int::new(result_bits)
     }
 
-    /// Negate (two's complement negation: ~x + 1)
+    /// Negate (two's complement negation: 0 - this)
+    /// Following Java: TwosComplementInt.negate() = new Int([FALSE]).minus(this)
     pub fn negate(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
-        let ones = self.not(factory);
-        let one = Int::new(vec![BoolValue::Constant(BooleanConstant::TRUE)]);
-        ones.plus(&one, factory)
+        // Create 0 as a single-bit FALSE
+        let zero = Int::new(vec![BoolValue::Constant(BooleanConstant::FALSE)]);
+        zero.minus(self, factory)
     }
 
     /// Sign of the integer: -1 if negative, 0 if zero, 1 if positive
+    /// Following Java: TwosComplementInt.sgn() returns 2-bit int:
+    /// - bit[0] = OR of all bits (non-zero)
+    /// - bit[1] = sign bit
     pub fn sign(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
-        // Check if zero: all bits are FALSE
-        let mut all_zero: Vec<BoolValue<'arena>> = vec![BoolValue::Constant(BooleanConstant::TRUE)];
-        for bit in &self.bits {
-            all_zero.push(factory.not(bit.clone()));
-        }
-        let is_zero = factory.and_multi(all_zero);
+        // bit[0]: OR of all bits (true if non-zero)
+        let bits_vec: Vec<BoolValue<'arena>> = self.bits.clone();
+        let any_bit_set = if bits_vec.is_empty() {
+            BoolValue::Constant(BooleanConstant::FALSE)
+        } else {
+            factory.or_multi(bits_vec)
+        };
 
-        // Sign bit determines negative
+        // bit[1]: sign bit
         let sign_bit = self.bit(self.width() - 1);
 
-        let width = factory.bitwidth();
+        Int::new(vec![any_bit_set, sign_bit])
+    }
+}
 
-        // Result: [sign_bit, NOT(sign_bit) OR is_zero, is_zero]
-        // -1 (negative): [1, 1, 0]
-        //  0 (zero):     [0, 1, 0]
-        //  1 (positive): [0, 0, 1]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bool::BooleanFactory;
 
-        // Simplified:
-        // bit[0] = NOT(is_zero) AND NOT(sign_bit)  (1 if positive)
-        // bit[1] = is_zero  (1 if zero)
-        // bit[2..] = sign_bit (1 if negative)
+    #[test]
+    fn twos_complement_bits_access() {
+        let _factory = BooleanFactory::new(0, crate::bool::Options::default());
+        let int_val = Int::constant(5, 8, BoolValue::Constant(BooleanConstant::TRUE));
 
-        // Actually, just use ite:
-        // if is_zero: return 0
-        // else if sign_bit: return -1 (all 1s with sign bit set)
-        // else: return 1 (just bit 0 set)
+        let bits = int_val.twos_complement_bits();
+        assert_eq!(bits.len(), 8);
 
-        let zero = Int::new(vec![BoolValue::Constant(BooleanConstant::FALSE); width]);
-        let one = Int::constant(1, width, BoolValue::Constant(BooleanConstant::TRUE));
-        let neg_one = Int::constant(-1, width, BoolValue::Constant(BooleanConstant::TRUE));
+        // 5 in binary is 00000101
+        // bits[0] = LSB = 1
+        // bits[1] = 0
+        // bits[2] = 1
+        // bits[3..7] = 0
+        assert!(matches!(bits[0], BoolValue::Constant(BooleanConstant::TRUE)));
+        assert!(matches!(bits[1], BoolValue::Constant(BooleanConstant::FALSE)));
+        assert!(matches!(bits[2], BoolValue::Constant(BooleanConstant::TRUE)));
+    }
 
-        // if is_zero: 0, else if sign_bit: -1, else: 1
-        let if_neg = factory.ite(sign_bit, neg_one.bits[0].clone(), one.bits[0].clone());
-        let result = factory.ite(is_zero, zero.bits[0].clone(), if_neg);
+    #[test]
+    fn twos_complement_bits_negative() {
+        let int_val = Int::constant(-1, 8, BoolValue::Constant(BooleanConstant::TRUE));
 
-        Int::new(vec![result])
+        let bits = int_val.twos_complement_bits();
+        assert_eq!(bits.len(), 8);
+
+        // -1 in two's complement is all 1s: 11111111
+        for bit in bits {
+            assert!(matches!(bit, BoolValue::Constant(BooleanConstant::TRUE)));
+        }
+    }
+
+    #[test]
+    fn int_constant_value() {
+        let int_val = Int::constant(42, 8, BoolValue::Constant(BooleanConstant::TRUE));
+        assert!(int_val.is_constant());
+        assert_eq!(int_val.value(), Some(42));
+
+        let int_neg = Int::constant(-10, 8, BoolValue::Constant(BooleanConstant::TRUE));
+        assert!(int_neg.is_constant());
+        assert_eq!(int_neg.value(), Some(-10));
+    }
+
+    #[test]
+    fn int_eq_circuit() {
+        let factory = BooleanFactory::new(10, crate::bool::Options::default());
+
+        let a = Int::constant(5, 8, BoolValue::Constant(BooleanConstant::TRUE));
+        let b = Int::constant(5, 8, BoolValue::Constant(BooleanConstant::TRUE));
+
+        let eq = a.eq(&b, &factory);
+        assert_eq!(eq, BoolValue::Constant(BooleanConstant::TRUE));
+
+        let c = Int::constant(3, 8, BoolValue::Constant(BooleanConstant::TRUE));
+        let neq = a.eq(&c, &factory);
+        assert_eq!(neq, BoolValue::Constant(BooleanConstant::FALSE));
+    }
+
+    #[test]
+    fn int_bit_access() {
+        let int_val = Int::constant(10, 8, BoolValue::Constant(BooleanConstant::TRUE));
+
+        // 10 in binary is 00001010
+        // bit(0) = 0, bit(1) = 1, bit(2) = 0, bit(3) = 1
+        assert!(matches!(int_val.bit(0), BoolValue::Constant(BooleanConstant::FALSE)));
+        assert!(matches!(int_val.bit(1), BoolValue::Constant(BooleanConstant::TRUE)));
+        assert!(matches!(int_val.bit(2), BoolValue::Constant(BooleanConstant::FALSE)));
+        assert!(matches!(int_val.bit(3), BoolValue::Constant(BooleanConstant::TRUE)));
+    }
+
+    #[test]
+    fn int_sign_extension() {
+        let int_val = Int::constant(-1, 4, BoolValue::Constant(BooleanConstant::TRUE));
+
+        // Sign bit should be extended when accessing beyond width
+        let beyond_bit = int_val.bit(10);
+        assert!(matches!(beyond_bit, BoolValue::Constant(BooleanConstant::TRUE)));
     }
 }

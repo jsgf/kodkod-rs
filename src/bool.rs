@@ -35,10 +35,19 @@ use std::marker::PhantomData;
 ///
 /// Handles are type-safe: `Handle<'a, X>` cannot be used where `Handle<'a, Y>` is expected.
 /// Can point to either a single value `Handle<'arena, T>` or a slice `Handle<'arena, [T]>`.
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash)]
 pub struct Handle<'arena, T: ?Sized> {
     ptr: *const T,
     _phantom: PhantomData<&'arena ()>,
+}
+
+impl<'arena, T: ?Sized + std::fmt::Debug> std::fmt::Debug for Handle<'arena, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // SAFETY: Handle is only created from valid arena allocations
+        // NOTE: This can stack overflow if there are cycles in the data structure,
+        // but BooleanFactory should only create DAGs (directed acyclic graphs)
+        unsafe { (*self.ptr).fmt(f) }
+    }
 }
 
 impl<'arena, T: ?Sized> Copy for Handle<'arena, T> {}
@@ -492,6 +501,26 @@ impl<'arena> BooleanMatrix<'arena> {
             let other_val = other.get(idx);
             let not_other = factory.not(other_val);
             result.set(idx, factory.and(val.clone(), not_other));
+        }
+
+        result
+    }
+
+    /// Element-wise negation
+    /// Following Java: BooleanMatrix.not()
+    pub fn not(&self, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+        let mut result = BooleanMatrix::empty(self.dimensions);
+
+        for i in 0..self.dimensions.capacity() {
+            let v = self.get(i);
+            if v == BoolValue::Constant(BooleanConstant::FALSE) {
+                // null/absent cell becomes TRUE
+                result.set(i, BoolValue::Constant(BooleanConstant::TRUE));
+            } else if v != BoolValue::Constant(BooleanConstant::TRUE) {
+                // Non-TRUE value gets negated
+                result.set(i, factory.not(v));
+            }
+            // TRUE cells remain absent (FALSE) in result
         }
 
         result

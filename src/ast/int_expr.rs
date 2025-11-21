@@ -223,6 +223,29 @@ impl IntExpression {
             right: Box::new(other),
         }
     }
+
+    /// Convert to an expression representing a singleton set containing the atom for this integer
+    pub fn to_expression(self) -> Expression {
+        Expression::IntToExprCast {
+            int_expr: Box::new(self),
+            op: super::IntCastOp::IntCast,
+        }
+    }
+
+    /// Convert to an expression representing the set of powers of 2 (bits) in this integer
+    pub fn to_bitset(self) -> Expression {
+        Expression::IntToExprCast {
+            int_expr: Box::new(self),
+            op: super::IntCastOp::BitsetCast,
+        }
+    }
+}
+
+impl From<IntExpression> for Expression {
+    /// Convert an integer expression to a relational expression (singleton set with the atom for this integer)
+    fn from(int_expr: IntExpression) -> Self {
+        int_expr.to_expression()
+    }
 }
 
 impl Expression {
@@ -321,5 +344,43 @@ mod tests {
 
         let sum = IntExpression::sum_all(vec![a, b, c]);
         assert!(matches!(sum, IntExpression::Nary { .. }));
+    }
+
+    #[test]
+    fn int_to_expression_cast() {
+        use super::super::IntCastOp;
+
+        let int_expr = IntExpression::constant(5);
+        let expr = int_expr.to_expression();
+
+        // Should create IntToExprCast with IntCast operator
+        assert!(matches!(expr, Expression::IntToExprCast { op: IntCastOp::IntCast, .. }));
+
+        // Test From trait
+        let int_expr2 = IntExpression::constant(10);
+        let expr2: Expression = int_expr2.into();
+        assert!(matches!(expr2, Expression::IntToExprCast { op: IntCastOp::IntCast, .. }));
+    }
+
+    #[test]
+    fn int_to_bitset_cast() {
+        use super::super::IntCastOp;
+
+        let int_expr = IntExpression::constant(7);
+        let expr = int_expr.to_bitset();
+
+        // Should create IntToExprCast with BitsetCast operator
+        assert!(matches!(expr, Expression::IntToExprCast { op: IntCastOp::BitsetCast, .. }));
+    }
+
+    #[test]
+    fn int_cast_arity() {
+        // IntToExprCast expressions should have arity 1
+        let int_expr = IntExpression::constant(42);
+        let expr = int_expr.to_expression();
+        assert_eq!(expr.arity(), 1);
+
+        let bitset_expr = IntExpression::constant(15).to_bitset();
+        assert_eq!(bitset_expr.arity(), 1);
     }
 }

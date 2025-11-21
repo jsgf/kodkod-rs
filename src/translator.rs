@@ -345,7 +345,74 @@ impl<'a> FOL2BoolTranslator<'a> {
                     BoolValue::Constant(BooleanConstant::TRUE), 0, &mut result);
                 result
             }
+            Expression::IntToExprCast { int_expr, op } => {
+                // Convert integer expression to relational expression
+                use crate::ast::IntCastOp;
+                let int_value = self.translate_int_expr(int_expr);
+                match op {
+                    IntCastOp::IntCast => {
+                        // Singleton set containing the atom for this integer
+                        self.interpret_int_value_as_set(int_value)
+                    }
+                    IntCastOp::BitsetCast => {
+                        // Set of powers of 2 (bits) in this integer
+                        self.interpret_int_value_as_bitset(int_value)
+                    }
+                }
+            }
         }
+    }
+
+    /// Convert an integer value to a set containing the atom for that integer
+    /// Following Java: FOL2BoolTranslator.visit(IntToExprCast) with INTCAST operator
+    fn interpret_int_value_as_set(&self, int_value: Int<'a>) -> BooleanMatrix<'a> {
+        let factory = self.interpreter.factory();
+        let usize = self.interpreter.universe().size();
+        let dims = Dimensions::square(usize, 1);
+        let mut ret = factory.matrix(dims);
+
+        // For each integer atom i in the universe, set result[interpret(i)] = (int_value == i)
+        for i in self.interpreter.ints() {
+            let atom_index = self.interpreter.interpret(i);
+            let i_const = factory.integer(i);
+            let is_equal = int_value.eq(&i_const, factory);
+            // ret[atom_index] = ret[atom_index] || (int_value == i)
+            let current = ret.get(atom_index);
+            ret.set(atom_index, factory.or(current, is_equal));
+        }
+
+        ret
+    }
+
+    /// Convert an integer value to a set of power-of-2 atoms (bitset representation)
+    /// Following Java: FOL2BoolTranslator.visit(IntToExprCast) with BITSETCAST operator
+    fn interpret_int_value_as_bitset(&self, int_value: Int<'a>) -> BooleanMatrix<'a> {
+        let factory = self.interpreter.factory();
+        let usize = self.interpreter.universe().size();
+        let dims = Dimensions::square(usize, 1);
+        let mut ret = factory.matrix(dims);
+
+        let twos_complement = int_value.twos_complement_bits();
+        let msb = twos_complement.len() - 1;
+
+        // Handle all bits but the sign bit
+        for i in 0..msb {
+            let pow2 = 1 << i;
+            // Check if this power of 2 is in the integer atoms
+            if self.interpreter.ints().any(|x| x == pow2) {
+                let atom_index = self.interpreter.interpret(pow2);
+                ret.set(atom_index, twos_complement[i].clone());
+            }
+        }
+
+        // Handle the sign bit
+        let sign_bit_value = -(1 << msb);
+        if self.interpreter.ints().any(|x| x == sign_bit_value) {
+            let atom_index = self.interpreter.interpret(sign_bit_value);
+            ret.set(atom_index, twos_complement[msb].clone());
+        }
+
+        ret
     }
 
     /// Quantifier translation

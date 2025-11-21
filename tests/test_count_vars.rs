@@ -77,8 +77,9 @@ fn test_cardinality_with_universal_quantifier_trivial() {
 
 #[test]
 fn test_cardinality_with_universal_quantifier_constraint() {
-    // Test: all p, q: People | p.likes.count() != q.likes.count()
-    // This is satisfiable: each person can like different numbers of people
+    // Test: all p, q: People | (p != q) => (p.likes.count() != q.likes.count())
+    // This tests that cardinality constraints with multiple quantified variables
+    // generate proper boolean circuits (not statically evaluated)
     let people = Relation::unary("People");
     let likes = Relation::binary("Likes");
 
@@ -99,9 +100,15 @@ fn test_cardinality_with_universal_quantifier_constraint() {
     let q = Variable::unary("q");
     let p_expr = Expression::from(p.clone());
     let q_expr = Expression::from(q.clone());
-    let p_count = p_expr.join(Expression::from(likes.clone())).count();
-    let q_count = q_expr.join(Expression::from(likes.clone())).count();
-    let different = p_count.eq(q_count).not();
+    let p_likes = Expression::from(p.clone()).join(Expression::from(likes.clone()));
+    let q_likes = Expression::from(q.clone()).join(Expression::from(likes.clone()));
+
+    let p_count = p_likes.count();
+    let q_count = q_likes.count();
+
+    // (p != q) => (p.likes.count() != q.likes.count())
+    // We exclude p=q to avoid trivial UNSAT (since p=p makes count(p.likes) == count(p.likes))
+    let different = p_expr.equals(q_expr).not().implies(p_count.eq(q_count).not());
 
     let formula = Formula::forall(
         Decls::from(Decl::one_of(p.clone(), Expression::from(people.clone())))
@@ -110,8 +117,8 @@ fn test_cardinality_with_universal_quantifier_constraint() {
     );
 
     let solution = solver.solve(&formula, &bounds).unwrap();
-    // This may be SAT or UNSAT depending on whether all people can have different like-counts
-    // The solver should generate proper circuits, which is what we're testing
+    // This should be SAT: different people can like different numbers of people
+    // The key test: boolean circuits should be generated (not statically evaluated)
     assert!(solution.statistics().num_variables() > 0, "Should generate boolean circuits for cardinality");
 }
 

@@ -40,6 +40,9 @@ pub trait ExpressionVisitor {
             Expression::Comprehension { declarations, formula } => {
                 self.visit_comprehension(expr, declarations, formula)
             }
+            Expression::IntToExprCast { int_expr, .. } => {
+                self.visit_int_to_expr_cast(expr, int_expr)
+            }
         }
     }
 
@@ -63,6 +66,9 @@ pub trait ExpressionVisitor {
 
     /// Visit a comprehension expression
     fn visit_comprehension(&mut self, expr: &Expression, declarations: &Decls, formula: &Formula) -> Self::Output;
+
+    /// Visit an integer-to-expression cast
+    fn visit_int_to_expr_cast(&mut self, expr: &Expression, int_expr: &IntExpression) -> Self::Output;
 }
 
 /// A visitor that can traverse formulas and return values
@@ -198,6 +204,10 @@ impl ExpressionVisitor for ExpressionCounter {
     }
 
     fn visit_comprehension(&mut self, _: &Expression, _: &Decls, _: &Formula) {
+        self.count += 1;
+    }
+
+    fn visit_int_to_expr_cast(&mut self, _: &Expression, _: &IntExpression) {
         self.count += 1;
     }
 }

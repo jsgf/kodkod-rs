@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn translate_and_gate() {
         let arena = crate::bool::MatrixArena::new();
-        let mut factory = BooleanFactory::new(10, Options::default());
+        let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
         let and = factory.and(v1, v2);
@@ -279,7 +279,7 @@ mod tests {
         // Create circuit: (v1 AND v2) OR (v1 AND v2)
         // Without memoization, (v1 AND v2) would be translated twice
         let arena = crate::bool::MatrixArena::new();
-        let mut factory = BooleanFactory::new(10, Options::default());
+        let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
 
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn translate_or_gate() {
         let arena = crate::bool::MatrixArena::new();
-        let mut factory = BooleanFactory::new(10, Options::default());
+        let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
         let or = factory.or(v1, v2);
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn translate_not_gate() {
         let arena = crate::bool::MatrixArena::new();
-        let mut factory = BooleanFactory::new(10, Options::default());
+        let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let not = factory.not(v1);
 
@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn translate_complex_formula() {
         let arena = crate::bool::MatrixArena::new();
-        let mut factory = BooleanFactory::new(10, Options::default());
+        let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
         let v3 = factory.variable(3);

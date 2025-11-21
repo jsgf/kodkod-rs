@@ -201,6 +201,15 @@ pub enum UnaryOp {
     ReflexiveClosure,
 }
 
+/// Operators for casting integer expressions to relational expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IntCastOp {
+    /// Cast to singleton set containing the atom representing the integer
+    IntCast,
+    /// Cast to set of powers of 2 (bits) present in the integer
+    BitsetCast,
+}
+
 /// A relational expression
 #[expect(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -232,6 +241,11 @@ pub enum Expression {
     Comprehension {
         declarations: Decls,
         formula: Box<Formula>,
+    },
+    /// Cast integer expression to relational expression
+    IntToExprCast {
+        int_expr: Box<IntExpression>,
+        op: IntCastOp,
     },
 }
 
@@ -273,6 +287,7 @@ impl Expression {
             Expression::Unary { .. } => 2,
             Expression::Nary { arity, .. } => *arity,
             Expression::Comprehension { declarations, .. } => declarations.size(),
+            Expression::IntToExprCast { .. } => 1,
         }
     }
 

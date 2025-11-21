@@ -20,6 +20,7 @@ pub struct LeafInterpreter {
     var_ranges: FxHashMap<Relation, Range<u32>>,
     lower_bounds: FxHashMap<Relation, TupleSet>,
     upper_bounds: FxHashMap<Relation, TupleSet>,
+    int_bounds: FxHashMap<i32, TupleSet>,
 }
 
 impl LeafInterpreter {
@@ -46,6 +47,14 @@ impl LeafInterpreter {
             upper_bounds.insert(relation.clone(), upper.clone());
         }
 
+        // Collect integer bounds
+        let mut int_bounds = FxHashMap::default();
+        for i in bounds.int_keys() {
+            if let Some(tuple_set) = bounds.int_bound(i) {
+                int_bounds.insert(i, tuple_set.clone());
+            }
+        }
+
         // Create factory with total allocated variables
         let factory = BooleanFactory::new(allocator.total_variables(), options.clone());
 
@@ -55,6 +64,7 @@ impl LeafInterpreter {
             var_ranges,
             lower_bounds,
             upper_bounds,
+            int_bounds,
         }
     }
 
@@ -186,6 +196,24 @@ impl LeafInterpreter {
         }
     }
 
+    /// Returns the set of integers with bounds
+    /// Following Java: LeafInterpreter.ints()
+    pub fn ints(&self) -> impl Iterator<Item = i32> + '_ {
+        self.int_bounds.keys().copied()
+    }
+
+    /// Returns the index of the atom from this.universe which represents the given integer
+    /// Following Java: LeafInterpreter.interpret(int)
+    /// @requires i in this.ints
+    /// @return this.ibounds[i].indexView().min()
+    pub fn interpret(&self, i: i32) -> usize {
+        let tuple_set = self.int_bounds.get(&i).expect("Integer not in bounds");
+        assert_eq!(tuple_set.arity(), 1, "Integer tuple set must be unary");
+        assert_eq!(tuple_set.size(), 1, "Integer tuple set must be singleton");
+        // Return the index of the first (and only) tuple
+        tuple_set.iter().next().unwrap().index()
+    }
+
     /// Converts a TupleSet to flat indices for BooleanMatrix
     /// Following Java pattern from LeafInterpreter
     pub fn tuple_set_to_indices(tuple_set: &TupleSet, _universe: &Universe) -> Vec<usize> {
@@ -222,7 +250,7 @@ mod tests {
         let bounds = Bounds::new(universe.clone());
 
         let options = Options::default();
-        let mut interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
 
         let matrix = interpreter.interpret_constant(ConstantExpr::Univ);
         assert_eq!(matrix.dimensions().capacity(), 3);
@@ -235,7 +263,7 @@ mod tests {
         let bounds = Bounds::new(universe.clone());
 
         let options = Options::default();
-        let mut interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
 
         let matrix = interpreter.interpret_constant(ConstantExpr::None);
         assert_eq!(matrix.density(), 0); // All FALSE (sparse)
@@ -247,7 +275,7 @@ mod tests {
         let bounds = Bounds::new(universe.clone());
 
         let options = Options::default();
-        let mut interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
 
         let matrix = interpreter.interpret_constant(ConstantExpr::Iden);
         assert_eq!(matrix.dimensions().capacity(), 4); // 2x2
@@ -279,7 +307,7 @@ mod tests {
             .unwrap();
 
         let options = Options::default();
-        let mut interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
         let matrix = interpreter.interpret_relation(&r);
 
         // Index 0 (A) → TRUE (in lower bound)
@@ -292,5 +320,75 @@ mod tests {
         // Index 2 (C) → variable 2 (uncertain)
         assert!(matrix.get(2).is_variable());
         assert_eq!(matrix.get(2).label(), 2);
+    }
+
+    #[test]
+    fn test_ints_iterator() {
+        let universe = Universe::new(&["a", "b", "c", "d", "e"]).unwrap();
+        let mut bounds = Bounds::new(universe.clone());
+
+        // Bind integers -2, -1, 0, 1, 2 to atoms a, b, c, d, e
+        let factory = bounds.universe().factory();
+        let atoms = ["a", "b", "c", "d", "e"];
+        for (idx, i) in (-2..=2).enumerate() {
+            bounds.bound_exactly_int(i, factory.tuple_set(&[&[atoms[idx]]]).unwrap()).unwrap();
+        }
+
+        let options = Options::default();
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+
+        let mut ints: Vec<i32> = interpreter.ints().collect();
+        ints.sort(); // Order not guaranteed from hashmap
+
+        assert_eq!(ints, vec![-2, -1, 0, 1, 2]);
+    }
+
+    #[test]
+    fn test_interpret_integer() {
+        let universe = Universe::new(&["a", "b", "c", "0", "1", "2"]).unwrap();
+        let mut bounds = Bounds::new(universe.clone());
+
+        // Bind integer 0 to atom "0" (index 3)
+        // Bind integer 1 to atom "1" (index 4)
+        // Bind integer 2 to atom "2" (index 5)
+        let factory = bounds.universe().factory();
+        bounds.bound_exactly_int(0, factory.tuple_set(&[&["0"]]).unwrap()).unwrap();
+        bounds.bound_exactly_int(1, factory.tuple_set(&[&["1"]]).unwrap()).unwrap();
+        bounds.bound_exactly_int(2, factory.tuple_set(&[&["2"]]).unwrap()).unwrap();
+
+        let options = Options::default();
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+
+        // interpret(0) should return index 3
+        assert_eq!(interpreter.interpret(0), 3);
+        // interpret(1) should return index 4
+        assert_eq!(interpreter.interpret(1), 4);
+        // interpret(2) should return index 5
+        assert_eq!(interpreter.interpret(2), 5);
+    }
+
+    #[test]
+    #[should_panic(expected = "Integer not in bounds")]
+    fn test_interpret_unbounded_integer() {
+        let universe = Universe::new(&["A", "B"]).unwrap();
+        let bounds = Bounds::new(universe.clone());
+
+        let options = Options::default();
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+
+        // Should panic - no integers bounded
+        interpreter.interpret(42);
+    }
+
+    #[test]
+    fn test_integer_bounds_empty() {
+        let universe = Universe::new(&["A", "B"]).unwrap();
+        let bounds = Bounds::new(universe.clone());
+
+        let options = Options::default();
+        let interpreter = LeafInterpreter::from_bounds(&bounds, &options);
+
+        // No integers should be present
+        assert_eq!(interpreter.ints().count(), 0);
     }
 }

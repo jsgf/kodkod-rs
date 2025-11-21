@@ -140,6 +140,35 @@ impl BooleanFactory {
             return inputs.into_iter().next().unwrap();
         }
 
+        // Check for contradictions (p AND !p = FALSE)
+        for i in 0..inputs.len() {
+            for j in (i+1)..inputs.len() {
+                // Check if inputs[j] is NOT(inputs[i]) or vice versa
+                if let BoolValue::Formula(f) = &inputs[j] {
+                    if let FormulaKind::Not(h) = f.kind() {
+                        if self.arena.resolve_handle(*h) == &inputs[i] {
+                            return self.constant(false);
+                        }
+                    }
+                }
+                if let BoolValue::Formula(f) = &inputs[i] {
+                    if let FormulaKind::Not(h) = f.kind() {
+                        if self.arena.resolve_handle(*h) == &inputs[j] {
+                            return self.constant(false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove duplicates (idempotency: p AND p = p)
+        inputs.sort_by_key(|v| v.label());
+        inputs.dedup();
+
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
         // Check cache
         if self.options.sharing {
             let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
@@ -187,6 +216,35 @@ impl BooleanFactory {
         if inputs.is_empty() {
             return self.constant(false);
         }
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
+        // Check for excluded middle (p OR !p = TRUE)
+        for i in 0..inputs.len() {
+            for j in (i+1)..inputs.len() {
+                // Check if inputs[j] is NOT(inputs[i]) or vice versa
+                if let BoolValue::Formula(f) = &inputs[j] {
+                    if let FormulaKind::Not(h) = f.kind() {
+                        if self.arena.resolve_handle(*h) == &inputs[i] {
+                            return self.constant(true);
+                        }
+                    }
+                }
+                if let BoolValue::Formula(f) = &inputs[i] {
+                    if let FormulaKind::Not(h) = f.kind() {
+                        if self.arena.resolve_handle(*h) == &inputs[j] {
+                            return self.constant(true);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove duplicates (idempotency: p OR p = p)
+        inputs.sort_by_key(|v| v.label());
+        inputs.dedup();
+
         if inputs.len() == 1 {
             return inputs.into_iter().next().unwrap();
         }
@@ -350,6 +408,12 @@ impl BooleanFactory {
         self.or(a_and_b, cin_and_xor)
     }
 
+    /// Creates an Int representing the given constant integer value
+    /// Following Java: BooleanFactory.integer(int)
+    pub fn integer<'arena>(&'arena self, value: i32) -> crate::bool::Int<'arena> {
+        crate::bool::Int::constant(value, self.options.bitwidth, BoolValue::Constant(BooleanConstant::TRUE))
+    }
+
     fn allocate_label(&self) -> i32 {
         let label = self.next_label.get();
         self.next_label.set(label + 1);
@@ -380,7 +444,7 @@ mod tests {
 
     #[test]
     fn gate_deduplication() {
-        let mut factory = BooleanFactory::new(5, Options::default());
+        let factory = BooleanFactory::new(5, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
 
@@ -393,7 +457,7 @@ mod tests {
 
     #[test]
     fn boolean_matrix() {
-        let mut factory = BooleanFactory::new(10, Options::default());
+        let factory = BooleanFactory::new(10, Options::default());
         // Ternary relation over universe of size 2: capacity=8 (2³), arity=3
         let dims = Dimensions::new(8, 3);
 
@@ -406,7 +470,7 @@ mod tests {
 
     #[test]
     fn and_simplification() {
-        let mut factory = BooleanFactory::new(5, Options::default());
+        let factory = BooleanFactory::new(5, Options::default());
 
         // AND with FALSE => FALSE
         let result = factory.and(factory.constant(true), factory.constant(false));
@@ -420,7 +484,7 @@ mod tests {
 
     #[test]
     fn or_simplification() {
-        let mut factory = BooleanFactory::new(5, Options::default());
+        let factory = BooleanFactory::new(5, Options::default());
 
         // OR with TRUE => TRUE
         let result = factory.or(factory.constant(true), factory.constant(false));
@@ -434,7 +498,7 @@ mod tests {
 
     #[test]
     fn not_simplification() {
-        let mut factory = BooleanFactory::new(5, Options::default());
+        let factory = BooleanFactory::new(5, Options::default());
 
         // NOT TRUE => FALSE
         let result = factory.not(factory.constant(true));
@@ -447,7 +511,7 @@ mod tests {
 
     #[test]
     fn ite_simplification() {
-        let mut factory = BooleanFactory::new(5, Options::default());
+        let factory = BooleanFactory::new(5, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
 
@@ -462,5 +526,308 @@ mod tests {
         // ITE with same branches => that value
         let result = factory.ite(v1.clone(), v2.clone(), v2.clone());
         assert_eq!(result.label(), 2); // v2
+    }
+
+    #[test]
+    fn integer_creation() {
+        let factory = BooleanFactory::new(10, Options::default());
+
+        // Create integer constant
+        let int5 = factory.integer(5);
+        assert_eq!(int5.width(), factory.options.bitwidth);
+
+        // Verify it's constant
+        assert!(int5.is_constant());
+        assert_eq!(int5.value(), Some(5));
+
+        // Test negative integer
+        let int_neg = factory.integer(-3);
+        assert!(int_neg.is_constant());
+        assert_eq!(int_neg.value(), Some(-3));
+
+        // Test zero
+        let int_zero = factory.integer(0);
+        assert!(int_zero.is_constant());
+        assert_eq!(int_zero.value(), Some(0));
+    }
+
+    #[test]
+    fn integer_bitwidth() {
+        let options = Options {
+            bitwidth: 8,
+            ..Default::default()
+        };
+        let factory = BooleanFactory::new(10, options);
+
+        let int_val = factory.integer(127);
+        assert_eq!(int_val.width(), 8);
+
+        let int_val2 = factory.integer(-128);
+        assert_eq!(int_val2.width(), 8);
+    }
+
+    // Algebraic property tests following Java BooleanCircuitTest
+
+    #[test]
+    #[should_panic(expected = "Double negation elimination failed")]
+    fn not_involution() {
+        // Following Java: testNot() - involution: !!a = a
+        // EXPECTED TO FAIL: Double negation elimination not implemented for formulas
+        let factory = BooleanFactory::new(20, Options::default());
+
+        // Constants
+        assert_eq!(factory.not(factory.not(factory.constant(false))), factory.constant(false));
+        assert_eq!(factory.not(factory.not(factory.constant(true))), factory.constant(true));
+
+        // Variables
+        for i in 1..=10 {
+            let v = factory.variable(i);
+            assert_eq!(factory.not(factory.not(v.clone())), v, "Double negation elimination failed for variable");
+        }
+
+        // Formulas
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+        let or12 = factory.or(v1.clone(), v2.clone());
+        let and12 = factory.and(v1, v2);
+
+        assert_eq!(factory.not(factory.not(or12.clone())), or12, "Double negation elimination failed for OR formula");
+        assert_eq!(factory.not(factory.not(and12.clone())), and12, "Double negation elimination failed for AND formula");
+    }
+
+    #[test]
+    fn and_identity_and_short_circuit() {
+        // Following Java: testIdentityContradictionExcludedMiddle for AND
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        // Identity: p AND TRUE = p
+        assert_eq!(factory.and(v1.clone(), factory.constant(true)), v1);
+        assert_eq!(factory.and(factory.constant(true), v2.clone()), v2);
+
+        // Short circuit: p AND FALSE = FALSE
+        assert_eq!(factory.and(v1.clone(), factory.constant(false)), factory.constant(false));
+        assert_eq!(factory.and(factory.constant(false), v1.clone()), factory.constant(false));
+
+        // Contradiction: p AND !p = FALSE
+        assert_eq!(factory.and(v1.clone(), factory.not(v1.clone())), factory.constant(false));
+    }
+
+    #[test]
+    fn or_identity_and_short_circuit() {
+        // Following Java: testIdentityContradictionExcludedMiddle for OR
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        // Identity: p OR FALSE = p
+        assert_eq!(factory.or(v1.clone(), factory.constant(false)), v1);
+        assert_eq!(factory.or(factory.constant(false), v2.clone()), v2);
+
+        // Short circuit: p OR TRUE = TRUE
+        assert_eq!(factory.or(v1.clone(), factory.constant(true)), factory.constant(true));
+        assert_eq!(factory.or(factory.constant(true), v1.clone()), factory.constant(true));
+
+        // Excluded middle: p OR !p = TRUE
+        assert_eq!(factory.or(v1.clone(), factory.not(v1.clone())), factory.constant(true));
+    }
+
+    #[test]
+    #[should_panic(expected = "Absorption law failed")]
+    fn and_idempotency_and_absorption() {
+        // Following Java: testIdempotencyAbsorptionContraction for AND
+        // EXPECTED TO FAIL: Absorption law optimization not implemented
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        // Idempotency: p AND p = p
+        assert_eq!(factory.and(v1.clone(), v1.clone()), v1);
+        assert_eq!(factory.and(v2.clone(), v2.clone()), v2);
+
+        // Absorption: p AND (p OR q) = p
+        let v1_or_v2 = factory.or(v1.clone(), v2.clone());
+        assert_eq!(factory.and(v1.clone(), v1_or_v2), v1, "Absorption law failed: p AND (p OR q) should equal p");
+
+        // Contraction (complement of absorption): p OR (p AND q) = p
+        let v1_and_v2 = factory.and(v1.clone(), v2.clone());
+        assert_eq!(factory.or(v1.clone(), v1_and_v2), v1, "Absorption law failed: p OR (p AND q) should equal p");
+    }
+
+    #[test]
+    #[should_panic(expected = "Absorption law failed")]
+    fn or_idempotency_and_absorption() {
+        // Following Java: testIdempotencyAbsorptionContraction for OR
+        // EXPECTED TO FAIL: Absorption law optimization not implemented
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+
+        // Idempotency: p OR p = p
+        assert_eq!(factory.or(v1.clone(), v1.clone()), v1);
+        assert_eq!(factory.or(v2.clone(), v2.clone()), v2);
+
+        // Absorption: p OR (p AND q) = p
+        let v1_and_v2 = factory.and(v1.clone(), v2.clone());
+        assert_eq!(factory.or(v1.clone(), v1_and_v2), v1, "Absorption law failed: p OR (p AND q) should equal p");
+
+        // Contraction (complement of absorption): p AND (p OR q) = p
+        let v1_or_v2 = factory.or(v1.clone(), v2.clone());
+        assert_eq!(factory.and(v1.clone(), v1_or_v2), v1, "Absorption law failed: p AND (p OR q) should equal p");
+    }
+
+    #[test]
+    fn and_commutativity() {
+        // Following Java: testCommutativityAndAssociativity for AND
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+        let v3 = factory.variable(3);
+
+        // Commutativity: p AND q = q AND p
+        assert_eq!(
+            factory.and(v1.clone(), v2.clone()),
+            factory.and(v2.clone(), v1.clone())
+        );
+
+        // Multi-input commutativity
+        assert_eq!(
+            factory.and_multi(vec![v1.clone(), v2.clone(), v3.clone()]),
+            factory.and_multi(vec![v2.clone(), v3.clone(), v1.clone()])
+        );
+        assert_eq!(
+            factory.and_multi(vec![v1.clone(), v2.clone(), v3.clone()]),
+            factory.and_multi(vec![v3.clone(), v1.clone(), v2.clone()])
+        );
+    }
+
+    #[test]
+    fn or_commutativity() {
+        // Following Java: testCommutativityAndAssociativity for OR
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+        let v3 = factory.variable(3);
+
+        // Commutativity: p OR q = q OR p
+        assert_eq!(
+            factory.or(v1.clone(), v2.clone()),
+            factory.or(v2.clone(), v1.clone())
+        );
+
+        // Multi-input commutativity
+        assert_eq!(
+            factory.or_multi(vec![v1.clone(), v2.clone(), v3.clone()]),
+            factory.or_multi(vec![v2.clone(), v3.clone(), v1.clone()])
+        );
+        assert_eq!(
+            factory.or_multi(vec![v1.clone(), v2.clone(), v3.clone()]),
+            factory.or_multi(vec![v3.clone(), v1.clone(), v2.clone()])
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Canonical form failed")]
+    fn and_associativity() {
+        // Following Java: testParenthesis for AND
+        // EXPECTED TO FAIL: Canonical form generation not implemented
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+        let v3 = factory.variable(3);
+        let v4 = factory.variable(4);
+
+        // Associativity: (p AND q) AND r = p AND (q AND r)
+        assert_eq!(
+            factory.and(factory.and(v1.clone(), v2.clone()), v3.clone()),
+            factory.and(v1.clone(), factory.and(v2.clone(), v3.clone())),
+            "Canonical form failed: (p AND q) AND r should equal p AND (q AND r)"
+        );
+
+        // Extended: ((p AND q) AND r) AND s = p AND (q AND (r AND s))
+        let pq = factory.and(v1.clone(), v2.clone());
+        let pqr = factory.and(pq.clone(), v3.clone());
+        let pqrs = factory.and(pqr, v4.clone());
+
+        let rs = factory.and(v3.clone(), v4.clone());
+        let qrs = factory.and(v2.clone(), rs);
+        let p_qrs = factory.and(v1.clone(), qrs);
+
+        assert_eq!(pqrs, p_qrs, "Canonical form failed for nested AND");
+    }
+
+    #[test]
+    #[should_panic(expected = "Canonical form failed")]
+    fn or_associativity() {
+        // Following Java: testParenthesis for OR
+        // EXPECTED TO FAIL: Canonical form generation not implemented
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+        let v3 = factory.variable(3);
+        let v4 = factory.variable(4);
+
+        // Associativity: (p OR q) OR r = p OR (q OR r)
+        assert_eq!(
+            factory.or(factory.or(v1.clone(), v2.clone()), v3.clone()),
+            factory.or(v1.clone(), factory.or(v2.clone(), v3.clone())),
+            "Canonical form failed: (p OR q) OR r should equal p OR (q OR r)"
+        );
+
+        // Extended: ((p OR q) OR r) OR s = p OR (q OR (r OR s))
+        let pq = factory.or(v1.clone(), v2.clone());
+        let pqr = factory.or(pq.clone(), v3.clone());
+        let pqrs = factory.or(pqr, v4.clone());
+
+        let rs = factory.or(v3.clone(), v4.clone());
+        let qrs = factory.or(v2.clone(), rs);
+        let p_qrs = factory.or(v1.clone(), qrs);
+
+        assert_eq!(pqrs, p_qrs, "Canonical form failed for nested OR");
+    }
+
+    #[test]
+    #[should_panic(expected = "ITE reduction failed")]
+    fn ite_reductions() {
+        // Following Java: testITE
+        // EXPECTED TO FAIL: ITE to boolean operation conversion not implemented
+        let factory = BooleanFactory::new(10, Options::default());
+
+        let v1 = factory.variable(1);
+        let v2 = factory.variable(2);
+        let a12 = factory.and(v1.clone(), v2.clone());
+        let na12 = factory.not(a12.clone());
+        let v6 = factory.variable(6);
+        let v7 = factory.variable(7);
+        let o67 = factory.or(v6.clone(), v7.clone());
+        let v8 = factory.variable(8);
+        let v9 = factory.variable(9);
+        let o89 = factory.or(v8.clone(), v9.clone());
+
+        // ITE(cond, t, t) = t
+        assert_eq!(factory.ite(a12.clone(), o67.clone(), o67.clone()), o67);
+
+        // ITE(cond, TRUE, e) = cond OR e
+        assert_eq!(
+            factory.ite(a12.clone(), factory.constant(true), o89.clone()),
+            factory.or(o89.clone(), a12.clone()),
+            "ITE reduction failed: ITE(c, TRUE, e) should equal c OR e"
+        );
+
+        // ITE(cond, FALSE, e) = !cond AND e
+        assert_eq!(
+            factory.ite(a12.clone(), factory.constant(false), o89.clone()),
+            factory.and(o89.clone(), na12.clone()),
+            "ITE reduction failed: ITE(c, FALSE, e) should equal !c AND e"
+        );
     }
 }

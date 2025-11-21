@@ -322,10 +322,7 @@ mod tests {
         let solution = solver.solve(&formula, &bounds).unwrap();
 
         let stats = solution.statistics();
-        // Times should be >= 0
-        assert!(stats.translation_time() >= 0);
-        assert!(stats.solving_time() >= 0);
-        // Now we actually generate variables and clauses
+        // Check statistics are generated
         assert!(stats.num_variables() > 0);
         assert!(stats.num_clauses() > 0);
     }
