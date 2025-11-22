@@ -126,6 +126,32 @@ impl Tuple {
         self.index
     }
 
+    /// Creates a tuple from a flat index
+    /// Following Java pattern: reconstructing tuple from index
+    ///
+    /// The index represents the tuple in base-n enumeration where n is the universe size.
+    /// For arity k, index = sum(atom[i] * base^(k-1-i) for i in 0..k)
+    pub fn from_index(universe: Universe, arity: usize, index: usize) -> Self {
+        let base = universe.size();
+        let mut atom_indices = Vec::with_capacity(arity);
+        let mut remaining = index;
+
+        // Extract each position from MSB to LSB
+        for i in 0..arity {
+            let power = arity - 1 - i;
+            let divisor = base.pow(power as u32);
+            let atom_idx = remaining / divisor;
+            atom_indices.push(atom_idx);
+            remaining %= divisor;
+        }
+
+        Tuple {
+            universe,
+            atom_indices,
+            index,
+        }
+    }
+
     /// Returns the atom at the given position
     pub fn atom(&self, i: usize) -> Option<&str> {
         self.atom_indices
@@ -445,11 +471,25 @@ impl TupleFactory {
     }
 
     /// Creates a singleton tuple set containing a single atom
-    pub fn set_of(&self, atom: &str) -> Result<TupleSet> {
+    /// Helper method for convenience
+    pub fn set_of_atom(&self, atom: &str) -> Result<TupleSet> {
         let tuple = self.tuple(&[atom])?;
         let mut set = TupleSet::empty(self.universe.clone(), 1);
         set.add(tuple)?;
         Ok(set)
+    }
+
+    /// Creates a tuple set from flat tuple indices
+    /// Following Java: TupleFactory.setOf(int arity, IntSet tupleIndices)
+    ///
+    /// Each index represents a tuple in the standard enumeration order
+    pub fn set_of(&self, arity: usize, indices: &[usize]) -> TupleSet {
+        let mut set = TupleSet::empty(self.universe.clone(), arity);
+        for &index in indices {
+            let tuple = Tuple::from_index(self.universe.clone(), arity, index);
+            set.add(tuple).expect("Tuple from valid index should be valid");
+        }
+        set
     }
 
     /// Creates an n-dimensional rectangular region
@@ -727,6 +767,12 @@ impl Instance {
     pub fn relations(&self) -> impl Iterator<Item = &Relation> {
         self.relations.keys()
     }
+
+    /// Returns the relation-to-tupleset mappings
+    /// Following Java: Instance.relationTuples()
+    pub fn relation_tuples(&self) -> &FxHashMap<Relation, TupleSet> {
+        &self.relations
+    }
 }
 
 #[cfg(test)]
@@ -887,6 +933,126 @@ mod tests {
         let result = instance.tuples(&person);
         assert!(result.is_some());
         assert_eq!(result.unwrap().size(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn tuple_from_index_unary() -> Result<()> {
+        let universe = Universe::new(&["A", "B", "C"])?;
+
+        // For unary tuples:
+        // Index 0 = (A), index 1 = (B), index 2 = (C)
+        let t0 = Tuple::from_index(universe.clone(), 1, 0);
+        assert_eq!(t0.arity(), 1);
+        assert_eq!(t0.index(), 0);
+        assert_eq!(t0.atom(0), Some("A"));
+
+        let t1 = Tuple::from_index(universe.clone(), 1, 1);
+        assert_eq!(t1.atom(0), Some("B"));
+
+        let t2 = Tuple::from_index(universe.clone(), 1, 2);
+        assert_eq!(t2.atom(0), Some("C"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn tuple_from_index_binary() -> Result<()> {
+        let universe = Universe::new(&["A", "B", "C"])?;
+
+        // For binary tuples with 3-atom universe:
+        // Index 0 = (A,A), 1 = (A,B), 2 = (A,C), 3 = (B,A), 4 = (B,B), ...
+        let t0 = Tuple::from_index(universe.clone(), 2, 0);
+        assert_eq!(t0.arity(), 2);
+        assert_eq!(t0.index(), 0);
+        assert_eq!(t0.atom(0), Some("A"));
+        assert_eq!(t0.atom(1), Some("A"));
+
+        let t1 = Tuple::from_index(universe.clone(), 2, 1);
+        assert_eq!(t1.atom(0), Some("A"));
+        assert_eq!(t1.atom(1), Some("B"));
+
+        let t4 = Tuple::from_index(universe.clone(), 2, 4);
+        assert_eq!(t4.atom(0), Some("B"));
+        assert_eq!(t4.atom(1), Some("B"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn tuple_from_index_roundtrip() -> Result<()> {
+        let universe = Universe::new(&["A", "B"])?;
+        let factory = universe.factory();
+
+        // Create a tuple normally and verify from_index reconstructs it
+        let original = factory.tuple(&["B", "A"])?;
+        let index = original.index();
+
+        let reconstructed = Tuple::from_index(universe.clone(), 2, index);
+
+        assert_eq!(reconstructed.arity(), original.arity());
+        assert_eq!(reconstructed.index(), original.index());
+        assert_eq!(reconstructed.atom(0), original.atom(0));
+        assert_eq!(reconstructed.atom(1), original.atom(1));
+
+        Ok(())
+    }
+
+    #[test]
+    fn factory_set_of_from_indices() -> Result<()> {
+        let universe = Universe::new(&["A", "B", "C"])?;
+        let factory = universe.factory();
+
+        // Create a set from indices: 0=(A), 2=(C)
+        let set = factory.set_of(1, &[0, 2]);
+
+        assert_eq!(set.arity(), 1);
+        assert_eq!(set.size(), 2);
+
+        let atoms: Vec<_> = set.iter().map(|t| t.atom(0).unwrap()).collect();
+        assert!(atoms.contains(&"A"));
+        assert!(atoms.contains(&"C"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn factory_set_of_binary_from_indices() -> Result<()> {
+        let universe = Universe::new(&["A", "B"])?;
+        let factory = universe.factory();
+
+        // For 2-atom universe, binary tuples:
+        // Index 0 = (A,A), 1 = (A,B), 2 = (B,A), 3 = (B,B)
+        let set = factory.set_of(2, &[1, 2]);
+
+        assert_eq!(set.arity(), 2);
+        assert_eq!(set.size(), 2);
+
+        let mut found_ab = false;
+        let mut found_ba = false;
+        for tuple in set.iter() {
+            if tuple.atom(0) == Some("A") && tuple.atom(1) == Some("B") {
+                found_ab = true;
+            }
+            if tuple.atom(0) == Some("B") && tuple.atom(1) == Some("A") {
+                found_ba = true;
+            }
+        }
+        assert!(found_ab);
+        assert!(found_ba);
+
+        Ok(())
+    }
+
+    #[test]
+    fn factory_set_of_empty_indices() -> Result<()> {
+        let universe = Universe::new(&["A", "B"])?;
+        let factory = universe.factory();
+
+        let set = factory.set_of(1, &[]);
+        assert_eq!(set.size(), 0);
+        assert!(set.is_empty());
 
         Ok(())
     }

@@ -352,6 +352,33 @@ impl Formula {
         }
     }
 
+
+    /// If-then-else for expressions
+    /// Following Java: Formula.thenElse(Expression, Expression)
+    /// Returns an expression that evaluates to then_expr if this formula is true,
+    /// otherwise evaluates to else_expr.
+    ///
+    /// # Panics
+    /// Panics if then_expr and else_expr have different arities
+    pub fn then_else(self, then_expr: Expression, else_expr: Expression) -> Expression {
+        assert_eq!(
+            then_expr.arity(),
+            else_expr.arity(),
+            "Arity mismatch: {:?}::{} and {:?}::{}",
+            then_expr,
+            then_expr.arity(),
+            else_expr,
+            else_expr.arity()
+        );
+        let arity = then_expr.arity();
+        Expression::If {
+            condition: Box::new(self),
+            then_expr: Box::new(then_expr),
+            else_expr: Box::new(else_expr),
+            arity,
+        }
+    }
+
     /// If-then-else for integer expressions
     /// Following Java: Formula.thenElse(IntExpression, IntExpression)
     pub fn then_else_int(self, then_expr: IntExpression, else_expr: IntExpression) -> IntExpression {

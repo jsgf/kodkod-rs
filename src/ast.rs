@@ -70,6 +70,14 @@ impl Relation {
         self.inner.arity
     }
 
+    /// Creates an acyclic predicate for this relation
+    /// Following Java: Relation.acyclic()
+    /// Returns a formula stating that this relation is acyclic
+    pub fn acyclic(self) -> crate::ast::formula::Formula {
+        use crate::ast::formula::{Formula, RelationPredicate};
+        Formula::RelationPredicate(RelationPredicate::acyclic(self))
+    }
+
     /// Creates a function predicate for this relation
     /// Following Java: Relation.function(Expression domain, Expression range)
     /// Returns a formula stating that this relation is a total function from domain to range
@@ -247,6 +255,13 @@ pub enum Expression {
         int_expr: Box<IntExpression>,
         op: IntCastOp,
     },
+    /// If-then-else expression
+    If {
+        condition: Box<Formula>,
+        then_expr: Box<Expression>,
+        else_expr: Box<Expression>,
+        arity: usize,
+    },
 }
 
 /// Constant expressions
@@ -288,6 +303,7 @@ impl Expression {
             Expression::Nary { arity, .. } => *arity,
             Expression::Comprehension { declarations, .. } => declarations.size(),
             Expression::IntToExprCast { .. } => 1,
+            Expression::If { arity, .. } => *arity,
         }
     }
 
