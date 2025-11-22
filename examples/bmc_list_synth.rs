@@ -160,7 +160,8 @@ impl ListSynth {
         // Make sure that our hole is a singleton
         let hole_constraint = Expression::from(self.hole.clone()).one();
 
-        // Build the spec with our custom next0/next3/head0
+        // Must use our custom expressions that incorporate the hole!
+        // The base encoding's expressions don't use the hole.
         Formula::and_all(vec![
             self.encoding.pre(),
             self.loop_guard(),
@@ -187,7 +188,11 @@ impl ListSynth {
         elts.extend(strings.iter().map(|s| s.as_str()));
         elts.push("nil");
 
-        // The syntax relations will represent themselves in the universe
+        // NOTE: In Java, the syntax relations are added as Relation objects to the universe.
+        // In Rust, we can't add Relation objects to the universe (they're not atoms).
+        // Instead we use string representations. This may be the source of the bug.
+        // Java: elts.add(headStx);  // adds the Relation object as an atom
+        // Rust: elts.push("\"head\"");  // adds a string representation
         elts.push("\"head\"");
         elts.push("\"nearNode0\"");
         elts.push("\"midNode0\"");
@@ -197,27 +202,40 @@ impl ListSynth {
     }
 
     fn synth_bounds(&self, size: usize) -> Bounds {
-        let u = self.universe(size).expect("Failed to create universe");
-        println!("Universe atoms: {:?}", u.size());
-        let mut b = Bounds::new(u);
-        let t = b.universe().factory();
+        // In Java, calling bounds(size) uses polymorphism to call our overridden universe(size).
+        // In Rust, we need to manually create bounds with OUR universe.
 
         // Get counterexample from checker
         let checker = ListCheck::new();
         let sol = checker.check(size);
         let cex = match sol {
-            Solution::Sat { instance, .. } => instance,
+            Solution::Sat { instance, ..} => instance,
             _ => panic!("Expected SAT solution from ListCheck"),
         };
 
-        // Bound the hole to the set of syntax options (as unary tuples)
+        // Create bounds using OUR universe (with syntax atoms), not encoding's universe
+        let u = self.universe(size).expect("Failed to create universe");
+        let mut b = Bounds::new(u);
+        let t = b.universe().factory();
+        let max = size - 1;
+
+        // Set up base bounds just like ListEncoding.bounds() does
+        // But DON'T set bounds for relations we'll bind exactly from counterexample
+        b.bound(&self.encoding.list, t.none(1), t.tuple_set(&[&["l0"]]).unwrap()).unwrap();
+        b.bound(&self.encoding.node, t.none(1), t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap()).unwrap();
+        b.bound(&self.encoding.string, t.none(1), t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap()).unwrap();
+        b.bound_exactly(&self.encoding.nil, t.tuple_set(&[&["nil"]]).unwrap()).unwrap();
+
+        // Don't set initial bounds for next, head, data, this_list - they'll be bound exactly below
+
+        // Now add bounds for synthesis-specific relations
+        // Bound the hole to the set of syntax options
         let mut hole_bound = t.none(1);
         hole_bound.add(t.tuple(&["nil"]).unwrap()).unwrap();
         hole_bound.add(t.tuple(&["\"head\""]).unwrap()).unwrap();
         hole_bound.add(t.tuple(&["\"nearNode0\""]).unwrap()).unwrap();
         hole_bound.add(t.tuple(&["\"midNode0\""]).unwrap()).unwrap();
         hole_bound.add(t.tuple(&["\"farNode0\""]).unwrap()).unwrap();
-
         b.bound(&self.hole, t.none(1), hole_bound).expect("Failed to bound hole");
 
         // Bind syntax relations to themselves
@@ -226,33 +244,8 @@ impl ListSynth {
         b.bound_exactly(&self.mid_node0_stx, t.tuple_set(&[&["\"midNode0\""]]).unwrap()).unwrap();
         b.bound_exactly(&self.far_node0_stx, t.tuple_set(&[&["\"farNode0\""]]).unwrap()).unwrap();
 
-        // Set up bounds for basic relations using our new universe
-        b.bound(&self.encoding.list, t.tuple_set(&[&["l0"]]).unwrap(), t.tuple_set(&[&["l0"]]).unwrap()).unwrap();
-
-        let max = size - 1;
-        b.bound(&self.encoding.node, t.none(1), t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap()).unwrap();
-        b.bound(&self.encoding.string, t.none(1), t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap()).unwrap();
-
-        let this_list_bound = t.tuple_set(&[&["l0"]]).unwrap();
-        b.bound_exactly(&self.encoding.this_list, this_list_bound).unwrap();
-        b.bound_exactly(&self.encoding.nil, t.tuple_set(&[&["nil"]]).unwrap()).unwrap();
-
-        // Set up bounds for head and data relations
-        let mut node_or_nil = t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap();
-        node_or_nil.add(t.tuple(&["nil"]).unwrap()).unwrap();
-        b.bound(&self.encoding.head, t.none(2), t.tuple_set(&[&["l0"]]).unwrap().product(&node_or_nil).unwrap()).unwrap();
-
-        let mut string_or_nil = t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap();
-        string_or_nil.add(t.tuple(&["nil"]).unwrap()).unwrap();
-
-        let node_bound = t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap();
-        b.bound(&self.encoding.data, t.none(2), node_bound.product(&string_or_nil).unwrap()).unwrap();
-
-        // Fix the counterexample values
-        println!("Copying counterexample values...");
-        let next_tuples = cex.tuples(&checker.encoding.next).expect("next tuples");
-        println!("Next tuples: arity={}, size={}", next_tuples.arity(), next_tuples.size());
-        b.bound_exactly(&self.encoding.next, self.encoding.copy_from(&t, next_tuples))
+        // Copy counterexample values (these will be translated to our universe)
+        b.bound_exactly(&self.encoding.next, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.next).expect("next tuples")))
             .expect("Failed to bind next");
         b.bound_exactly(&self.encoding.head, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples")))
             .expect("Failed to bind head");
@@ -261,7 +254,6 @@ impl ListSynth {
         b.bound_exactly(&self.encoding.this_list, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.this_list).expect("this_list tuples")))
             .expect("Failed to bind this_list");
 
-        println!("Bounds created successfully");
         b
     }
 

@@ -40,7 +40,7 @@
   - Also does everything that takes something by value actually need to? Could it take a reference. (But it *should not* take a reference then immediately clone it.)
 
 NOTES:
-1. *NOTHING* can be considered unless at least `cargo check` passes
+1. *NOTHING* can be considered completed or done unless at least `cargo check` of all targets passes
 2. Any newly implemented feature *must* also have tests, ideally ported from the equivalent Java ones.
 4. Commit work between steps above.
 
@@ -77,7 +77,7 @@ NOTES:
 - [ ] ListDebug.java (Deferred - requires proof/unsat core extraction - see above)
 - [x] ListEncoding.java
 - [x] ListRepair.java
-- [ ] ListSynth.java (BUG: formula trivially UNSAT - needs debugging of synthesis spec/bounds interaction)
+- [ ] ListSynth.java (BUG IN KODKOD CORE: Fixed universe mismatch & duplicate bounds, but formula still trivially UNSAT (0 vars). With cex bindings: 0 vars/1 clause. Without: 1547 vars/UNSAT. Issue is in how expressions referencing bound relations are simplified. Likely bug in override_with or then_else translation when base relation is bound exactly.)
 - [ ] ListViz.java (Visualization helper - can defer)
 
 #### csp/ (10 total)
