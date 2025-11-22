@@ -77,7 +77,7 @@ NOTES:
 - [ ] ListDebug.java (Deferred - requires proof/unsat core extraction - see above)
 - [x] ListEncoding.java
 - [x] ListRepair.java
-- [ ] ListSynth.java (In progress - formula construction needs debugging, trivially UNSAT)
+- [ ] ListSynth.java (BUG: formula trivially UNSAT - needs debugging of synthesis spec/bounds interaction)
 - [ ] ListViz.java (Visualization helper - can defer)
 
 #### csp/ (10 total)
