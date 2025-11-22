@@ -2,6 +2,7 @@
   - The primary goal of this is to discover any missing features or bugs
   - Secondary goal is to make idiomatic Rust versions which are functionally identical to the Java
   - If an example fails because of a bug or missing feature, then you *MUST* fix the bug or implement the feature before moving on.
+  - **EXCEPTION**: Features requiring substantial subsystems (>500 LOC) can be deferred and documented below
 - Port all remaining tests
   - Make sure there's a Rust test corresponding to every Java test
   - Like examples, *DO NOT* move on if there's a bug or missing feature
@@ -9,6 +10,17 @@
   - This excludes tests which are only specific to Java, like the JNI interfaces to solvers, or custom data structures which Rust has by default
 - Implement missing optimizations
   - Revisit all should_panic tests and implement the features they require
+- **Implement proof/unsat core extraction system**
+  - Required for: ListDebug.java example
+  - Scope: ~1000+ LOC across multiple modules
+  - Components needed:
+    - TranslationLog and TranslationRecord (~200 LOC) - track formula→CNF mapping during translation
+    - Proof trait with TrivialProof and ResolutionBasedProof implementations (~530 LOC)
+    - Core minimization strategies (RCEStrategy, etc.) (~134+ LOC each, multiple strategies)
+    - SAT solver with proof support (MiniSatProver) - may require switching from batsat or adding proof tracking
+    - Integration into Solver to enable options like setCoreGranularity() and setLogTranslation()
+  - Status: Deferred due to complexity; blocks 1 example (ListDebug)
+  - Following Java: kodkod.engine.Proof, kodkod.engine.fol2sat.TranslationLog, kodkod.engine.ucore.*
 - Fix up copyrights
   - All files should have the same copyright and license as the Java files they're derived from
   - The overall package should have the same license
@@ -60,13 +72,13 @@ NOTES:
 - [x] Viktor.java
 
 #### bmc/ (7 total)
-- [ ] List.java (Not needed - Java data structure, not a Kodkod example)
+- [ ] List.java (Not a Kodkod example - it's the Java data structure being verified)
 - [x] ListCheck.java
-- [ ] ListDebug.java (Deferred - requires unsat core/proof support)
+- [ ] ListDebug.java (Deferred - requires proof/unsat core extraction - see above)
 - [x] ListEncoding.java
 - [x] ListRepair.java
-- [ ] ListSynth.java
-- [ ] ListViz.java (Deferred - visualization, can be added later)
+- [ ] ListSynth.java (In progress - formula construction needs debugging, trivially UNSAT)
+- [ ] ListViz.java (Visualization helper - can defer)
 
 #### csp/ (10 total)
 - [ ] BlockedNQueens.java
@@ -145,5 +157,5 @@ NOTES:
   - Relation.acyclic() method for symmetry-breaking optimization
     - Matches Java API for creating acyclic predicates on relations
 - Deferred (requires unimplemented features):
-  - ListDebug (requires unsat core/proof support)
-  - ListViz (visualization, not critical for core functionality)
+  - ListDebug (requires proof/unsat core extraction - ~1000+ LOC subsystem)
+  - ListViz (visualization helper, not critical for core functionality)
