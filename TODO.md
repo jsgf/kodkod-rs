@@ -77,7 +77,7 @@ NOTES:
 - [ ] ListDebug.java (Deferred - requires proof/unsat core extraction - see above)
 - [x] ListEncoding.java
 - [x] ListRepair.java
-- [ ] ListSynth.java (BUG IN KODKOD CORE: Fixed universe mismatch & duplicate bounds, but formula still trivially UNSAT (0 vars). With cex bindings: 0 vars/1 clause. Without: 1547 vars/UNSAT. Issue is in how expressions referencing bound relations are simplified. Likely bug in override_with or then_else translation when base relation is bound exactly.)
+- [ ] ListSynth.java (ROOT CAUSE FOUND - ARCHITECTURAL ISSUE: Universe only supports String atoms, but Java uses Relation objects as atoms. In Java: `elts.add(headStx)` adds the Relation OBJECT as an atom, and `hole` can be bound to actual Relation objects. In Rust: Universe only has `Vec<String>`, so we use string representations like `"\"nearNode0\""` instead of actual Relations. This breaks semantic linking when `hole.join(meaning())` executes. SOLUTION OPTIONS: (1) Add `enum Atom { String(String), Relation(Relation), ... }` and refactor Universe, or (2) Use `Box<dyn AtomTrait>` with downcasting. The architectural fix may naturally resolve the trivial UNSAT bug. See commit 800790d for detailed investigation.)
 - [ ] ListViz.java (Visualization helper - can defer)
 
 #### csp/ (10 total)

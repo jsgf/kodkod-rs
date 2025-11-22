@@ -245,6 +245,8 @@ impl ListSynth {
         b.bound_exactly(&self.far_node0_stx, t.tuple_set(&[&["\"farNode0\""]]).unwrap()).unwrap();
 
         // Copy counterexample values (these will be translated to our universe)
+        // NOTE: This currently breaks because the Rust Universe only supports String atoms,
+        // but Java uses Relation objects as atoms. See bmc_list_synth.md for details.
         b.bound_exactly(&self.encoding.next, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.next).expect("next tuples")))
             .expect("Failed to bind next");
         b.bound_exactly(&self.encoding.head, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples")))
