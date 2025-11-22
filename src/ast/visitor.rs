@@ -43,6 +43,9 @@ pub trait ExpressionVisitor {
             Expression::IntToExprCast { int_expr, .. } => {
                 self.visit_int_to_expr_cast(expr, int_expr)
             }
+            Expression::If { condition, then_expr, else_expr, .. } => {
+                self.visit_if(expr, condition, then_expr, else_expr)
+            }
         }
     }
 
@@ -69,6 +72,15 @@ pub trait ExpressionVisitor {
 
     /// Visit an integer-to-expression cast
     fn visit_int_to_expr_cast(&mut self, expr: &Expression, int_expr: &IntExpression) -> Self::Output;
+
+    /// Visit an if-then-else expression
+    fn visit_if(
+        &mut self,
+        expr: &Expression,
+        condition: &Formula,
+        then_expr: &Expression,
+        else_expr: &Expression,
+    ) -> Self::Output;
 }
 
 /// A visitor that can traverse formulas and return values
@@ -208,6 +220,20 @@ impl ExpressionVisitor for ExpressionCounter {
     }
 
     fn visit_int_to_expr_cast(&mut self, _: &Expression, _: &IntExpression) {
+        self.count += 1;
+    }
+
+    fn visit_if(
+        &mut self,
+        _: &Expression,
+        _condition: &Formula,
+        then_expr: &Expression,
+        else_expr: &Expression,
+    ) {
+        // Note: we don't visit the formula condition here because this is an ExpressionVisitor
+        // The condition contributes to the expression structure but we just count expressions
+        self.visit_expression(then_expr);
+        self.visit_expression(else_expr);
         self.count += 1;
     }
 }

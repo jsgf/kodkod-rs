@@ -11,7 +11,7 @@ pub use environment::Environment;
 
 use crate::ast::*;
 use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Int, Options};
-use crate::instance::Bounds;
+use crate::instance::{Bounds, Instance};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
@@ -125,6 +125,48 @@ impl Translator {
             interpreter,
             matrix: matrix_static,
         }
+    }
+
+    /// Evaluates a formula against an instance
+    /// Following Java: Translator.evaluate(Formula, Instance, Options)
+    ///
+    /// Returns the boolean value of the formula with respect to the instance.
+    pub fn evaluate_formula(formula: &Formula, instance: &Instance, options: &Options) -> bool {
+        let interpreter = LeafInterpreter::from_instance(instance, options);
+        let translator = FOL2BoolTranslator::new(&interpreter);
+        let value = translator.translate_formula(formula);
+
+        // For evaluation against an instance, all values should reduce to constants
+        // since there are no variables
+        match value {
+            BoolValue::Constant(c) => c.boolean_value(),
+            _ => panic!("Expected constant value when evaluating against instance"),
+        }
+    }
+
+    /// Evaluates an expression against an instance
+    /// Following Java: Translator.evaluate(Expression, Instance, Options)
+    ///
+    /// Returns the tuple indices (as a vector) that the expression evaluates to.
+    /// The caller should convert these to a TupleSet using TupleFactory.setOf()
+    pub fn evaluate_expression(expr: &Expression, instance: &Instance, options: &Options) -> Vec<usize> {
+        let interpreter = LeafInterpreter::from_instance(instance, options);
+        let translator = FOL2BoolTranslator::new(&interpreter);
+        let matrix = translator.translate_expression(expr);
+        matrix.dense_indices()
+    }
+
+    /// Evaluates an integer expression against an instance
+    /// Following Java: Translator.evaluate(IntExpression, Instance, Options)
+    ///
+    /// Returns the integer value that the expression evaluates to with respect to the instance.
+    pub fn evaluate_int_expression(expr: &IntExpression, instance: &Instance, options: &Options) -> i32 {
+        let interpreter = LeafInterpreter::from_instance(instance, options);
+        let translator = FOL2BoolTranslator::new(&interpreter);
+        let int_value = translator.translate_int_expr(expr);
+        int_value
+            .value()
+            .expect("IntExpression should evaluate to a constant when evaluated against an instance")
     }
 }
 
@@ -359,6 +401,14 @@ impl<'a> FOL2BoolTranslator<'a> {
                         self.interpret_int_value_as_bitset(int_value)
                     }
                 }
+            }
+            Expression::If { condition, then_expr, else_expr, .. } => {
+                // If-then-else expression
+                // Following Java: FOL2BoolTranslator.visit(IfExpression)
+                let condition_val = self.translate_formula(condition);
+                let then_matrix = self.translate_expression(then_expr);
+                let else_matrix = self.translate_expression(else_expr);
+                then_matrix.choice(condition_val, &else_matrix, self.interpreter.factory())
             }
         }
     }

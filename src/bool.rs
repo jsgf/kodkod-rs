@@ -103,6 +103,12 @@ impl BooleanConstant {
             BooleanConstant::FALSE => -1,
         }
     }
+
+    /// Returns the boolean value of this constant
+    /// Following Java: BooleanConstant.booleanValue()
+    pub fn boolean_value(&self) -> bool {
+        self.label() > 0 || *self == BooleanConstant::TRUE
+    }
 }
 
 impl BooleanValue for BooleanConstant {
@@ -435,6 +441,25 @@ impl<'arena> BooleanMatrix<'arena> {
         self.cells.len()
     }
 
+    /// Returns the indices where the value is TRUE
+    /// Following Java: BooleanMatrix.denseIndices()
+    ///
+    /// For evaluation results (all constants), this returns indices that are TRUE.
+    /// Should only be called after evaluation against an instance where all values
+    /// are constants (no variables).
+    pub fn dense_indices(&self) -> Vec<usize> {
+        self.cells
+            .iter()
+            .filter_map(|(&idx, val)| {
+                if *val == BoolValue::Constant(BooleanConstant::TRUE) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// Gets the element at the given row and column
     pub fn get_at(&self, row: usize, col: usize) -> Option<BoolValue<'arena>> {
         if row < self.dimensions.rows && col < self.dimensions.cols {
@@ -670,6 +695,44 @@ impl<'arena> BooleanMatrix<'arena> {
         } else {
             factory.and_multi(acc)
         }
+    }
+
+    /// If-then-else choice between matrices
+    /// Following Java: BooleanMatrix.choice(BooleanValue, BooleanMatrix)
+    /// Returns a matrix m such that m[i] = condition ? this[i] : other[i]
+    pub fn choice(&self, condition: BoolValue<'arena>, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+        assert_eq!(self.dimensions, other.dimensions);
+
+        // Trivial cases
+        if let BoolValue::Constant(c) = condition {
+            return match c {
+                BooleanConstant::TRUE => self.clone(),
+                BooleanConstant::FALSE => other.clone(),
+            };
+        }
+
+        let mut result = BooleanMatrix::empty(self.dimensions);
+
+        // For each entry in this matrix
+        for (&idx, val) in &self.cells {
+            if let Some(other_val) = other.cells.get(&idx) {
+                // Both have values: use ite
+                result.set(idx, factory.ite(condition.clone(), val.clone(), other_val.clone()));
+            } else {
+                // Only this has value: condition AND val
+                result.set(idx, factory.and(condition.clone(), val.clone()));
+            }
+        }
+
+        // For entries only in other matrix
+        for (&idx, val) in &other.cells {
+            if !self.cells.contains_key(&idx) {
+                // condition ? FALSE : val = NOT(condition) AND val
+                result.set(idx, factory.and(factory.not(condition.clone()), val.clone()));
+            }
+        }
+
+        result
     }
 
     /// Check equality: all corresponding entries must be equal
@@ -928,5 +991,172 @@ mod tests {
     fn operator_variants() {
         // Just ensure all operators exist
         let _ = [Operator::AND, Operator::OR, Operator::NOT, Operator::ITE];
+    }
+
+    #[test]
+    fn matrix_choice_trivial_true() {
+        // Following Java: BooleanMatrix.choice with TRUE condition
+        use crate::bool::factory::{BooleanFactory, Options};
+
+        let factory = BooleanFactory::new(10, Options::default());
+        let dims = Dimensions::new(2, 1);
+
+        let mut m1 = BooleanMatrix::empty(dims);
+        let mut m2 = BooleanMatrix::empty(dims);
+
+        m1.set(0, factory.variable(1));
+        m1.set(1, factory.variable(2));
+
+        m2.set(0, factory.variable(3));
+        m2.set(1, factory.variable(4));
+
+        // TRUE ? m1 : m2 = m1
+        let result = m1.choice(factory.constant(true), &m2, &factory);
+
+        assert_eq!(result.get(0).label(), 1);
+        assert_eq!(result.get(1).label(), 2);
+    }
+
+    #[test]
+    fn matrix_choice_trivial_false() {
+        // Following Java: BooleanMatrix.choice with FALSE condition
+        use crate::bool::factory::{BooleanFactory, Options};
+
+        let factory = BooleanFactory::new(10, Options::default());
+        let dims = Dimensions::new(2, 1);
+
+        let mut m1 = BooleanMatrix::empty(dims);
+        let mut m2 = BooleanMatrix::empty(dims);
+
+        m1.set(0, factory.variable(1));
+        m1.set(1, factory.variable(2));
+
+        m2.set(0, factory.variable(3));
+        m2.set(1, factory.variable(4));
+
+        // FALSE ? m1 : m2 = m2
+        let result = m1.choice(factory.constant(false), &m2, &factory);
+
+        assert_eq!(result.get(0).label(), 3);
+        assert_eq!(result.get(1).label(), 4);
+    }
+
+    #[test]
+    fn matrix_choice_conditional() {
+        // Following Java: BooleanMatrix.choice with variable condition
+        use crate::bool::factory::{BooleanFactory, Options};
+
+        let factory = BooleanFactory::new(10, Options::default());
+        let dims = Dimensions::new(3, 1);
+
+        let mut m1 = BooleanMatrix::empty(dims);
+        let mut m2 = BooleanMatrix::empty(dims);
+
+        // m1 has values at indices 0 and 1
+        m1.set(0, factory.variable(1));
+        m1.set(1, factory.variable(2));
+
+        // m2 has values at indices 1 and 2
+        m2.set(1, factory.variable(3));
+        m2.set(2, factory.variable(4));
+
+        let cond = factory.variable(5);
+
+        // result = cond ? m1 : m2
+        let result = m1.choice(cond.clone(), &m2, &factory);
+
+        // Index 0: only in m1, result should be cond AND v1
+        let r0 = result.get(0);
+        assert!(r0.is_formula());
+
+        // Index 1: in both, result should be ITE(cond, v1, v3)
+        let r1 = result.get(1);
+        assert!(r1.is_formula());
+
+        // Index 2: only in m2, result should be NOT(cond) AND v4
+        let r2 = result.get(2);
+        assert!(r2.is_formula());
+    }
+
+    #[test]
+    fn matrix_choice_sparse() {
+        // Test choice with sparse matrices
+        use crate::bool::factory::{BooleanFactory, Options};
+
+        let factory = BooleanFactory::new(10, Options::default());
+        let dims = Dimensions::new(10, 1); // Large sparse matrix
+
+        let mut m1 = BooleanMatrix::empty(dims);
+        let mut m2 = BooleanMatrix::empty(dims);
+
+        // Only a few entries
+        m1.set(0, factory.variable(1));
+        m1.set(5, factory.variable(2));
+
+        m2.set(5, factory.variable(3));
+        m2.set(9, factory.variable(4));
+
+        let cond = factory.variable(5);
+        let result = m1.choice(cond, &m2, &factory);
+
+        // Should only have entries where either m1 or m2 had entries
+        assert!(result.density() <= 4);
+        assert!(result.get(0).is_formula()); // From m1 only
+        assert!(result.get(5).is_formula()); // From both
+        assert!(result.get(9).is_formula()); // From m2 only
+        assert_eq!(result.get(3).label(), -1); // FALSE (neither had entry)
+    }
+
+    #[test]
+    fn boolean_constant_boolean_value() {
+        assert!(BooleanConstant::TRUE.boolean_value());
+        assert!(!BooleanConstant::FALSE.boolean_value());
+    }
+
+    #[test]
+    fn matrix_dense_indices_all_true() {
+        let dims = Dimensions::new(5, 1);
+
+        let mut matrix = BooleanMatrix::empty(dims);
+        matrix.set(0, BoolValue::Constant(BooleanConstant::TRUE));
+        matrix.set(2, BoolValue::Constant(BooleanConstant::TRUE));
+        matrix.set(4, BoolValue::Constant(BooleanConstant::TRUE));
+
+        let indices = matrix.dense_indices();
+        assert_eq!(indices.len(), 3);
+        assert!(indices.contains(&0));
+        assert!(indices.contains(&2));
+        assert!(indices.contains(&4));
+    }
+
+    #[test]
+    fn matrix_dense_indices_mixed() {
+        use crate::bool::factory::{BooleanFactory, Options};
+
+        let factory = BooleanFactory::new(5, Options::default());
+        let dims = Dimensions::new(5, 1);
+
+        let mut matrix = BooleanMatrix::empty(dims);
+        matrix.set(0, BoolValue::Constant(BooleanConstant::TRUE));
+        matrix.set(1, factory.variable(1)); // Variable, not TRUE
+        matrix.set(2, BoolValue::Constant(BooleanConstant::TRUE));
+        matrix.set(3, BoolValue::Constant(BooleanConstant::FALSE));
+
+        let indices = matrix.dense_indices();
+        // Should only include indices with TRUE constants
+        assert_eq!(indices.len(), 2);
+        assert!(indices.contains(&0));
+        assert!(indices.contains(&2));
+        assert!(!indices.contains(&1)); // Variable, not included
+        assert!(!indices.contains(&3)); // FALSE, not included
+    }
+
+    #[test]
+    fn matrix_dense_indices_empty() {
+        let dims = Dimensions::new(5, 1);
+        let matrix = BooleanMatrix::<'_>::empty(dims);
+
+        let indices = matrix.dense_indices();
+        assert_eq!(indices.len(), 0);
     }
 }

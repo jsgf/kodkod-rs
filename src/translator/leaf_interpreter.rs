@@ -7,7 +7,7 @@ use crate::bool::{
     BooleanFactory, BooleanMatrix, Dimensions, Options,
     VariableAllocator,
 };
-use crate::instance::{Bounds, TupleSet, Universe};
+use crate::instance::{Bounds, Instance, TupleSet, Universe};
 use rustc_hash::FxHashMap;
 use std::ops::Range;
 
@@ -61,6 +61,34 @@ impl LeafInterpreter {
         Self {
             factory,
             universe: bounds.universe().clone(),
+            var_ranges,
+            lower_bounds,
+            upper_bounds,
+            int_bounds,
+        }
+    }
+
+    /// Creates a LeafInterpreter from an Instance for evaluation
+    /// Following Java: LeafInterpreter.exact(Instance, Options)
+    ///
+    /// When evaluating against an instance, all relations are bound exactly
+    /// (lower = upper = the tuples in the instance), so no variables are needed.
+    pub fn from_instance(instance: &Instance, options: &Options) -> Self {
+        let relation_tuples = instance.relation_tuples();
+
+        // For exact interpretation, lower = upper = instance tuples
+        // No variables needed since everything is determined
+        let lower_bounds = relation_tuples.clone();
+        let upper_bounds = relation_tuples.clone();
+        let var_ranges = FxHashMap::default(); // No variables
+        let int_bounds = FxHashMap::default(); // TODO: support when needed
+
+        // Create factory with 0 variables (all constants)
+        let factory = BooleanFactory::new(0, options.clone());
+
+        Self {
+            factory,
+            universe: instance.universe().clone(),
             var_ranges,
             lower_bounds,
             upper_bounds,

@@ -3,9 +3,11 @@
 pub mod rustsat_adapter;
 pub mod symmetry_detector;
 pub mod symmetry_breaker;
+pub mod evaluator;
 
 pub use symmetry_detector::SymmetryDetector;
 pub use symmetry_breaker::SymmetryBreaker;
+pub use evaluator::Evaluator;
 
 /// Core SAT solver trait
 ///
