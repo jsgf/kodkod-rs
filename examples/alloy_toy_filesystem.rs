@@ -64,7 +64,7 @@ impl ToyFilesystem {
         let mut bounds = Bounds::new(universe);
 
         // root = {d0}
-        bounds.bound_exactly(&self.root, factory.set_of("d0")?)?;
+        bounds.bound_exactly(&self.root, factory.set_of_atom("d0")?)?;
 
         // dir in {d0, d1}
         let dir_tuples = vec![vec!["d0"], vec!["d1"]];

@@ -524,8 +524,8 @@ impl AbstractWorldDefinitions {
         )?;
         bounds.bound(&self.ain, factory.none(1), ain_bound)?;
 
-        bounds.bound_exactly(&self.a_null_in, factory.set_of("aNullIn")?)?;
-        bounds.bound_exactly(&self.a_null_out, factory.set_of("aNullOut")?)?;
+        bounds.bound_exactly(&self.a_null_in, factory.set_of_atom("aNullIn")?)?;
+        bounds.bound_exactly(&self.a_null_out, factory.set_of_atom("aNullOut")?)?;
 
         bounds.bound(
             &self.from,

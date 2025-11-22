@@ -148,7 +148,7 @@ impl Viktor {
         let mut bounds = Bounds::new(universe);
 
         // Bound all a[i][j] to {"a"}
-        let abound = factory.set_of("a")?;
+        let abound = factory.set_of_atom("a")?;
         for i in 0..self.rows {
             for j in 0..self.cols {
                 bounds.bound(&self.a[i][j], factory.none(1), abound.clone())?;
@@ -163,7 +163,7 @@ impl Viktor {
         for j in 0..self.cols {
             bounds.bound(&self.x[j], factory.none(1), xbound.clone())?;
             // Integer bounds: j -> {j}
-            bounds.bound_exactly_int(j as i32, factory.set_of(&j.to_string())?)?;
+            bounds.bound_exactly_int(j as i32, factory.set_of_atom(&j.to_string())?)?;
         }
 
         Ok(bounds)

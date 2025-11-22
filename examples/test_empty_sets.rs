@@ -26,7 +26,7 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     // Test 1: prev(first) should be empty
     println!("Test 1: prev(0) with ord = {{(0,1), (1,2)}}");
     let atom0 = Relation::unary("atom0");
-    bounds.bound_exactly(&atom0, factory.set_of("0")?)?;
+    bounds.bound_exactly(&atom0, factory.set_of_atom("0")?)?;
 
     let formula1 = Expression::from(ord.clone())
         .join(Expression::from(atom0.clone()))
