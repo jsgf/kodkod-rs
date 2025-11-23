@@ -3,13 +3,117 @@
 //! These types define the domain of discourse and bindings for relations.
 
 use rustc_hash::FxHashMap;
+use std::any::{Any, TypeId};
 use std::collections::BTreeSet;
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::rc::Rc;
 
 use crate::ast::Relation;
 use crate::error::{KodkodError, Result};
+
+/// Index of an atom in a universe
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct AtomIndex(usize);
+
+impl AtomIndex {
+    /// Creates a new atom index (private to this module)
+    fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    /// Returns the raw index value (private to this module)
+    fn get(self) -> usize {
+        self.0
+    }
+}
+
+/// Trait for atoms that can be stored in a Universe
+///
+/// Atoms must implement `Any` for downcasting and `Debug` for display.
+/// They must also be comparable and hashable for universe indexing.
+pub trait Atom: Any + Debug {
+    /// Compare this atom with another for equality
+    fn atom_eq(&self, other: &dyn Atom) -> bool;
+
+    /// Compute the hash of this atom
+    fn atom_hash(&self) -> u64;
+}
+
+// Convenience downcast helpers for common types (free functions, not trait methods)
+
+/// Try to downcast an atom to String
+pub fn atom_as_string(atom: &dyn Atom) -> Option<&String> {
+    let any: &dyn Any = atom;
+    any.downcast_ref::<String>()
+}
+
+/// Try to downcast an atom to &str (convenience wrapper around atom_as_string)
+pub fn atom_as_str(atom: &dyn Atom) -> Option<&str> {
+    atom_as_string(atom).map(|s| s.as_str())
+}
+
+/// Try to downcast an atom to i32
+pub fn atom_as_i32(atom: &dyn Atom) -> Option<&i32> {
+    let any: &dyn Any = atom;
+    any.downcast_ref::<i32>()
+}
+
+/// Try to downcast an atom to usize
+pub fn atom_as_usize(atom: &dyn Atom) -> Option<&usize> {
+    let any: &dyn Any = atom;
+    any.downcast_ref::<usize>()
+}
+
+/// Generic downcast for atoms
+pub fn atom_downcast_ref<T: 'static>(atom: &dyn Atom) -> Option<&T> {
+    let any: &dyn Any = atom;
+    any.downcast_ref::<T>()
+}
+
+/// Blanket implementation for any type that is `Any + Debug + Eq + Hash`
+impl<T: Any + Debug + Eq + Hash> Atom for T {
+    fn atom_eq(&self, other: &dyn Atom) -> bool {
+        // Upcast to Any for downcasting
+        let other_any: &dyn Any = other;
+        other_any
+            .downcast_ref::<T>()
+            .map_or(false, |other_t| self == other_t)
+    }
+
+    fn atom_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        let mut hasher = DefaultHasher::new();
+        // Include type ID to distinguish between different types with same value
+        TypeId::of::<T>().hash(&mut hasher);
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+/// Wrapper for using Atom trait objects as HashMap keys
+#[derive(Clone)]
+struct AtomKey(Rc<dyn Atom>);
+
+impl Hash for AtomKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.atom_hash().hash(state);
+    }
+}
+
+impl PartialEq for AtomKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.atom_eq(&*other.0)
+    }
+}
+
+impl Eq for AtomKey {}
+
+impl Debug for AtomKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 /// An ordered set of unique atoms
 ///
@@ -17,46 +121,55 @@ use crate::error::{KodkodError, Result};
 /// Atoms are stored in a specific order which is used for indexing.
 #[derive(Clone)]
 pub struct Universe {
-    inner: Arc<UniverseInner>,
+    inner: Rc<UniverseInner>,
 }
 
 struct UniverseInner {
-    atoms: Vec<String>,
-    indices: FxHashMap<String, usize>,
+    atoms: Vec<Rc<dyn Atom>>,
+    indices: FxHashMap<AtomKey, AtomIndex>,
 }
 
 impl Universe {
-    /// Creates a new universe from a slice of atom names
+    /// Creates a new universe from a slice of atom names (strings)
+    ///
+    /// This is a convenience method for creating universes with string atoms.
     ///
     /// # Errors
     /// Returns an error if the slice is empty or contains duplicates
     pub fn new(atoms: &[&str]) -> Result<Self> {
+        let atom_objs: Vec<Rc<dyn Atom>> = atoms
+            .iter()
+            .map(|&s| Rc::new(s.to_string()) as Rc<dyn Atom>)
+            .collect();
+        Self::from_atoms(atom_objs)
+    }
+
+    /// Creates a new universe from a vector of atoms
+    ///
+    /// # Errors
+    /// Returns an error if the vector is empty or contains duplicates
+    pub fn from_atoms(atoms: Vec<Rc<dyn Atom>>) -> Result<Self> {
         if atoms.is_empty() {
             return Err(KodkodError::InvalidArgument(
                 "Cannot create an empty universe".to_string(),
             ));
         }
 
-        let mut atom_vec = Vec::with_capacity(atoms.len());
         let mut indices = FxHashMap::default();
 
-        for (i, &atom) in atoms.iter().enumerate() {
-            let atom_string = atom.to_string();
-            if indices.contains_key(&atom_string) {
+        for (i, atom) in atoms.iter().enumerate() {
+            let key = AtomKey(Rc::clone(atom));
+            if indices.contains_key(&key) {
                 return Err(KodkodError::InvalidArgument(format!(
-                    "{} appears multiple times",
+                    "{:?} appears multiple times",
                     atom
                 )));
             }
-            indices.insert(atom_string.clone(), i);
-            atom_vec.push(atom_string);
+            indices.insert(key, AtomIndex::new(i));
         }
 
         Ok(Self {
-            inner: Arc::new(UniverseInner {
-                atoms: atom_vec,
-                indices,
-            }),
+            inner: Rc::new(UniverseInner { atoms, indices }),
         })
     }
 
@@ -65,19 +178,34 @@ impl Universe {
         self.inner.atoms.len()
     }
 
-    /// Returns the atom at the given index
-    pub fn atom(&self, index: usize) -> Option<&str> {
-        self.inner.atoms.get(index).map(|s| s.as_str())
+    /// Returns a reference to the atom at the given index
+    pub fn atom(&self, index: AtomIndex) -> Option<&dyn Atom> {
+        self.inner.atoms.get(index.get()).map(|rc| &**rc as &dyn Atom)
     }
 
     /// Returns the index of the given atom
-    pub fn index_of(&self, atom: &str) -> Option<usize> {
-        self.inner.indices.get(atom).copied()
+    pub(crate) fn index_of(&self, atom: &dyn Atom) -> Option<AtomIndex> {
+        // Find by equality
+        for (key, &idx) in &self.inner.indices {
+            if atom.atom_eq(&*key.0) {
+                return Some(idx);
+            }
+        }
+        None
     }
 
     /// Returns true if this universe contains the given atom
-    pub fn contains(&self, atom: &str) -> bool {
-        self.inner.indices.contains_key(atom)
+    pub fn contains(&self, atom: &dyn Atom) -> bool {
+        self.index_of(atom).is_some()
+    }
+
+    /// Returns an iterator over all atoms with their indices
+    pub fn iter_atoms(&self) -> impl Iterator<Item = (AtomIndex, &dyn Atom)> + '_ {
+        self.inner
+            .atoms
+            .iter()
+            .enumerate()
+            .map(|(i, rc)| (AtomIndex::new(i), &**rc as &dyn Atom))
     }
 
     /// Returns a factory for creating tuples from this universe
@@ -90,7 +218,7 @@ impl Universe {
 
 impl PartialEq for Universe {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
+        Rc::ptr_eq(&self.inner, &other.inner)
     }
 }
 
@@ -106,7 +234,7 @@ impl fmt::Debug for Universe {
 #[derive(Clone, Debug)]
 pub struct Tuple {
     universe: Universe,
-    atom_indices: Vec<usize>,
+    atom_indices: Vec<AtomIndex>,
     index: usize,
 }
 
@@ -141,7 +269,7 @@ impl Tuple {
             let power = arity - 1 - i;
             let divisor = base.pow(power as u32);
             let atom_idx = remaining / divisor;
-            atom_indices.push(atom_idx);
+            atom_indices.push(AtomIndex::new(atom_idx));
             remaining %= divisor;
         }
 
@@ -153,19 +281,19 @@ impl Tuple {
     }
 
     /// Returns the atom at the given position
-    pub fn atom(&self, i: usize) -> Option<&str> {
+    pub fn atom(&self, i: usize) -> Option<&dyn Atom> {
         self.atom_indices
             .get(i)
             .and_then(|&idx| self.universe.atom(idx))
     }
 
     /// Returns the index of the atom at position i
-    pub fn atom_index(&self, i: usize) -> Option<usize> {
+    pub(crate) fn atom_index(&self, i: usize) -> Option<AtomIndex> {
         self.atom_indices.get(i).copied()
     }
 
     /// Returns an iterator over the atoms in this tuple
-    pub fn atoms(&self) -> impl Iterator<Item = &str> + '_ {
+    pub fn atoms(&self) -> impl Iterator<Item = &dyn Atom> + '_ {
         (0..self.arity()).filter_map(move |i| self.atom(i))
     }
 }
@@ -184,7 +312,7 @@ impl Hash for Tuple {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.arity().hash(state);
         self.index.hash(state);
-        Arc::as_ptr(&self.universe.inner).hash(state);
+        Rc::as_ptr(&self.universe.inner).hash(state);
     }
 }
 
@@ -341,7 +469,7 @@ impl TupleSet {
                 let base = self.universe.size();
                 let mut index = 0;
                 for (i, &atom_idx) in atoms.iter().enumerate() {
-                    index += atom_idx * base.pow((new_arity - 1 - i) as u32);
+                    index += atom_idx.get() * base.pow((new_arity - 1 - i) as u32);
                 }
 
                 let product_tuple = Tuple {
@@ -368,8 +496,53 @@ impl TupleFactory {
         &self.universe
     }
 
-    /// Creates a tuple from the given atoms
+    /// Creates a tuple from the given string atoms
+    ///
+    /// This is a convenience method for working with string-based universes.
     pub fn tuple(&self, atoms: &[&str]) -> Result<Tuple> {
+        if atoms.is_empty() {
+            return Err(KodkodError::InvalidArgument(
+                "Cannot create empty tuple".to_string(),
+            ));
+        }
+
+        let mut atom_indices = Vec::with_capacity(atoms.len());
+        for &atom_str in atoms {
+            // Need to find the index by comparing with universe atoms
+            let mut found_idx = None;
+            for (idx, universe_atom) in self.universe.inner.atoms.iter().enumerate() {
+                // Try to downcast to String to compare with str
+                if let Some(s) = atom_as_string(&**universe_atom) {
+                    if s == atom_str {
+                        found_idx = Some(AtomIndex::new(idx));
+                        break;
+                    }
+                }
+            }
+            let idx = found_idx.ok_or_else(|| {
+                KodkodError::InvalidArgument(format!("Atom {} not in universe", atom_str))
+            })?;
+            atom_indices.push(idx);
+        }
+
+        // Calculate index in n-dimensional space
+        let base = self.universe.size();
+        let mut index = 0;
+        for (i, &atom_idx) in atom_indices.iter().enumerate() {
+            index += atom_idx.get() * base.pow((atoms.len() - 1 - i) as u32);
+        }
+
+        Ok(Tuple {
+            universe: self.universe.clone(),
+            atom_indices,
+            index,
+        })
+    }
+
+    /// Creates a tuple from atom values by searching for them in the universe
+    ///
+    /// This is more flexible than `tuple()` as it works with any Atom type.
+    pub fn tuple_from_atoms(&self, atoms: &[&dyn Atom]) -> Result<Tuple> {
         if atoms.is_empty() {
             return Err(KodkodError::InvalidArgument(
                 "Cannot create empty tuple".to_string(),
@@ -379,7 +552,7 @@ impl TupleFactory {
         let mut atom_indices = Vec::with_capacity(atoms.len());
         for &atom in atoms {
             let idx = self.universe.index_of(atom).ok_or_else(|| {
-                KodkodError::InvalidArgument(format!("Atom {} not in universe", atom))
+                KodkodError::InvalidArgument(format!("Atom {:?} not in universe", atom))
             })?;
             atom_indices.push(idx);
         }
@@ -388,12 +561,46 @@ impl TupleFactory {
         let base = self.universe.size();
         let mut index = 0;
         for (i, &atom_idx) in atom_indices.iter().enumerate() {
-            index += atom_idx * base.pow((atoms.len() - 1 - i) as u32);
+            index += atom_idx.get() * base.pow((atoms.len() - 1 - i) as u32);
         }
 
         Ok(Tuple {
             universe: self.universe.clone(),
             atom_indices,
+            index,
+        })
+    }
+
+    /// Creates a tuple from atom indices
+    ///
+    /// This is useful when you already know the indices of atoms in the universe.
+    fn tuple_from_atom_indices(&self, indices: Vec<AtomIndex>) -> Result<Tuple> {
+        if indices.is_empty() {
+            return Err(KodkodError::InvalidArgument(
+                "Cannot create empty tuple".to_string(),
+            ));
+        }
+
+        for &idx in &indices {
+            if idx.get() >= self.universe.size() {
+                return Err(KodkodError::InvalidArgument(format!(
+                    "Index {} out of bounds for universe of size {}",
+                    idx.get(),
+                    self.universe.size()
+                )));
+            }
+        }
+
+        // Calculate index in n-dimensional space
+        let base = self.universe.size();
+        let mut index = 0;
+        for (i, &atom_idx) in indices.iter().enumerate() {
+            index += atom_idx.get() * base.pow((indices.len() - 1 - i) as u32);
+        }
+
+        Ok(Tuple {
+            universe: self.universe.clone(),
+            atom_indices: indices,
             index,
         })
     }
@@ -509,20 +716,20 @@ impl TupleFactory {
         }
 
         // Start with the first dimension's range
-        let start_atom = self.universe.atom(upper_left.atom_index(0).unwrap()).unwrap();
-        let end_atom = self.universe.atom(lower_right.atom_index(0).unwrap()).unwrap();
+        let start_idx = upper_left.atom_index(0).unwrap();
+        let end_idx = lower_right.atom_index(0).unwrap();
 
-        let start_tuple = self.tuple(&[start_atom])?;
-        let end_tuple = self.tuple(&[end_atom])?;
+        let start_tuple = self.tuple_from_atom_indices(vec![start_idx])?;
+        let end_tuple = self.tuple_from_atom_indices(vec![end_idx])?;
         let mut result = self.range(start_tuple, end_tuple)?;
 
         // Product with each subsequent dimension's range
         for i in 1..upper_left.arity() {
-            let start_atom = self.universe.atom(upper_left.atom_index(i).unwrap()).unwrap();
-            let end_atom = self.universe.atom(lower_right.atom_index(i).unwrap()).unwrap();
+            let start_idx = upper_left.atom_index(i).unwrap();
+            let end_idx = lower_right.atom_index(i).unwrap();
 
-            let start_tuple = self.tuple(&[start_atom])?;
-            let end_tuple = self.tuple(&[end_atom])?;
+            let start_tuple = self.tuple_from_atom_indices(vec![start_idx])?;
+            let end_tuple = self.tuple_from_atom_indices(vec![end_idx])?;
             let dim_range = self.range(start_tuple, end_tuple)?;
 
             result = result.product(&dim_range)?;
@@ -551,7 +758,7 @@ impl TupleFactory {
         for pos in (0..arity).rev() {
             let divisor = base.pow(pos as u32);
             let atom_idx = remaining / divisor;
-            atom_indices.push(atom_idx);
+            atom_indices.push(AtomIndex::new(atom_idx));
             remaining %= divisor;
         }
 
@@ -783,12 +990,18 @@ mod tests {
     fn create_universe() -> Result<()> {
         let universe = Universe::new(&["A", "B", "C"])?;
         assert_eq!(universe.size(), 3);
-        assert_eq!(universe.atom(0), Some("A"));
-        assert_eq!(universe.atom(1), Some("B"));
-        assert_eq!(universe.atom(2), Some("C"));
-        assert_eq!(universe.index_of("B"), Some(1));
-        assert!(universe.contains("A"));
-        assert!(!universe.contains("D"));
+
+        // Test iter_atoms helper
+        let atoms: Vec<_> = universe
+            .iter_atoms()
+            .map(|(_, atom)| atom_as_string(atom).unwrap().as_str())
+            .collect();
+        assert_eq!(atoms, vec!["A", "B", "C"]);
+
+        // Can check via contains
+        assert!(universe.contains(&"A".to_string() as &dyn Atom));
+        assert!(universe.contains(&"B".to_string() as &dyn Atom));
+        assert!(!universe.contains(&"D".to_string() as &dyn Atom));
         Ok(())
     }
 
@@ -811,12 +1024,12 @@ mod tests {
 
         let tuple = factory.tuple(&["A"])?;
         assert_eq!(tuple.arity(), 1);
-        assert_eq!(tuple.atom(0), Some("A"));
+        assert_eq!(atom_as_string(tuple.atom(0).unwrap()).unwrap(), "A");
 
         let tuple2 = factory.tuple(&["B", "C"])?;
         assert_eq!(tuple2.arity(), 2);
-        assert_eq!(tuple2.atom(0), Some("B"));
-        assert_eq!(tuple2.atom(1), Some("C"));
+        assert_eq!(atom_as_string(tuple2.atom(0).unwrap()).unwrap(), "B");
+        assert_eq!(atom_as_string(tuple2.atom(1).unwrap()).unwrap(), "C");
 
         Ok(())
     }
@@ -946,13 +1159,13 @@ mod tests {
         let t0 = Tuple::from_index(universe.clone(), 1, 0);
         assert_eq!(t0.arity(), 1);
         assert_eq!(t0.index(), 0);
-        assert_eq!(t0.atom(0), Some("A"));
+        assert_eq!(atom_as_string(t0.atom(0).unwrap()).unwrap(), "A");
 
         let t1 = Tuple::from_index(universe.clone(), 1, 1);
-        assert_eq!(t1.atom(0), Some("B"));
+        assert_eq!(atom_as_string(t1.atom(0).unwrap()).unwrap(), "B");
 
         let t2 = Tuple::from_index(universe.clone(), 1, 2);
-        assert_eq!(t2.atom(0), Some("C"));
+        assert_eq!(atom_as_string(t2.atom(0).unwrap()).unwrap(), "C");
 
         Ok(())
     }
@@ -966,16 +1179,16 @@ mod tests {
         let t0 = Tuple::from_index(universe.clone(), 2, 0);
         assert_eq!(t0.arity(), 2);
         assert_eq!(t0.index(), 0);
-        assert_eq!(t0.atom(0), Some("A"));
-        assert_eq!(t0.atom(1), Some("A"));
+        assert_eq!(atom_as_string(t0.atom(0).unwrap()).unwrap(), "A");
+        assert_eq!(atom_as_string(t0.atom(1).unwrap()).unwrap(), "A");
 
         let t1 = Tuple::from_index(universe.clone(), 2, 1);
-        assert_eq!(t1.atom(0), Some("A"));
-        assert_eq!(t1.atom(1), Some("B"));
+        assert_eq!(atom_as_string(t1.atom(0).unwrap()).unwrap(), "A");
+        assert_eq!(atom_as_string(t1.atom(1).unwrap()).unwrap(), "B");
 
         let t4 = Tuple::from_index(universe.clone(), 2, 4);
-        assert_eq!(t4.atom(0), Some("B"));
-        assert_eq!(t4.atom(1), Some("B"));
+        assert_eq!(atom_as_string(t4.atom(0).unwrap()).unwrap(), "B");
+        assert_eq!(atom_as_string(t4.atom(1).unwrap()).unwrap(), "B");
 
         Ok(())
     }
@@ -993,8 +1206,15 @@ mod tests {
 
         assert_eq!(reconstructed.arity(), original.arity());
         assert_eq!(reconstructed.index(), original.index());
-        assert_eq!(reconstructed.atom(0), original.atom(0));
-        assert_eq!(reconstructed.atom(1), original.atom(1));
+        // Compare atoms via their hash/equality
+        assert_eq!(
+            atom_as_string(reconstructed.atom(0).unwrap()).unwrap(),
+            atom_as_string(original.atom(0).unwrap()).unwrap()
+        );
+        assert_eq!(
+            atom_as_string(reconstructed.atom(1).unwrap()).unwrap(),
+            atom_as_string(original.atom(1).unwrap()).unwrap()
+        );
 
         Ok(())
     }
@@ -1010,9 +1230,12 @@ mod tests {
         assert_eq!(set.arity(), 1);
         assert_eq!(set.size(), 2);
 
-        let atoms: Vec<_> = set.iter().map(|t| t.atom(0).unwrap()).collect();
-        assert!(atoms.contains(&"A"));
-        assert!(atoms.contains(&"C"));
+        let atoms: Vec<_> = set
+            .iter()
+            .map(|t| atom_as_string(t.atom(0).unwrap()).unwrap().clone())
+            .collect();
+        assert!(atoms.contains(&"A".to_string()));
+        assert!(atoms.contains(&"C".to_string()));
 
         Ok(())
     }
@@ -1032,10 +1255,12 @@ mod tests {
         let mut found_ab = false;
         let mut found_ba = false;
         for tuple in set.iter() {
-            if tuple.atom(0) == Some("A") && tuple.atom(1) == Some("B") {
+            let a0 = atom_as_string(tuple.atom(0).unwrap()).unwrap();
+            let a1 = atom_as_string(tuple.atom(1).unwrap()).unwrap();
+            if a0 == "A" && a1 == "B" {
                 found_ab = true;
             }
-            if tuple.atom(0) == Some("B") && tuple.atom(1) == Some("A") {
+            if a0 == "B" && a1 == "A" {
                 found_ba = true;
             }
         }
