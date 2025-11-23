@@ -3,7 +3,7 @@
 //! Following Java: Various tests from BooleanCircuitTest and integration tests
 
 use kodkod_rs::ast::{Expression, Formula, Relation};
-use kodkod_rs::instance::{Bounds, TupleSet, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, TupleSet, Universe};
 use kodkod_rs::solver::{Options as SolverOptions, Solver};
 
 /// Test Formula::then_else creates proper Expression::If variants
@@ -148,12 +148,12 @@ fn test_ite_conditional() {
             // P is empty, so condition is false, result should be R2 = {C}
             assert_eq!(result_value.size(), 1);
             let result_tuple = result_value.iter().next().unwrap();
-            assert_eq!(result_tuple.atom(0), Some("C"));
+            assert_eq!(atom_as_str(result_tuple.atom(0).unwrap()), Some("C"));
         } else {
             // P is non-empty, so condition is true, result should be R1 = {B}
             assert_eq!(result_value.size(), 1);
             let result_tuple = result_value.iter().next().unwrap();
-            assert_eq!(result_tuple.atom(0), Some("B"));
+            assert_eq!(atom_as_str(result_tuple.atom(0).unwrap()), Some("B"));
         }
     }
 }

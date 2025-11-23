@@ -23,7 +23,7 @@
 //! A Kodkod encoding of the Latin squares problem.
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::instance::{Bounds, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
 /// Model of a Latin square
@@ -167,7 +167,9 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
                     let idx = i * n + j;
                     if idx < tuples.len() {
                         if let Some(atom) = tuples[idx].atom(2) {
-                            print!("{}\t", atom);
+                            if let Some(s) = atom_as_str(atom) {
+                                print!("{}\t", s);
+                            }
                         }
                     }
                 }

@@ -4,7 +4,7 @@
 //! This version solves 4x4 Sudoku (2x2 regions) for simplicity.
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::instance::{Bounds, Instance, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, Instance, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
 fn main() {
@@ -126,7 +126,7 @@ fn print_solution(instance: &Instance, sudoku: &Sudoku) {
         // The grid relation is ternary: grid[row][col] = value
         // Encoded as tuples (row, col, value) where each is a "number" atom
         for tuple in grid_tuples.iter() {
-            let atoms: Vec<_> = tuple.atoms().collect();
+            let atoms: Vec<_> = tuple.atoms().filter_map(atom_as_str).collect();
             if atoms.len() == 3 {
                 // Parse the atom names (they are "1", "2", "3", "4" for 4x4)
                 if let (Ok(row), Ok(col), Ok(val)) = (

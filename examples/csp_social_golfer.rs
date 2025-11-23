@@ -26,7 +26,7 @@
 //! no two golfers play in the same group more than once.
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::instance::{Bounds, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 use std::time::Instant;
 
@@ -186,7 +186,10 @@ impl SocialGolfer {
                     if let (Some(week), Some(group), Some(player)) =
                         (tuple.atom(0), tuple.atom(1), tuple.atom(2))
                     {
-                        print!("{}->{}->{}; ", week, group, player);
+                        let w = atom_as_str(week).unwrap_or("");
+                        let g = atom_as_str(group).unwrap_or("");
+                        let p = atom_as_str(player).unwrap_or("");
+                        print!("{}->{}->{}; ", w, g, p);
                     }
                 }
                 println!();

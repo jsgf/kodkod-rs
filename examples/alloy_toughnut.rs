@@ -4,7 +4,7 @@
 //! Based on kodkod.examples.alloy.Toughnut
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::instance::{Bounds, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
 struct Toughnut {
@@ -134,7 +134,9 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
             print!("    tuple {}: ", i);
             for j in 0..tuple.arity() {
                 if let Some(atom) = tuple.atom(j) {
-                    print!("{} ", atom);
+                    if let Some(s) = atom_as_str(atom) {
+                        print!("{} ", s);
+                    }
                 }
             }
             println!();
@@ -152,7 +154,9 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
             print!("    ");
             for j in 0..tuple.arity() {
                 if let Some(atom) = tuple.atom(j) {
-                    print!("{} ", atom);
+                    if let Some(s) = atom_as_str(atom) {
+                        print!("{} ", s);
+                    }
                 }
             }
             println!();

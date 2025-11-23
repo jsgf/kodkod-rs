@@ -26,7 +26,7 @@
 
 use kodkod_rs::ast::{Expression, Formula, IntExpression, Relation};
 use kodkod_rs::engine::Evaluator;
-use kodkod_rs::instance::{Instance, Universe};
+use kodkod_rs::instance::{atom_as_str, Instance, Universe};
 
 #[test]
 fn test_evaluate_formula_true() {
@@ -87,7 +87,10 @@ fn test_evaluate_expression() {
 
     // Check that result equals the original tuples
     assert_eq!(result.iter().count(), 2);
-    let atoms: Vec<_> = result.iter().map(|t| t.atom(0).unwrap()).collect();
+    let atoms: Vec<_> = result
+        .iter()
+        .map(|t| atom_as_str(t.atom(0).unwrap()).unwrap())
+        .collect();
     assert!(atoms.contains(&"A"));
     assert!(atoms.contains(&"C"));
 }
@@ -129,7 +132,10 @@ fn test_evaluate_expression_union() {
     let result = evaluator.evaluate_expression(&expr);
 
     assert_eq!(result.size(), 2);
-    let atoms: Vec<_> = result.iter().map(|t| t.atom(0).unwrap()).collect();
+    let atoms: Vec<_> = result
+        .iter()
+        .map(|t| atom_as_str(t.atom(0).unwrap()).unwrap())
+        .collect();
     assert!(atoms.contains(&"A"));
     assert!(atoms.contains(&"B"));
 }
@@ -153,7 +159,10 @@ fn test_evaluate_expression_intersection() {
     let result = evaluator.evaluate_expression(&expr);
 
     assert_eq!(result.size(), 1);
-    assert_eq!(result.iter().next().unwrap().atom(0), Some("B"));
+    assert_eq!(
+        atom_as_str(result.iter().next().unwrap().atom(0).unwrap()),
+        Some("B")
+    );
 }
 
 #[test]

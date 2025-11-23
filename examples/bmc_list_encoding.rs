@@ -27,7 +27,7 @@
 // Following Java: kodkod.examples.bmc.ListEncoding
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::instance::{Bounds, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, Universe};
 
 pub struct ListEncoding {
     pub list: Relation,
@@ -298,7 +298,9 @@ impl ListEncoding {
         let arity = other.arity();
         let mut out = tf.none(arity);
         for tuple in other.iter() {
-            let atoms: Vec<&str> = (0..arity).filter_map(|i| tuple.atom(i)).collect();
+            let atoms: Vec<&str> = (0..arity)
+                .filter_map(|i| tuple.atom(i).and_then(atom_as_str))
+                .collect();
             if atoms.len() == arity {
                 if let Ok(t) = tf.tuple(&atoms) {
                     let _ = out.add(t);

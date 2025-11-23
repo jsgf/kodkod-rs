@@ -1,7 +1,7 @@
 //! Pigeonhole principle: n+1 pigeons cannot fit in n holes
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::instance::{Bounds, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
 struct Pigeonhole {
@@ -94,9 +94,9 @@ impl Pigeonhole {
         // This is done by creating all 2-tuples of the form (pigeon_atom, hole_atom)
         let mut product_tuples = Vec::new();
         for pigeon_tuple in pigeon_set.iter() {
-            let pigeon_atoms: Vec<&str> = pigeon_tuple.atoms().collect();
+            let pigeon_atoms: Vec<&str> = pigeon_tuple.atoms().filter_map(atom_as_str).collect();
             for hole_tuple in hole_set.iter() {
-                let hole_atoms: Vec<&str> = hole_tuple.atoms().collect();
+                let hole_atoms: Vec<&str> = hole_tuple.atoms().filter_map(atom_as_str).collect();
                 let mut combined = pigeon_atoms.clone();
                 combined.extend(hole_atoms);
                 product_tuples.push(combined);

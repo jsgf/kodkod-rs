@@ -1,7 +1,7 @@
 //! Test to verify solution extraction works correctly
 
 use kodkod_rs::ast::{Expression, Relation};
-use kodkod_rs::instance::{Bounds, Universe};
+use kodkod_rs::instance::{atom_as_str, Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
 #[test]
@@ -38,7 +38,7 @@ fn test_solution_extraction_with_lower_bound() {
     // Check that A is in the solution
     let mut has_a = false;
     for tuple in r_tuples.iter() {
-        let atoms: Vec<_> = tuple.atoms().collect();
+        let atoms: Vec<_> = tuple.atoms().filter_map(atom_as_str).collect();
         if atoms == vec!["A"] {
             has_a = true;
         }
