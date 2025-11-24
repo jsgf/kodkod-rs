@@ -1,8 +1,12 @@
 - This is a Rust port of kodkod from Java. The reference source is in ../kodkod. It should always be used to verify functionality and implementation.
-- The Java impl is the reference, and the Rust port must be *complete*, *accurate* and *faithful*. *DO NOT* leave stubs, placeholders, mocks, simplifications or any other workarounds.
+- The Java impl is the reference, and the Rust port must be *complete*, *accurate* and *faithful*. *DO NOT* leave stubs, placeholders, TODO comments, mocks, simplifications or any other workarounds.
 - Any test which relies on incomplete/simplified/placeholder/mock implementation should *FAIL* until the implementation is completed.
 - Always compile-test everything with `cargo check` and make sure all tests pass (or fail as expected if incomplete) before considering something "done".
 - When dealing with an Arena, any reference, direct or indirect, exposed to the API user via a public API *MUST* have a lifetime which ties it to that arena. UNDER NO CIRCUMSTANCES should the user EVER see a 'static lifetime reference, directly or indirectly (ie embedded in something else).
-- IMPORTANT: If you can't port an example either because there's a problem in the Rust implementation, or there's a missing feature, then *YOU MUST* fix the bug, or complete the feature. *DO NOT* just go on to the next example. *YOU MUST* use the Java implementation as reference.
+- ***IMPORTANT***: If you can't port an example either because there's a problem in the Rust implementation, or there's a missing feature, then *YOU MUST* fix the bug, or complete the feature. *DO NOT* just go on to the next example. *YOU MUST* use the Java implementation as reference. This includes implementing at least unit tests, and integration tests if they're warrented.
 - Use a tight timeout before running any example if you don't know how long it will take.
 - When formatting a simple variable with format! (or something that wraps format!), use the `{variable}` syntax.
+- ***NEVER*** introduce `unsafe` code without asking user and getting explicit permission.
+- When choosing between adding features, moving on or fixing bugs, you *MUST* choose to fix any outstanding bugs. Bug fixing is the *ABSOLUTE* highest priority.
+- use --release for any long-running test or example
+- Java kodkod jar files are in ../kodkod/build, and probably need to be explicitly put in the classpath
