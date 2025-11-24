@@ -216,10 +216,14 @@ impl LeafInterpreter {
             }
 
             ConstantExpr::Ints => {
-                // Integer atoms are an extension feature
-                // Return empty set (correct for relational-only problems)
+                // Following Java: LeafInterpreter.interpret(ConstantExpression)
+                // Returns the set of all integers with bounds
                 let dims = Dimensions::new(univ_size, 1);
-                BooleanMatrix::with_bounds(dims, &self.factory, &[], &[])
+                let mut indices = Vec::new();
+                for i in self.ints() {
+                    indices.push(self.interpret(i));
+                }
+                BooleanMatrix::with_bounds(dims, &self.factory, &indices, &indices)
             }
         }
     }

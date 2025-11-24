@@ -810,12 +810,53 @@ impl<'a> FOL2BoolTranslator<'a> {
                 Int::constant(0, factory.bitwidth(), one_bit)
             }
 
-            IntExpression::ExprCast(_) => {
-                // Cast expression not yet supported
+            IntExpression::ExprCast(expr) => {
+                // Following Java: FOL2BoolTranslator.visit(ExprToIntCast) for SUM operator
+                // Translates expression and sums the integer values of its atoms
+                let matrix = self.translate_expression(expr);
                 let factory = self.interpreter.factory();
-                let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
-                Int::constant(0, factory.bitwidth(), one_bit)
+
+                // Collect all integers with bounds
+                let ints: Vec<i32> = self.interpreter.ints().collect();
+
+                if ints.is_empty() {
+                    // No integers, return 0
+                    return Int::constant(0, factory.bitwidth(), BoolValue::Constant(BooleanConstant::TRUE));
+                }
+
+                // Build sum recursively like Java implementation
+                self.sum_helper(&matrix, &ints, 0, ints.len() - 1)
             }
+        }
+    }
+
+    /// Helper method for computing sum of integer atoms in an expression
+    /// Following Java: FOL2BoolTranslator.sum(BooleanMatrix, IntIterator, int, int)
+    fn sum_helper(
+        &self,
+        matrix: &BooleanMatrix<'a>,
+        ints: &[i32],
+        low: usize,
+        high: usize,
+    ) -> Int<'a> {
+        let factory = self.interpreter.factory();
+
+        if low > high {
+            // Empty range
+            Int::constant(0, factory.bitwidth(), BoolValue::Constant(BooleanConstant::TRUE))
+        } else if low == high {
+            // Single integer
+            let i = ints[low];
+            let atom_index = self.interpreter.interpret(i);
+            let condition = matrix.get(atom_index);
+            // Create integer that equals i when condition is true, 0 otherwise
+            Int::constant(i, factory.bitwidth(), condition)
+        } else {
+            // Recursively split and sum
+            let mid = (low + high) / 2;
+            let lsum = self.sum_helper(matrix, ints, low, mid);
+            let hsum = self.sum_helper(matrix, ints, mid + 1, high);
+            lsum.plus(&hsum, factory)
         }
     }
 }

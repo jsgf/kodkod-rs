@@ -136,6 +136,8 @@ impl Universe {
     ///
     /// # Errors
     /// Returns an error if the slice is empty or contains duplicates
+    ///
+    /// TODO: Switch API - make `new()` take `Vec<Rc<dyn Atom>>` and add `from_str()` for backward compat
     pub fn new(atoms: &[&str]) -> Result<Self> {
         let atom_objs: Vec<Rc<dyn Atom>> = atoms
             .iter()
