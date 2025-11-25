@@ -210,23 +210,36 @@ impl ListEncoding {
         let t = b.universe().factory();
         let max = size - 1;
 
-        b.bound(&self.list, t.tuple_set(&[&["l0"]]).unwrap(), t.tuple_set(&[&["l0"]]).unwrap()).unwrap();
-        b.bound(&self.node, t.none(1), t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap()).unwrap();
-        b.bound(&self.string, t.none(1), t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap()).unwrap();
-        b.bound(&self.this_list, b.upper_bound(&self.list).unwrap().clone(), b.upper_bound(&self.list).unwrap().clone()).unwrap();
+        // In Java, b.bound(rel, set) means lower=empty, upper=set
+        let list_set = t.tuple_set(&[&["l0"]]).unwrap();
+        b.bound(&self.list, t.none(1), list_set).unwrap();
+
+        let node_set = t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap();
+        b.bound(&self.node, t.none(1), node_set).unwrap();
+
+        let string_set = t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap();
+        b.bound(&self.string, t.none(1), string_set).unwrap();
+
+        let this_list_set = b.upper_bound(&self.list).unwrap().clone();
+        b.bound(&self.this_list, t.none(1), this_list_set).unwrap();
+
         b.bound_exactly(&self.nil, t.tuple_set(&[&["nil"]]).unwrap()).unwrap();
 
+        // Java uses one-arg b.bound() which sets lower=empty, upper=set
         let mut ran = t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap();
         ran.add(t.tuple(&["nil"]).unwrap()).unwrap();
-        b.bound(&self.head, t.none(2), b.upper_bound(&self.list).unwrap().product(&ran).unwrap()).unwrap();
+        let head_bound = b.upper_bound(&self.list).unwrap().product(&ran).unwrap();
+        b.bound(&self.head, t.none(2), head_bound).unwrap();
 
         let mut ran = t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap();
         ran.add(t.tuple(&["nil"]).unwrap()).unwrap();
-        b.bound(&self.next, t.none(2), b.upper_bound(&self.node).unwrap().product(&ran).unwrap()).unwrap();
+        let next_bound = b.upper_bound(&self.node).unwrap().product(&ran).unwrap();
+        b.bound(&self.next, t.none(2), next_bound).unwrap();
 
         let mut ran = t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap();
         ran.add(t.tuple(&["nil"]).unwrap()).unwrap();
-        b.bound(&self.data, t.none(2), b.upper_bound(&self.node).unwrap().product(&ran).unwrap()).unwrap();
+        let data_bound = b.upper_bound(&self.node).unwrap().product(&ran).unwrap();
+        b.bound(&self.data, t.none(2), data_bound).unwrap();
 
         b
     }

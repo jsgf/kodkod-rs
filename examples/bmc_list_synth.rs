@@ -161,12 +161,10 @@ impl ListSynth {
         let pre = self.encoding.pre();
         let loop_guard = self.loop_guard();
 
-        // Test with FULL post() but without binding head exactly
+        // Use FULL post() with custom next3 and head0
         let next3 = self.next3();
         let head0 = self.head0();
         let post = self.encoding.post_with(next3, head0);
-
-        eprintln!("DEBUG: synth_spec WITH FULL post() - head NOT bound exactly");
 
         Formula::and_all(vec![
             pre,
@@ -228,15 +226,15 @@ impl ListSynth {
         let max = size - 1;
 
         // Set up base bounds just like ListEncoding.bounds() does
-        // In Java, b.bound(rel, set) means boundExactly (both lower and upper = set)
+        // In Java, b.bound(rel, set) means lower=empty, upper=set (NOT exact!)
         let list_set = t.tuple_set(&[&["l0"]]).unwrap();
-        b.bound(&self.encoding.list, list_set.clone(), list_set).unwrap();
+        b.bound(&self.encoding.list, t.none(1), list_set).unwrap();
 
         let node_set = t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap();
-        b.bound(&self.encoding.node, node_set.clone(), node_set).unwrap();
+        b.bound(&self.encoding.node, t.none(1), node_set).unwrap();
 
         let string_set = t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap();
-        b.bound(&self.encoding.string, string_set.clone(), string_set).unwrap();
+        b.bound(&self.encoding.string, t.none(1), string_set).unwrap();
 
         b.bound_exactly(&self.encoding.nil, t.tuple_set(&[&["nil"]]).unwrap()).unwrap();
 
@@ -297,9 +295,8 @@ impl ListSynth {
 
         let head_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples"));
         eprintln!("  head: {} tuples", head_tuples.size());
-        // DON'T bind head exactly - let it vary
-        // b.bound_exactly(&self.encoding.head, head_tuples)
-        //     .expect("Failed to bind head");
+        b.bound_exactly(&self.encoding.head, head_tuples)
+            .expect("Failed to bind head");
 
         let data_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.data).expect("data tuples"));
         eprintln!("  data: {} tuples", data_tuples.size());
