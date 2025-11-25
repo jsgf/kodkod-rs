@@ -161,7 +161,7 @@ impl ListSynth {
         let pre = self.encoding.pre();
         let loop_guard = self.loop_guard();
 
-        // Use FULL post() with custom next3 and head0
+        // FULL post() with next NOT exactly bounded
         let next3 = self.next3();
         let head0 = self.head0();
         let post = self.encoding.post_with(next3, head0);
@@ -290,8 +290,12 @@ impl ListSynth {
 
         let next_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.next).expect("next tuples"));
         eprintln!("  next: {} tuples", next_tuples.size());
-        b.bound_exactly(&self.encoding.next, next_tuples)
-            .expect("Failed to bind next");
+        // WORKAROUND: Don't bind next exactly - causes translator bug with acyclic(next3)
+        // When next is exactly bounded, acyclic(next3) where next3 uses next.override_with()
+        // incorrectly reduces to constant FALSE during translation
+        // TODO: Fix translator's handling of acyclic() on complex override expressions
+        // b.bound_exactly(&self.encoding.next, next_tuples)
+        //     .expect("Failed to bind next");
 
         let head_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples"));
         eprintln!("  head: {} tuples", head_tuples.size());
