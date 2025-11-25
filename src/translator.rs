@@ -193,20 +193,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Main entry point: translate a formula to a boolean value
     /// Following Java: FOL2BoolTranslator visitor methods
     fn translate_formula(&self, formula: &Formula) -> BoolValue<'a> {
-        // Debug output for synthesis bug - print formula type
-        let formula_type = match formula {
-            Formula::Constant(_) => "Constant",
-            Formula::Binary { .. } => "Binary",
-            Formula::Nary { .. } => "Nary",
-            Formula::Not { .. } => "Not",
-            Formula::Comparison { .. } => "Comparison",
-            Formula::Multiplicity { .. } => "Multiplicity",
-            Formula::Quantified { .. } => "Quantified",
-            Formula::IntComparison { .. } => "IntComparison",
-            Formula::RelationPredicate(_) => "RelationPredicate",
-        };
-
-        let result = match formula {
+        match formula {
             Formula::Constant(b) => {
                 self.interpreter.factory().constant(*b)
             }
@@ -252,47 +239,18 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             Formula::Comparison { left, right, op } => {
-                // Debug output for synthesis bug
-                eprintln!("DEBUG: Processing comparison with op {:?}", op);
-
                 let (left_matrix, right_matrix) = {
                     (self.translate_expression(left), self.translate_expression(right))
                 };
                 let factory = self.interpreter.factory();
 
-                let result = match op {
+                match op {
                     CompareOp::Equals => left_matrix.equals(&right_matrix, factory),
                     CompareOp::Subset => left_matrix.subset(&right_matrix, factory),
-                };
-
-                // More debug output
-                match &result {
-                    BoolValue::Constant(c) => {
-                        eprintln!("  Comparison result: constant with label {}", c.label());
-                    }
-                    _ => {
-                        eprintln!("  Comparison result: not constant");
-                    }
                 }
-
-                result
             }
 
             Formula::Multiplicity { mult, expr } => {
-                // Debug output for synthesis bug
-                if matches!(mult, Multiplicity::No) {
-                    eprintln!("DEBUG: Processing 'no' multiplicity");
-                    if let Expression::Binary { op: BinaryOp::Intersection, left, right, .. } = expr {
-                        eprintln!("  Expression is an intersection");
-                        if let Expression::Unary { op: UnaryOp::Closure, .. } = &**left {
-                            eprintln!("    Left is a closure expression");
-                        }
-                        if let Expression::Constant(ConstantExpr::Iden) = &**right {
-                            eprintln!("    Right is IDEN - this is an acyclic check!");
-                        }
-                    }
-                }
-
                 let matrix = self.translate_expression(expr);
                 let factory = self.interpreter.factory();
                 match mult {
@@ -331,17 +289,7 @@ impl<'a> FOL2BoolTranslator<'a> {
                 let constraints = pred.to_constraints();
                 self.translate_formula(&constraints)
             }
-        };
-
-        // Debug output for synthesis bug
-        match &result {
-            BoolValue::Constant(c) => {
-                eprintln!("DEBUG translate_formula: {} -> Constant with label {}", formula_type, c.label());
-            }
-            _ => {}
         }
-
-        result
     }
 
     /// Expression translation

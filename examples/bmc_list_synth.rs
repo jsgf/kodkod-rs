@@ -290,9 +290,19 @@ impl ListSynth {
 
         let next_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.next).expect("next tuples"));
         eprintln!("  next: {} tuples", next_tuples.size());
-        // TEST: Try binding next exactly to reproduce the bug
-        b.bound_exactly(&self.encoding.next, next_tuples)
-            .expect("Failed to bind next");
+        // BUG: There's a translator bug with exact bounds + override + acyclic
+        // When next is exactly bounded and we use acyclic(next3) where next3 uses next.override_with(),
+        // the translator incorrectly reduces the formula to constant FALSE (0 variables, 1 clause).
+        // The Java version binds next exactly and works correctly.
+        //
+        // This is a bug in the FOL to Boolean translator that needs to be fixed.
+        // The literal 0 bug in CNF has been fixed, but this deeper issue remains.
+        //
+        // For now, commenting out exact binding makes the formula not reduce to FALSE,
+        // but synthesis is still UNSAT (likely due to over-constrained problem without exact bounds).
+        //
+        // b.bound_exactly(&self.encoding.next, next_tuples)
+        //     .expect("Failed to bind next");
 
         let head_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples"));
         eprintln!("  head: {} tuples", head_tuples.size());
