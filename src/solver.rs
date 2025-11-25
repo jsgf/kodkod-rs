@@ -3,7 +3,7 @@
 //! The solver translates relational formulas to SAT and finds solutions.
 
 use crate::ast::*;
-use crate::bool::Options as BoolOptions;
+use crate::bool::{BoolValue, Options as BoolOptions};
 use crate::cnf::CNFTranslator;
 use crate::engine::{rustsat_adapter::RustSatAdapter, SATSolver};
 use crate::instance::{Bounds, Instance, TupleSet};
@@ -79,10 +79,20 @@ impl Solver {
         // Step 2: Convert boolean circuit to CNF
         let cnf_start = Instant::now();
         let bool_circuit = translation_result.value();
+
+        // DEBUG: Check if the circuit is trivially false
+        if let BoolValue::Constant(c) = bool_circuit {
+            eprintln!("DEBUG: Boolean circuit is constant: {}", c.boolean_value());
+        } else {
+            eprintln!("DEBUG: Boolean circuit is not constant (has variables)");
+        }
+
         let interpreter = translation_result.interpreter();
         let cnf_translator = CNFTranslator::new(interpreter.arena());
         let (_top_level_var, cnf) = cnf_translator.translate(bool_circuit);
         let cnf_time = cnf_start.elapsed();
+
+        eprintln!("DEBUG: CNF has {} variables, {} clauses", cnf.num_variables, cnf.num_clauses());
 
         // Step 3: Run SAT solver
         let solving_start = Instant::now();

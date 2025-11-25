@@ -54,7 +54,7 @@ impl ListEncoding {
         }
     }
 
-    fn invariants(
+    pub fn invariants(
         &self,
         this_list: &Expression,
         next: &Expression,

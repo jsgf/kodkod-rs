@@ -24,7 +24,7 @@
 //!
 //! Following Java: kodkod.examples.bmc.ListSynth
 
-use kodkod_rs::ast::{Expression, Formula, Relation};
+use kodkod_rs::ast::{Expression, Formula, Relation, Variable, Decls, Decl};
 use kodkod_rs::solver::{Solution, Solver, Options};
 use kodkod_rs::instance::{Bounds, Universe};
 
@@ -158,15 +158,20 @@ impl ListSynth {
         // Make sure that our hole is a singleton
         let hole_constraint = Expression::from(self.hole.clone()).one();
 
-        // BUG: Adding post_with() causes the formula to become trivially false (0 variables, 1 clause)
-        // This is likely due to how Rust handles method calls vs Java's polymorphism.
-        // For now, we use a partial formula without post() to verify the architecture works.
-        // Must use our custom expressions that incorporate the hole!
+        let pre = self.encoding.pre();
+        let loop_guard = self.loop_guard();
+
+        // Test with FULL post() but without binding head exactly
+        let next3 = self.next3();
+        let head0 = self.head0();
+        let post = self.encoding.post_with(next3, head0);
+
+        eprintln!("DEBUG: synth_spec WITH FULL post() - head NOT bound exactly");
+
         Formula::and_all(vec![
-            self.encoding.pre(),
-            self.loop_guard(),
-            // TODO: Fix this - need to investigate why post_with() creates contradiction
-            // self.encoding.post_with(self.next3(), self.head0()),
+            pre,
+            loop_guard,
+            post,
             hole_constraint,
         ])
     }
@@ -203,9 +208,6 @@ impl ListSynth {
     }
 
     fn synth_bounds(&self, size: usize) -> Bounds {
-        // In Java, calling bounds(size) uses polymorphism to call our overridden universe(size).
-        // In Rust, we need to manually create bounds with OUR universe.
-
         // Get counterexample from checker
         let checker = ListCheck::new();
         let sol = checker.check(size);
@@ -216,14 +218,26 @@ impl ListSynth {
 
         // Create bounds using OUR universe (with syntax atoms), not encoding's universe
         let u = self.universe(size).expect("Failed to create universe");
+        eprintln!("\nDEBUG: Synth universe atoms:");
+        for (i, (_, atom)) in u.iter_atoms().enumerate() {
+            eprintln!("  {}: {}", i, kodkod_rs::instance::atom_as_str(atom).unwrap_or("<non-string>"));
+        }
+
         let mut b = Bounds::new(u);
         let t = b.universe().factory();
         let max = size - 1;
 
         // Set up base bounds just like ListEncoding.bounds() does
-        b.bound(&self.encoding.list, t.none(1), t.tuple_set(&[&["l0"]]).unwrap()).unwrap();
-        b.bound(&self.encoding.node, t.none(1), t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap()).unwrap();
-        b.bound(&self.encoding.string, t.none(1), t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap()).unwrap();
+        // In Java, b.bound(rel, set) means boundExactly (both lower and upper = set)
+        let list_set = t.tuple_set(&[&["l0"]]).unwrap();
+        b.bound(&self.encoding.list, list_set.clone(), list_set).unwrap();
+
+        let node_set = t.range(t.tuple(&["n0"]).unwrap(), t.tuple(&[&format!("n{max}")]).unwrap()).unwrap();
+        b.bound(&self.encoding.node, node_set.clone(), node_set).unwrap();
+
+        let string_set = t.range(t.tuple(&["s0"]).unwrap(), t.tuple(&[&format!("s{max}")]).unwrap()).unwrap();
+        b.bound(&self.encoding.string, string_set.clone(), string_set).unwrap();
+
         b.bound_exactly(&self.encoding.nil, t.tuple_set(&[&["nil"]]).unwrap()).unwrap();
 
         // Set initial bounds for relations that will be bound exactly from counterexample
@@ -259,27 +273,89 @@ impl ListSynth {
         b.bound_exactly(&self.far_node0_stx, t.tuple_set(&[&["\"farNode0\""]]).unwrap()).unwrap();
 
         // Copy counterexample values (these will be translated to our universe)
-        b.bound_exactly(&self.encoding.next, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.next).expect("next tuples")))
+        eprintln!("DEBUG: Copying bounds from counterexample...");
+        eprintln!("  cex universe size: {}", cex.universe().size());
+        eprintln!("  synth universe size: {}", b.universe().size());
+
+        // Print the counterexample next relation
+        if let Some(next_in_cex) = cex.tuples(&checker.encoding.next) {
+            eprintln!("\nDEBUG: Counterexample 'next' relation:");
+            for tuple in next_in_cex.iter() {
+                if let (Some(from), Some(to)) = (tuple.atom(0), tuple.atom(1)) {
+                    use kodkod_rs::instance::atom_as_str;
+                    eprintln!("  {} -> {}",
+                        atom_as_str(from).unwrap_or("?"),
+                        atom_as_str(to).unwrap_or("?"));
+                }
+            }
+        }
+
+        let next_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.next).expect("next tuples"));
+        eprintln!("  next: {} tuples", next_tuples.size());
+        b.bound_exactly(&self.encoding.next, next_tuples)
             .expect("Failed to bind next");
-        b.bound_exactly(&self.encoding.head, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples")))
-            .expect("Failed to bind head");
-        b.bound_exactly(&self.encoding.data, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.data).expect("data tuples")))
+
+        let head_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples"));
+        eprintln!("  head: {} tuples", head_tuples.size());
+        // DON'T bind head exactly - let it vary
+        // b.bound_exactly(&self.encoding.head, head_tuples)
+        //     .expect("Failed to bind head");
+
+        let data_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.data).expect("data tuples"));
+        eprintln!("  data: {} tuples", data_tuples.size());
+        b.bound_exactly(&self.encoding.data, data_tuples)
             .expect("Failed to bind data");
-        b.bound_exactly(&self.encoding.this_list, self.encoding.copy_from(&t, cex.tuples(&checker.encoding.this_list).expect("this_list tuples")))
+
+        let this_list_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.this_list).expect("this_list tuples"));
+        eprintln!("  this_list: {} tuples", this_list_tuples.size());
+        b.bound_exactly(&self.encoding.this_list, this_list_tuples)
             .expect("Failed to bind this_list");
 
         b
     }
 
     fn synth(&self, size: usize) -> Solution {
+        eprintln!("\n>>> ENTERING synth() <<<");
+        let formula = self.synth_spec();
+        eprintln!(">>> Formula created <<<");
+
+        let bounds = self.synth_bounds(size);
+        eprintln!(">>> Bounds created <<<");
+
+        eprintln!("DEBUG: Checking bounds for synthesis:");
+        eprintln!("  Universe size: {}", bounds.universe().size());
+        eprintln!("  Number of relations: {}", bounds.relations().count());
+
+        // Check if hole is bounded
+        if let Some(lower) = bounds.lower_bound(&self.hole) {
+            eprintln!("  hole lower bound: {} tuples", lower.size());
+        }
+        if let Some(upper) = bounds.upper_bound(&self.hole) {
+            eprintln!("  hole upper bound: {} tuples", upper.size());
+        }
+
+        eprintln!(">>> Calling solver.solve() <<<");
         let options = Options::default();
         let solver = Solver::new(options);
-        solver.solve(&self.synth_spec(), &self.synth_bounds(size))
-            .expect("Failed to solve")
+        let result = solver.solve(&formula, &bounds)
+            .expect("Failed to solve");
+        eprintln!(">>> Solver returned <<<");
+        result
     }
 
     fn show_synth(&self, size: usize) {
         println!("************ SYNTHESIZE REVERSE REPAIR FOR {size} NODES ************");
+
+        // First run the checker to get a counterexample
+        let checker = ListCheck::new();
+        eprintln!("Running checker...");
+        let check_sol = checker.check(size);
+        eprintln!("Checker done: {:?}", match &check_sol {
+            Solution::Sat { .. } => "SAT",
+            Solution::Unsat { .. } => "UNSAT",
+            _ => "OTHER"
+        });
+
         let sol = self.synth(size);
         let outcome = match &sol {
             Solution::Sat { .. } => "SATISFIABLE (synthesis found)",

@@ -61,7 +61,9 @@
       "Bash(for ex in abstractworlddefinitions ceilingsandfloors dnacuts filesystem groupscheduling)",
       "Bash(timeout 10 java:*)",
       "Bash(while read f)",
-      "Bash(for ex in bmc_list_check bmc_list_repair bmc_list_synth)"
+      "Bash(for ex in bmc_list_check bmc_list_repair bmc_list_synth)",
+      "Bash(timeout 30 cargo build:*)",
+      "Bash(timeout 60 cargo build:*)"
     ],
     "deny": [],
     "ask": []
