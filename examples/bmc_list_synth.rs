@@ -290,12 +290,9 @@ impl ListSynth {
 
         let next_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.next).expect("next tuples"));
         eprintln!("  next: {} tuples", next_tuples.size());
-        // WORKAROUND: Don't bind next exactly - causes translator bug with acyclic(next3)
-        // When next is exactly bounded, acyclic(next3) where next3 uses next.override_with()
-        // incorrectly reduces to constant FALSE during translation
-        // TODO: Fix translator's handling of acyclic() on complex override expressions
-        // b.bound_exactly(&self.encoding.next, next_tuples)
-        //     .expect("Failed to bind next");
+        // TEST: Try binding next exactly to reproduce the bug
+        b.bound_exactly(&self.encoding.next, next_tuples)
+            .expect("Failed to bind next");
 
         let head_tuples = self.encoding.copy_from(&t, cex.tuples(&checker.encoding.head).expect("head tuples"));
         eprintln!("  head: {} tuples", head_tuples.size());
@@ -327,12 +324,24 @@ impl ListSynth {
         eprintln!("  Universe size: {}", bounds.universe().size());
         eprintln!("  Number of relations: {}", bounds.relations().count());
 
-        // Check if hole is bounded
+        // Debug hole bounds in detail
         if let Some(lower) = bounds.lower_bound(&self.hole) {
             eprintln!("  hole lower bound: {} tuples", lower.size());
+            for tuple in lower.iter() {
+                let atoms: Vec<_> = (0..lower.arity())
+                    .filter_map(|i| tuple.atom(i).and_then(|a| kodkod_rs::instance::atom_as_str(a)))
+                    .collect();
+                eprintln!("    hole lower: {:?}", atoms);
+            }
         }
         if let Some(upper) = bounds.upper_bound(&self.hole) {
             eprintln!("  hole upper bound: {} tuples", upper.size());
+            for tuple in upper.iter() {
+                let atoms: Vec<_> = (0..upper.arity())
+                    .filter_map(|i| tuple.atom(i).and_then(|a| kodkod_rs::instance::atom_as_str(a)))
+                    .collect();
+                eprintln!("    hole upper: {:?}", atoms);
+            }
         }
 
         eprintln!(">>> Calling solver.solve() <<<");

@@ -87,11 +87,18 @@ impl<'a> CNFTranslator<'a> {
 
     /// Translates a boolean value and returns its label
     fn translate_value(&mut self, value: &BoolValue) -> i32 {
-        match value {
+        let label = match value {
             BoolValue::Constant(c) => c.label(),
             BoolValue::Variable(v) => v.label(),
             BoolValue::Formula(f) => self.translate_formula(f),
+        };
+
+        // DEBUG: Track literal 0
+        if label == 0 {
+            eprintln!("WARNING: translate_value returning label 0 for {:?}", value);
         }
+
+        label
     }
 
     /// Translates a boolean formula using Tseitin transformation
@@ -135,6 +142,10 @@ impl<'a> CNFTranslator<'a> {
     /// - (a1 ∨ ¬output) - if output true, each input must be true
     /// - (a2 ∨ ¬output)
     /// - ...
+    ///
+    /// Constants are filtered out:
+    /// - TRUE (label 0) inputs are ignored (identity for AND)
+    /// - FALSE (label -1) makes entire AND false
     fn translate_and(&mut self, output: i32, inputs: &[BoolValue]) {
         if inputs.is_empty() {
             return;
@@ -142,13 +153,30 @@ impl<'a> CNFTranslator<'a> {
 
         let input_labels: Vec<i32> = inputs.iter().map(|v| self.translate_value(v)).collect();
 
+        // Check for FALSE constant - makes entire AND false
+        if input_labels.contains(&-1) {
+            // output must be FALSE
+            // We can't use literal -1, so we just constrain output to be false
+            self.cnf.add_clause(vec![-output]);
+            return;
+        }
+
+        // Filter out TRUE constants (label 0) - they're identity for AND
+        let non_const_labels: Vec<i32> = input_labels.into_iter().filter(|&l| l != 0).collect();
+
+        if non_const_labels.is_empty() {
+            // All inputs were TRUE, so output is TRUE
+            self.cnf.add_clause(vec![output]);
+            return;
+        }
+
         // If all inputs are true, output must be true
-        let mut clause = input_labels.iter().map(|&l| -l).collect::<Vec<_>>();
+        let mut clause = non_const_labels.iter().map(|&l| -l).collect::<Vec<_>>();
         clause.push(output);
         self.cnf.add_clause(clause);
 
         // If output is true, each input must be true
-        for &input in &input_labels {
+        for &input in &non_const_labels {
             self.cnf.add_clause(vec![input, -output]);
         }
     }
@@ -160,6 +188,10 @@ impl<'a> CNFTranslator<'a> {
     /// - (¬a1 ∨ output) - if output false, each input must be false
     /// - (¬a2 ∨ output)
     /// - ...
+    ///
+    /// Constants are filtered out:
+    /// - TRUE (label 0) makes entire OR true
+    /// - FALSE (label -1) inputs are ignored (identity for OR)
     fn translate_or(&mut self, output: i32, inputs: &[BoolValue]) {
         if inputs.is_empty() {
             return;
@@ -167,13 +199,29 @@ impl<'a> CNFTranslator<'a> {
 
         let input_labels: Vec<i32> = inputs.iter().map(|v| self.translate_value(v)).collect();
 
+        // Check for TRUE constant - makes entire OR true
+        if input_labels.contains(&0) {
+            // output must be TRUE
+            self.cnf.add_clause(vec![output]);
+            return;
+        }
+
+        // Filter out FALSE constants (label -1) - they're identity for OR
+        let non_const_labels: Vec<i32> = input_labels.into_iter().filter(|&l| l != -1).collect();
+
+        if non_const_labels.is_empty() {
+            // All inputs were FALSE, so output is FALSE
+            self.cnf.add_clause(vec![-output]);
+            return;
+        }
+
         // If any input is true, output can be true
-        let mut clause = input_labels.clone();
+        let mut clause = non_const_labels.clone();
         clause.push(-output);
         self.cnf.add_clause(clause);
 
         // If output is false, all inputs must be false
-        for &input in &input_labels {
+        for &input in &non_const_labels {
             self.cnf.add_clause(vec![-input, output]);
         }
     }
@@ -183,11 +231,29 @@ impl<'a> CNFTranslator<'a> {
     /// CNF encoding:
     /// - (input ∨ output) - if input false, output true
     /// - (¬input ∨ ¬output) - if input true, output false
+    ///
+    /// Constants:
+    /// - NOT TRUE (0) = FALSE: output is false
+    /// - NOT FALSE (-1) = TRUE: output is true
     fn translate_not(&mut self, output: i32, input: &BoolValue) {
         let input_label = self.translate_value(input);
 
-        self.cnf.add_clause(vec![input_label, output]);
-        self.cnf.add_clause(vec![-input_label, -output]);
+        // Handle constants
+        match input_label {
+            0 => {
+                // NOT TRUE = FALSE, so output must be false
+                self.cnf.add_clause(vec![-output]);
+            }
+            -1 => {
+                // NOT FALSE = TRUE, so output must be true
+                self.cnf.add_clause(vec![output]);
+            }
+            _ => {
+                // Normal case
+                self.cnf.add_clause(vec![input_label, output]);
+                self.cnf.add_clause(vec![-input_label, -output]);
+            }
+        }
     }
 
     /// Translates ITE gate: output = if cond then then_val else else_val
@@ -197,19 +263,71 @@ impl<'a> CNFTranslator<'a> {
     /// - (¬cond ∨ then ∨ ¬output) - if cond true and output false, then false
     /// - (cond ∨ ¬else ∨ output) - if ¬cond and else true, output true
     /// - (cond ∨ else ∨ ¬output) - if ¬cond true and output false, else false
+    ///
+    /// Special cases for constants:
+    /// - If else_val is TRUE (label 0): simplifies to output ↔ (¬cond ∨ then_val)
+    /// - If then_val is TRUE (label 0): simplifies to output ↔ (cond ∨ else_val)
+    /// - If else_val is FALSE (label -1): simplifies to output ↔ (cond ∧ then_val)
+    /// - If then_val is FALSE (label -1): simplifies to output ↔ (¬cond ∧ else_val)
     fn translate_ite(&mut self, output: i32, condition: &BoolValue, then_val: &BoolValue, else_val: &BoolValue) {
         let cond = self.translate_value(condition);
         let then_label = self.translate_value(then_val);
         let else_label = self.translate_value(else_val);
 
-        // cond → (then → output)
-        self.cnf.add_clause(vec![-cond, -then_label, output]);
-        // cond → (output → then)
-        self.cnf.add_clause(vec![-cond, then_label, -output]);
-        // ¬cond → (else → output)
-        self.cnf.add_clause(vec![cond, -else_label, output]);
-        // ¬cond → (output → else)
-        self.cnf.add_clause(vec![cond, else_label, -output]);
+        // Handle special cases with constants to avoid using invalid literal 0
+        match (then_label, else_label) {
+            // Case: if cond then TRUE else else_val
+            // Simplifies to: output ↔ (cond ∨ else_val)
+            (0, _) => {
+                // cond → output
+                self.cnf.add_clause(vec![-cond, output]);
+                // ¬cond → (else_val → output)
+                self.cnf.add_clause(vec![cond, -else_label, output]);
+                // ¬cond → (output → else_val)
+                self.cnf.add_clause(vec![cond, else_label, -output]);
+            }
+            // Case: if cond then then_val else TRUE
+            // Simplifies to: output ↔ (¬cond ∨ then_val)
+            (_, 0) => {
+                // ¬cond → output
+                self.cnf.add_clause(vec![cond, output]);
+                // cond → (then_val → output)
+                self.cnf.add_clause(vec![-cond, -then_label, output]);
+                // cond → (output → then_val)
+                self.cnf.add_clause(vec![-cond, then_label, -output]);
+            }
+            // Case: if cond then FALSE else else_val
+            // Simplifies to: output ↔ (¬cond ∧ else_val)
+            (-1, _) => {
+                // cond → ¬output
+                self.cnf.add_clause(vec![-cond, -output]);
+                // ¬cond → (else_val → output)
+                self.cnf.add_clause(vec![cond, -else_label, output]);
+                // ¬cond → (output → else_val)
+                self.cnf.add_clause(vec![cond, else_label, -output]);
+            }
+            // Case: if cond then then_val else FALSE
+            // Simplifies to: output ↔ (cond ∧ then_val)
+            (_, -1) => {
+                // ¬cond → ¬output
+                self.cnf.add_clause(vec![cond, -output]);
+                // cond → (then_val → output)
+                self.cnf.add_clause(vec![-cond, -then_label, output]);
+                // cond → (output → then_val)
+                self.cnf.add_clause(vec![-cond, then_label, -output]);
+            }
+            // Normal case: no constants
+            _ => {
+                // cond → (then → output)
+                self.cnf.add_clause(vec![-cond, -then_label, output]);
+                // cond → (output → then)
+                self.cnf.add_clause(vec![-cond, then_label, -output]);
+                // ¬cond → (else → output)
+                self.cnf.add_clause(vec![cond, -else_label, output]);
+                // ¬cond → (output → else)
+                self.cnf.add_clause(vec![cond, else_label, -output]);
+            }
+        }
     }
 }
 

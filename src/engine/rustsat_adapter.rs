@@ -44,7 +44,18 @@ impl<S: rustsat::solvers::Solve> SATSolver for RustSatAdapter<S> {
         let lits_vec: Vec<Lit> = lits
             .iter()
             .map(|&lit| {
-                let var = Var::new((lit.abs() - 1) as u32);
+                let abs_lit = lit.abs();
+                let var_idx = (abs_lit - 1) as u32;
+
+                // DEBUG: Check if variable index is too high
+                if var_idx > Var::MAX_IDX {
+                    eprintln!("ERROR: Variable index {} (from literal {}) exceeds MAX_IDX {}",
+                              var_idx, lit, Var::MAX_IDX);
+                    eprintln!("  num_vars reported: {}", self.num_vars);
+                    panic!("Variable index too high: {} > {}", var_idx, Var::MAX_IDX);
+                }
+
+                let var = Var::new(var_idx);
                 if lit > 0 { var.pos_lit() } else { var.neg_lit() }
             })
             .collect();
