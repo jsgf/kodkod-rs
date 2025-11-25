@@ -158,14 +158,15 @@ impl ListSynth {
         // Make sure that our hole is a singleton
         let hole_constraint = Expression::from(self.hole.clone()).one();
 
-        // TODO: BUG - Adding post() causes the formula to become trivially false (0 variables, 1 clause)
-        // For now, we use a partial formula without post() to verify the architecture works
+        // BUG: Adding post_with() causes the formula to become trivially false (0 variables, 1 clause)
+        // This is likely due to how Rust handles method calls vs Java's polymorphism.
+        // For now, we use a partial formula without post() to verify the architecture works.
         // Must use our custom expressions that incorporate the hole!
-        // The base encoding's expressions don't use the hole.
         Formula::and_all(vec![
             self.encoding.pre(),
             self.loop_guard(),
-            // self.encoding.post_with(self.next3(), self.head0()),  // BUG: This makes formula UNSAT
+            // TODO: Fix this - need to investigate why post_with() creates contradiction
+            // self.encoding.post_with(self.next3(), self.head0()),
             hole_constraint,
         ])
     }
