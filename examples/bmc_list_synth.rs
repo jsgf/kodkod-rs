@@ -29,16 +29,14 @@ use kodkod_rs::solver::{Solution, Solver, Options};
 use kodkod_rs::instance::{Bounds, Universe};
 
 // Import the ListEncoding module and ListCheck
-mod list_encoding {
-    include!("bmc_list_encoding.rs");
-}
+#[path = "bmc_list_encoding/mod.rs"]
+mod bmc_list_encoding;
 
-mod list_check {
-    include!("bmc_list_check.rs");
-}
+#[path = "bmc_list_check/mod.rs"]
+mod bmc_list_check;
 
-use list_encoding::ListEncoding;
-use list_check::ListCheck;
+use bmc_list_encoding::ListEncoding;
+use bmc_list_check::ListCheck;
 
 struct ListSynth {
     encoding: ListEncoding,

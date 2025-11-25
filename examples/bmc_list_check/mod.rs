@@ -30,7 +30,7 @@ use kodkod_rs::instance::Bounds;
 
 // Import the ListEncoding module
 // Since Rust doesn't have inheritance, we'll use composition
-#[path = "bmc_list_encoding/mod.rs"]
+#[path = "../bmc_list_encoding/mod.rs"]
 mod bmc_list_encoding;
 
 use bmc_list_encoding::ListEncoding;
@@ -65,7 +65,7 @@ impl ListCheck {
             .expect("Failed to solve")
     }
 
-    fn show_check(&self, size: usize) {
+    pub fn show_check(&self, size: usize) {
         let sol = self.check(size);
         println!("************ CHECK REVERSE FOR {size} NODES ************");
         let outcome = match &sol {
@@ -88,11 +88,4 @@ impl ListCheck {
         // ListViz::print_state_graph("check-pre", &self.encoding, sol.instance(), State::PRE);
         // ListViz::print_state_graph("check-post", &self.encoding, sol.instance(), State::POST);
     }
-}
-
-fn main() {
-    let enc = ListCheck::new();
-    enc.show_check(1);
-    enc.show_check(2);
-    enc.show_check(3);
 }

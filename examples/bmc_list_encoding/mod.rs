@@ -310,8 +310,3 @@ impl ListEncoding {
         out
     }
 }
-
-fn main() {
-    println!("This is a library module for BMC examples.");
-    println!("Run bmc_list_check, bmc_list_debug, etc. instead.");
-}

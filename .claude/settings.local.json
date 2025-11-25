@@ -59,7 +59,8 @@
       "Bash(echo:*)",
       "Bash(timeout 30 javac:*)",
       "Bash(for ex in abstractworlddefinitions ceilingsandfloors dnacuts filesystem groupscheduling)",
-      "Bash(timeout 10 java:*)"
+      "Bash(timeout 10 java:*)",
+      "Bash(while read f)"
     ],
     "deny": [],
     "ask": []

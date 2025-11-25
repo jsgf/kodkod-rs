@@ -254,6 +254,11 @@ impl Expression {
         IntExpression::Cardinality(self)
     }
 
+    /// Sum of integer atoms in expression (cast expression to int via SUM)
+    pub fn sum_cast(self) -> IntExpression {
+        IntExpression::ExprCast(self)
+    }
+
     /// Sum of expression values over declarations
     pub fn sum(self, decls: Decls) -> IntExpression {
         IntExpression::Sum {
