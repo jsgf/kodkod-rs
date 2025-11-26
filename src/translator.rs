@@ -503,7 +503,6 @@ impl<'a> FOL2BoolTranslator<'a> {
     ) {
         // Short-circuit: if we've already found TRUE, stop
         if let Some(BoolValue::Constant(BooleanConstant::TRUE)) = acc {
-            eprintln!("DEBUG: Short-circuit in EXISTS at decl {}", current_decl);
             return;
         }
 
@@ -514,17 +513,10 @@ impl<'a> FOL2BoolTranslator<'a> {
             let result = factory.and(decl_constraints.clone(), formula_val);
 
             // Accumulate with OR: acc = acc OR result
-            let old_acc = acc.as_ref().map(|v| format!("{:?}", v)).unwrap_or_else(|| "None".to_string());
             *acc = Some(match acc.take() {
-                None => result.clone(),
-                Some(prev) => factory.or(prev, result.clone())
+                None => result,
+                Some(prev) => factory.or(prev, result)
             });
-            let new_acc = format!("{:?}", acc.as_ref().unwrap());
-            if old_acc != new_acc {
-                eprintln!("DEBUG: EXISTS accumulated: {} -> {}",
-                    if old_acc.len() > 50 { &old_acc[..50] } else { &old_acc },
-                    if new_acc.len() > 50 { &new_acc[..50] } else { &new_acc });
-            }
             return;
         }
 
@@ -532,9 +524,6 @@ impl<'a> FOL2BoolTranslator<'a> {
         let decl = decls.iter().nth(current_decl).unwrap();
         let var = decl.variable();
         let domain = self.translate_expression(decl.expression());
-
-        eprintln!("DEBUG: EXISTS processing decl {} (var: {}), domain capacity: {}",
-            current_decl, var.name(), domain.dimensions().capacity());
 
         // Create ground matrix for this variable
         let mut ground_value = self.interpreter.factory().matrix(*domain.dimensions());
@@ -550,7 +539,6 @@ impl<'a> FOL2BoolTranslator<'a> {
         for (index, value) in indices {
             // Short-circuit check
             if let Some(BoolValue::Constant(BooleanConstant::TRUE)) = acc {
-                eprintln!("DEBUG: Short-circuit breaking loop at decl {} after {} iterations", current_decl, index);
                 break;
             }
 
