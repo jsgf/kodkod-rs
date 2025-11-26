@@ -113,7 +113,7 @@ NOTES:
 - N/A SudokuDatabase.java (Support class)
 - N/A SudokuParser.java (Support class)
 
-#### tptp/ (24 total)
+#### tptp/ (24 total, 1 complete, 1 deferred)
 - [ ] ALG195.java
 - [ ] ALG195_1.java
 - [ ] ALG197.java
@@ -131,7 +131,7 @@ NOTES:
 - [ ] MED009.java
 - [ ] MGT066.java
 - [x] NUM374.java
-- [ ] NUM378.java
+- [D] NUM378.java (Deferred - requires formula simplification before quantifier expansion - 92 vars)
 - [ ] Quasigroups7.java
 - [ ] SET943.java
 - [ ] SET948.java
