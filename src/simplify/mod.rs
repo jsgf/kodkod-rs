@@ -6,6 +6,10 @@
  * Following Java: kodkod.engine.fol2sat.FormulaFlattener, etc.
  */
 
+pub mod flattener;
+
+pub use flattener::FormulaFlattener;
+
 use crate::ast::{Formula, Expression, Decls, Quantifier};
 use crate::ast::formula::BinaryFormulaOp;
 use crate::instance::Bounds;
@@ -29,7 +33,7 @@ struct FormulaSimplifier<'a> {
     bounds: &'a Bounds,
     options: &'a BoolOptions,
     // Cache for simplified subformulas
-    cache: HashMap<*const Formula, Formula>,
+    cache: HashMap<Formula, Formula>,
     // Maximum domain size to eagerly evaluate quantifiers
     max_eager_domain: usize,
 }

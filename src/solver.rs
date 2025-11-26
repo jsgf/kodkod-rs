@@ -25,6 +25,10 @@ pub struct Options {
     /// predicate (SBP) that will be generated. Higher values break more
     /// symmetries but may increase overhead. Set to 0 to disable.
     pub symmetry_breaking: i32,
+    /// Whether to flatten formulas to NNF (default = true)
+    pub flatten_formulas: bool,
+    /// Whether to break up quantifiers when flattening (default = false)
+    pub breakup_quantifiers: bool,
 }
 
 impl Default for Options {
@@ -33,6 +37,8 @@ impl Default for Options {
             bool_options: BoolOptions::default(),
             timeout_ms: None,
             symmetry_breaking: 20,
+            flatten_formulas: true,
+            breakup_quantifiers: false,
         }
     }
 }
@@ -69,12 +75,23 @@ impl Solver {
         // Step 0: Simplify formula before translation
         let simplification_start = Instant::now();
         let simplified_formula = crate::simplify::simplify_formula(formula, bounds, &self.options.bool_options);
+
+        // Step 0.5: Flatten formula to NNF if enabled
+        let flattened_formula = if self.options.flatten_formulas {
+            let mut flattener = crate::simplify::FormulaFlattener::new(self.options.breakup_quantifiers);
+            let conjuncts = flattener.flatten(&simplified_formula);
+            // Combine conjuncts back into a single formula
+            Formula::and_all(conjuncts)
+        } else {
+            simplified_formula
+        };
+
         let simplification_time = simplification_start.elapsed();
 
         eprintln!("DEBUG: Simplification took {:?}", simplification_time);
 
         // Check if formula simplified to a constant
-        match &simplified_formula {
+        match &flattened_formula {
             Formula::Constant(true) => {
                 eprintln!("DEBUG: Formula simplified to TRUE");
                 return Ok(Solution::Trivial {
@@ -105,7 +122,7 @@ impl Solver {
         // Step 1: Translate formula to boolean circuit
         let translation_start = Instant::now();
         let translation_result = Translator::evaluate(
-            &simplified_formula,
+            &flattened_formula,
             bounds,
             &self.options.bool_options,
             self.options.symmetry_breaking,
