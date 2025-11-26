@@ -16,15 +16,22 @@
   - May require minor refactoring to expose testable functions
 - Implement missing optimizations
   - Revisit all should_panic tests and implement the features they require
-  - **PERFORMANCE: Formula simplification before quantifier expansion**
-    - Issue: NUM378 hangs during translation (92 quantified vars over 22 atoms = 22^92 combinations)
-    - Symptom: Formula evaluates to FALSE at innermost level, but must backtrack through all outer loops
-    - Short-circuit helps but insufficient: FALSE OR FALSE = FALSE (never triggers short-circuit)
-    - Java solution: Detects trivially UNSAT BEFORE expanding quantifiers
-    - Root cause: Missing early formula preprocessing/simplification pass
-    - Java does: FormulaFlattener.flatten(), Skolemizer.skolemize(), SymmetryBreaker, predicate inlining
-    - We need: Pre-expansion constant propagation and contradiction detection
-    - Status: Short-circuit logic added but not sufficient for this case
+  - **PERFORMANCE: Formula preprocessing for complex quantified formulas**
+    - Status: Basic constant propagation implemented, deeper preprocessing needed
+    - What's implemented:
+      - Constant propagation for binary/n-ary formulas
+      - Short-circuit logic in quantifier translation
+      - Detection of trivial quantified formulas (constant body)
+      - Framework for eager evaluation (small domains)
+    - What's still needed for NUM378 (92 vars over 22 atoms):
+      - FormulaFlattener: Push negations, flatten to CNF
+      - Skolemizer: Eliminate existentials via Skolem functions
+      - SymmetryBreaker: Detect and break symmetries in bounds
+      - Predicate inlining: Replace relation predicates with constraints
+      - Partial evaluation: Evaluate expressions using exact bounds
+      - Constraint propagation: Detect contradictions in equation systems
+    - Complexity: ~2000-3000 LOC across multiple modules
+    - References: ../kodkod/src/kodkod/engine/fol2sat/{FormulaFlattener,Skolemizer}.java
 - **Implement proof/unsat core extraction system**
   - Required for: ListDebug.java example
   - Scope: ~1000+ LOC across multiple modules
