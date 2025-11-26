@@ -272,7 +272,7 @@ impl FormulaFlattener {
             // ∀x.(P ∧ Q) = (∀x.P) ∧ (∀x.Q) if x is not free in one of them
             // This is a simplified version - full implementation would need free variable analysis
             match body {
-                Formula::Binary { op: BinaryFormulaOp::And, left, right } => {
+                Formula::Binary { op: BinaryFormulaOp::And, left: _, right: _ } => {
                     // For now, just flatten the body without breaking up
                     // Full implementation would check free variables
                     Formula::Quantified {

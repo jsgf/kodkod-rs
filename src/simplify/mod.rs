@@ -99,88 +99,35 @@ impl<'a> FormulaSimplifier<'a> {
 
     fn simplify_binary(&self, op: &BinaryFormulaOp, left: Formula, right: Formula) -> Formula {
         use BinaryFormulaOp::*;
-        match op {
-            And => {
-                // FALSE AND x = FALSE
-                if matches!(left, Formula::Constant(false)) || matches!(right, Formula::Constant(false)) {
-                    return Formula::FALSE;
-                }
-                // TRUE AND x = x
-                if matches!(left, Formula::Constant(true)) {
-                    return right;
-                }
-                // x AND TRUE = x
-                if matches!(right, Formula::Constant(true)) {
-                    return left;
-                }
-                Formula::Binary {
-                    op: And,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }
-            }
-            Or => {
-                // TRUE OR x = TRUE
-                if matches!(left, Formula::Constant(true)) || matches!(right, Formula::Constant(true)) {
-                    return Formula::TRUE;
-                }
-                // FALSE OR x = x
-                if matches!(left, Formula::Constant(false)) {
-                    return right;
-                }
-                // x OR FALSE = x
-                if matches!(right, Formula::Constant(false)) {
-                    return left;
-                }
-                Formula::Binary {
-                    op: Or,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }
-            }
-            Implies => {
-                // FALSE => x = TRUE
-                if matches!(left, Formula::Constant(false)) {
-                    return Formula::TRUE;
-                }
-                // TRUE => x = x
-                if matches!(left, Formula::Constant(true)) {
-                    return right;
-                }
-                // x => TRUE = TRUE
-                if matches!(right, Formula::Constant(true)) {
-                    return Formula::TRUE;
-                }
-                // x => FALSE = NOT x
-                if matches!(right, Formula::Constant(false)) {
-                    return Formula::Not(Box::new(left));
-                }
-                Formula::Binary {
-                    op: Implies,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }
-            }
-            Iff => {
-                // TRUE <=> x = x
-                if matches!(left, Formula::Constant(true)) {
-                    return right;
-                }
-                if matches!(right, Formula::Constant(true)) {
-                    return left;
-                }
-                // FALSE <=> x = NOT x
-                if matches!(left, Formula::Constant(false)) {
-                    return Formula::Not(Box::new(right));
-                }
-                if matches!(right, Formula::Constant(false)) {
-                    return Formula::Not(Box::new(left));
-                }
-                Formula::Binary {
-                    op: Iff,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }
+        use Formula::Constant;
+
+        match (op, left, right) {
+            // AND simplifications
+            (And, Constant(false), _) | (And, _, Constant(false)) => Formula::FALSE,
+            (And, Constant(true), other) | (And, other, Constant(true)) => other,
+            (And, left, right) if left == right => left, // x AND x = x
+
+            // OR simplifications
+            (Or, Constant(true), _) | (Or, _, Constant(true)) => Formula::TRUE,
+            (Or, Constant(false), other) | (Or, other, Constant(false)) => other,
+            (Or, left, right) if left == right => left, // x OR x = x
+
+            // IMPLIES simplifications
+            (Implies, Constant(false), _) | (Implies, _, Constant(true)) => Formula::TRUE,
+            (Implies, Constant(true), other) => other,
+            (Implies, other, Constant(false)) => Formula::Not(Box::new(other)),
+            (Implies, left, right) if left == right => Formula::TRUE, // x => x = TRUE
+
+            // IFF simplifications
+            (Iff, Constant(true), other) | (Iff, other, Constant(true)) => other,
+            (Iff, Constant(false), other) | (Iff, other, Constant(false)) => Formula::Not(Box::new(other)),
+            (Iff, left, right) if left == right => Formula::TRUE, // x <=> x = TRUE
+
+            // Default: keep the formula
+            (op, left, right) => Formula::Binary {
+                op: *op,
+                left: Box::new(left),
+                right: Box::new(right),
             }
         }
     }
@@ -383,6 +330,38 @@ mod tests {
 
         // Test NOT FALSE = TRUE
         let f = Formula::not(Formula::FALSE);
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(true)));
+    }
+
+    #[test]
+    fn test_idempotence_rules() {
+        let atoms: Vec<&str> = vec!["A"];
+        let u = Universe::new(&atoms).unwrap();
+        let b = Bounds::new(u);
+        let opts = BoolOptions::default();
+
+        // Create a simple relation for testing
+        let r = crate::ast::Relation::unary("r");
+
+        // x AND x = x
+        let x = crate::ast::Expression::from(r).some();
+        let f = Formula::and(x.clone(), x.clone());
+        let result = simplify_formula(&f, &b, &opts);
+        assert_eq!(result, x);
+
+        // x OR x = x
+        let f = Formula::or(x.clone(), x.clone());
+        let result = simplify_formula(&f, &b, &opts);
+        assert_eq!(result, x);
+
+        // x => x = TRUE
+        let f = Formula::implies(x.clone(), x.clone());
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(true)));
+
+        // x <=> x = TRUE
+        let f = Formula::iff(x.clone(), x.clone());
         let result = simplify_formula(&f, &b, &opts);
         assert!(matches!(result, Formula::Constant(true)));
     }

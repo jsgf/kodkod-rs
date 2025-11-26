@@ -400,6 +400,8 @@ mod tests {
             bool_options: BoolOptions::default(),
             timeout_ms: Some(5000),
             symmetry_breaking: 20,
+            flatten_formulas: true,
+            breakup_quantifiers: false,
         };
 
         let solver = Solver::new(options);
