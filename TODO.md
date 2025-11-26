@@ -16,6 +16,11 @@
   - May require minor refactoring to expose testable functions
 - Implement missing optimizations
   - Revisit all should_panic tests and implement the features they require
+  - **PERFORMANCE: Formula simplification before translation**
+    - Issue: NUM378 hangs during translation (96 quantified vars over 22 atoms)
+    - Java recognizes it as trivially UNSAT without full expansion
+    - Need early formula simplification/constant propagation
+    - May be related to handling of contradictions in existential formulas
 - **Implement proof/unsat core extraction system**
   - Required for: ListDebug.java example
   - Scope: ~1000+ LOC across multiple modules

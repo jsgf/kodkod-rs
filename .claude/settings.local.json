@@ -63,7 +63,10 @@
       "Bash(while read f)",
       "Bash(for ex in bmc_list_check bmc_list_repair bmc_list_synth)",
       "Bash(timeout 30 cargo build:*)",
-      "Bash(timeout 60 cargo build:*)"
+      "Bash(timeout 60 cargo build:*)",
+      "Bash(timeout 30 bash -c 'cd /home/jsgf/git/kodkod && javac -cp build/kodkod.jar examples/kodkod/examples/tptp/NUM378.java':*)",
+      "Bash(timeout 120 bash:*)",
+      "Bash(timeout 30 bash -c 'RUST_LOG=kodkod_rs=debug cargo run --release --example tptp_num378 2>&1 | head -100':*)"
     ],
     "deny": [],
     "ask": []

@@ -228,7 +228,15 @@ fn main() {
     let num = NUM378::new();
 
     println!("Running NUM378...");
-    let sol = num.solve();
+    println!("Building bounds...");
+    let bounds = num.bounds();
+    println!("Building formula...");
+    let formula = num.check_inequalities();
+    println!("Solving...");
+
+    let options = Options::default();
+    let solver = Solver::new(options);
+    let sol = solver.solve(&formula, &bounds).expect("Failed to solve");
 
     match sol {
         Solution::Sat { .. } => {
