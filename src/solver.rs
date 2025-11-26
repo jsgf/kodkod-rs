@@ -66,15 +66,51 @@ impl Solver {
         formula: &Formula,
         bounds: &Bounds,
     ) -> Result<Solution> {
+        // Step 0: Simplify formula before translation
+        let simplification_start = Instant::now();
+        let simplified_formula = crate::simplify::simplify_formula(formula, bounds, &self.options.bool_options);
+        let simplification_time = simplification_start.elapsed();
+
+        eprintln!("DEBUG: Simplification took {:?}", simplification_time);
+
+        // Check if formula simplified to a constant
+        match &simplified_formula {
+            Formula::Constant(true) => {
+                eprintln!("DEBUG: Formula simplified to TRUE");
+                return Ok(Solution::Trivial {
+                    is_true: true,
+                    stats: Statistics {
+                        translation_time: simplification_time,
+                        solving_time: Duration::from_micros(0),
+                        num_variables: 0,
+                        num_clauses: 0,
+                    },
+                });
+            }
+            Formula::Constant(false) => {
+                eprintln!("DEBUG: Formula simplified to FALSE");
+                return Ok(Solution::Trivial {
+                    is_true: false,
+                    stats: Statistics {
+                        translation_time: simplification_time,
+                        solving_time: Duration::from_micros(0),
+                        num_variables: 0,
+                        num_clauses: 0,
+                    },
+                });
+            }
+            _ => {}
+        }
+
         // Step 1: Translate formula to boolean circuit
         let translation_start = Instant::now();
         let translation_result = Translator::evaluate(
-            formula,
+            &simplified_formula,
             bounds,
             &self.options.bool_options,
             self.options.symmetry_breaking,
         );
-        let translation_time = translation_start.elapsed();
+        let translation_time = translation_start.elapsed() + simplification_time;
 
         // Step 2: Convert boolean circuit to CNF
         let cnf_start = Instant::now();

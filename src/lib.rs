@@ -66,6 +66,9 @@ pub mod cnf;
 /// Main solver API
 pub mod solver;
 
+/// Formula simplification and preprocessing
+pub mod simplify;
+
 /// Utility collections and helper functions
 /// Integer collections, sparse sequences, and utilities
 pub mod util {

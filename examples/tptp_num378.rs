@@ -227,13 +227,26 @@ impl NUM378 {
 fn main() {
     let num = NUM378::new();
 
-    println!("Running NUM378...");
-    println!("Note: This example requires formula simplification before quantifier expansion.");
-    println!("With 92 quantified variables over 22 atoms, it will not complete in reasonable time.");
-    println!("See TODO.md for details on needed optimizations.");
-    println!();
-    println!("Skipping execution.");
+    println!("Running NUM378 with simplification...");
+    println!("Testing if formula simplification detects trivial UNSAT...");
 
-    // Uncommenting the following will hang:
-    // let sol = num.solve();
+    let sol = num.solve();
+
+    match sol {
+        Solution::Sat { .. } => {
+            println!("SATISFIABLE");
+        }
+        Solution::Unsat { .. } => {
+            println!("UNSATISFIABLE");
+        }
+        Solution::Trivial { is_true, .. } => {
+            if is_true {
+                println!("Trivially TRUE");
+            } else {
+                println!("Trivially FALSE - simplification worked!");
+            }
+        }
+    }
+
+    println!("\nStatistics: {:?}", sol.statistics());
 }
