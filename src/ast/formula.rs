@@ -547,6 +547,12 @@ impl Decls {
         self.declarations.push(decl);
         self
     }
+
+    /// Combines this Decls with another Decls
+    pub fn and_decls(mut self, other: Decls) -> Self {
+        self.declarations.extend(other.declarations);
+        self
+    }
 }
 
 #[cfg(test)]
