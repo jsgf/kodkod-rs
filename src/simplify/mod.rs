@@ -338,6 +338,52 @@ mod tests {
     }
 
     #[test]
+    fn test_constant_detection() {
+        let atoms: Vec<&str> = vec!["A"];
+        let u = Universe::new(&atoms).unwrap();
+        let b = Bounds::new(u);
+        let opts = BoolOptions::default();
+
+        // Test that TRUE is recognized as constant
+        let result = simplify_formula(&Formula::TRUE, &b, &opts);
+        assert!(matches!(result, Formula::Constant(true)));
+
+        // Test that FALSE is recognized as constant
+        let result = simplify_formula(&Formula::FALSE, &b, &opts);
+        assert!(matches!(result, Formula::Constant(false)));
+
+        // Test TRUE AND FALSE = FALSE
+        let f = Formula::and(Formula::TRUE, Formula::FALSE);
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(false)));
+
+        // Test TRUE OR FALSE = TRUE
+        let f = Formula::or(Formula::TRUE, Formula::FALSE);
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(true)));
+
+        // Test FALSE OR FALSE = FALSE
+        let f = Formula::or(Formula::FALSE, Formula::FALSE);
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(false)));
+
+        // Test TRUE AND TRUE = TRUE
+        let f = Formula::and(Formula::TRUE, Formula::TRUE);
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(true)));
+
+        // Test NOT TRUE = FALSE
+        let f = Formula::not(Formula::TRUE);
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(false)));
+
+        // Test NOT FALSE = TRUE
+        let f = Formula::not(Formula::FALSE);
+        let result = simplify_formula(&f, &b, &opts);
+        assert!(matches!(result, Formula::Constant(true)));
+    }
+
+    #[test]
     fn test_quantified_with_constant_body() {
         let atoms: Vec<&str> = vec!["A", "B"];
         let u = Universe::new(&atoms).unwrap();

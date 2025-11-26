@@ -239,12 +239,16 @@ pub enum Solution {
 impl Solution {
     /// Returns true if the formula is satisfiable
     pub fn is_sat(&self) -> bool {
-        matches!(self, Solution::Sat { .. })
+        match self {
+            Solution::Sat { .. } => true,
+            Solution::Trivial { is_true, .. } => *is_true,
+            Solution::Unsat { .. } => false,
+        }
     }
 
     /// Returns true if the formula is unsatisfiable
     pub fn is_unsat(&self) -> bool {
-        matches!(self, Solution::Unsat { .. })
+        !self.is_sat()
     }
 
     /// Returns true if the formula is trivial
