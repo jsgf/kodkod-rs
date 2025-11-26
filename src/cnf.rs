@@ -93,11 +93,6 @@ impl<'a> CNFTranslator<'a> {
             BoolValue::Formula(f) => self.translate_formula(f),
         };
 
-        // DEBUG: Track literal 0
-        if label == 0 {
-            eprintln!("WARNING: translate_value returning label 0 for {:?}", value);
-        }
-
         label
     }
 

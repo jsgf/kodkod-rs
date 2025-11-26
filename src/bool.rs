@@ -662,7 +662,7 @@ impl<'arena> BooleanMatrix<'arena> {
             result.set(idx, val.clone());
         }
 
-        let row_length = self.dimensions.capacity() / self.dimensions.rows();
+        let row_length = self.dimensions.capacity() / self.dimensions.dimension_0();
         let mut row = usize::MAX;
         let mut row_val = BoolValue::Constant(BooleanConstant::TRUE);
 
