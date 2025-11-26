@@ -260,7 +260,7 @@ impl<'a> FormulaSimplifier<'a> {
 
         // Check if all declarations are simple (one_of UNIV)
         for decl in declarations.iter() {
-            if !matches!(decl.expression(), Expression::Univ) {
+            if !matches!(decl.expression(), Expression::UNIV) {
                 return false;
             }
         }
@@ -268,7 +268,7 @@ impl<'a> FormulaSimplifier<'a> {
         true
     }
 
-    fn try_eager_evaluate(&self, quantifier: Quantifier, declarations: &Decls, body: &Formula) -> Option<Formula> {
+    fn try_eager_evaluate(&self, _quantifier: Quantifier, _declarations: &Decls, _body: &Formula) -> Option<Formula> {
         // For now, return None - eager evaluation not yet implemented
         // This would require:
         // 1. Enumerate all possible bindings of variables
