@@ -32,6 +32,153 @@
       - Constraint propagation: Detect contradictions in equation systems
     - Complexity: ~2000-3000 LOC across multiple modules
     - References: ../kodkod/src/kodkod/engine/fol2sat/{FormulaFlattener,Skolemizer}.java
+
+## Early Simplification Plan
+
+### Phase 1: Fix existing should_panic tests requiring simplification
+
+#### 1.1 Fix trivial formula tests (tests/trivial.rs)
+- **Problem**: Tests for TRUE, FALSE, TRUE∧FALSE, TRUE∨FALSE are failing
+- **Root cause**: Early simplification of constant formulas not detecting trivial cases
+- **Solution**:
+  - Enhance simplify::simplify_formula to detect constant formulas early
+  - Return Formula::TRUE/FALSE directly when formulas simplify to constants
+  - Ensure Solver::solve recognizes constant formulas before translation
+- **Test coverage**:
+  - tests/trivial.rs (4 tests)
+  - Add unit tests in src/simplify/mod.rs for constant detection
+
+#### 1.2 Audit and fix all should_panic tests
+- **Scope**: Review all tests with #[should_panic] attributes
+- **Current inventory** (from grep):
+  - src/ast.rs:500, 567 - Arity validation tests
+  - src/translator/leaf_interpreter.rs:403 - Bounds checking
+  - tests/test_if_then_else.rs:29 - Arity mismatch
+  - src/bool/factory.rs:572, 639, 662, 737, 768, 799 - Boolean simplification
+  - src/bool.rs:926, 932 - Variable label validation
+  - tests/test_boolean_matrix.rs:492 - Transpose validation
+- **Action**: Verify each test, ensure proper implementation exists
+
+### Phase 2: Complete implementation for NUM378
+
+#### 2.1 Formula Flattening (FormulaFlattener)
+- **Purpose**: Convert formulas to Negation Normal Form (NNF) and break up quantifiers
+- **Key components**:
+  - NNF conversion: Push negations to literals
+  - Quantifier breakup: Split universal quantifiers when possible
+  - Conjunction extraction: Flatten nested AND operations
+- **Implementation path**:
+  - Port ../kodkod/src/kodkod/engine/fol2sat/FormulaFlattener.java (~275 LOC)
+  - Create src/simplify/flattener.rs
+  - Integration point: Call from Solver before translation
+- **Test coverage**:
+  - Port Java tests from kodkod.test.unit.SkolemizationTest
+  - Add regression tests for NUM378 preprocessing
+
+#### 2.2 Skolemization (Skolemizer)
+- **Purpose**: Eliminate existential quantifiers by introducing Skolem functions
+- **Key components**:
+  - Skolem function generation
+  - Existential quantifier elimination
+  - Dependency tracking for nested quantifiers
+- **Implementation path**:
+  - Port ../kodkod/src/kodkod/engine/fol2sat/Skolemizer.java (~564 LOC)
+  - Create src/simplify/skolemizer.rs
+  - Handle nested quantifier dependencies
+- **Test coverage**:
+  - Port Java SkolemizationTest
+  - Verify on TPTP examples with heavy quantification
+
+#### 2.3 Enhanced Constant Propagation
+- **Current state**: Basic binary/n-ary propagation exists
+- **Enhancements needed**:
+  - Expression evaluation with exact bounds
+  - Relation predicate evaluation when bounds are exact
+  - Integer expression constant folding
+  - Cardinality constraint simplification
+- **Implementation**:
+  - Extend src/simplify/mod.rs
+  - Add Expression visitor for constant evaluation
+  - Cache evaluated subexpressions
+
+#### 2.4 Partial Evaluation with Bounds
+- **Purpose**: Evaluate expressions using known bounds
+- **Components**:
+  - Exact bound detection (lower = upper)
+  - Expression evaluation with substitution
+  - Relation composition with known values
+- **Implementation**:
+  - Add bounds parameter to simplify_formula
+  - Create evaluator for expressions with exact bounds
+  - Integrate with constant propagation
+
+#### 2.5 Integration and Optimization
+- **Solver pipeline**:
+  1. Initial simplification (constant propagation)
+  2. Formula flattening (NNF conversion)
+  3. Skolemization (if enabled)
+  4. Partial evaluation with bounds
+  5. Final simplification pass
+- **Caching strategy**:
+  - Cache simplified subformulas
+  - Share cache across simplification phases
+  - Use arena allocation for intermediate formulas
+
+### Phase 3: Rust vs Java Audit
+
+#### 3.1 Feature Comparison
+- **Method**: Systematic comparison of Java and Rust implementations
+- **Scope**:
+  - Formula simplification (kodkod.engine.fol2sat.*)
+  - Boolean circuit optimization (kodkod.engine.bool.*)
+  - Translation optimizations (kodkod.engine.fol2sat.Translator)
+- **Output**: Gap analysis document listing missing optimizations
+
+#### 3.2 Performance Optimizations
+- **Java optimizations to port**:
+  - Circuit-level simplifications in BooleanFactory
+  - Gate-level optimizations (absorption, idempotence)
+  - CNF minimization techniques
+- **Rust-specific optimizations**:
+  - Arena allocation for formula nodes
+  - Zero-copy formula transformations
+  - Parallel simplification where applicable
+
+#### 3.3 Test Coverage Alignment
+- **Goal**: Ensure Rust tests cover all Java test scenarios
+- **Process**:
+  - Map Java test files to Rust equivalents
+  - Identify missing test scenarios
+  - Port or create equivalent tests
+- **Priority areas**:
+  - TPTP examples (especially NUM378)
+  - Quantifier-heavy formulas
+  - Large formula optimization
+
+### Implementation Order & Dependencies
+
+1. **Immediate** (Phase 1.1): Fix trivial formula tests
+   - Required for basic solver correctness
+   - Blocks other solver tests
+
+2. **Short-term** (Phase 1.2 + 2.3): Enhanced constant propagation
+   - Foundation for other optimizations
+   - Improves existing examples
+
+3. **Medium-term** (Phase 2.1-2.2): Flattener & Skolemizer
+   - Required for NUM378
+   - Enables quantifier-heavy examples
+
+4. **Long-term** (Phase 2.4-2.5 + Phase 3): Full optimization suite
+   - Performance improvements
+   - Complete Java parity
+
+### Success Metrics
+
+- All tests in tests/trivial.rs pass
+- NUM378 example performance within 2x of Java implementation
+- No #[should_panic] tests that should be working
+- Performance parity with Java implementation (within 2x) on all TPTP examples
 - **Implement proof/unsat core extraction system**
   - Required for: ListDebug.java example
   - Scope: ~1000+ LOC across multiple modules
