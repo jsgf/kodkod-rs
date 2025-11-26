@@ -16,11 +16,15 @@
   - May require minor refactoring to expose testable functions
 - Implement missing optimizations
   - Revisit all should_panic tests and implement the features they require
-  - **PERFORMANCE: Formula simplification before translation**
-    - Issue: NUM378 hangs during translation (96 quantified vars over 22 atoms)
-    - Java recognizes it as trivially UNSAT without full expansion
-    - Need early formula simplification/constant propagation
-    - May be related to handling of contradictions in existential formulas
+  - **PERFORMANCE: Formula simplification before quantifier expansion**
+    - Issue: NUM378 hangs during translation (92 quantified vars over 22 atoms = 22^92 combinations)
+    - Symptom: Formula evaluates to FALSE at innermost level, but must backtrack through all outer loops
+    - Short-circuit helps but insufficient: FALSE OR FALSE = FALSE (never triggers short-circuit)
+    - Java solution: Detects trivially UNSAT BEFORE expanding quantifiers
+    - Root cause: Missing early formula preprocessing/simplification pass
+    - Java does: FormulaFlattener.flatten(), Skolemizer.skolemize(), SymmetryBreaker, predicate inlining
+    - We need: Pre-expansion constant propagation and contradiction detection
+    - Status: Short-circuit logic added but not sufficient for this case
 - **Implement proof/unsat core extraction system**
   - Required for: ListDebug.java example
   - Scope: ~1000+ LOC across multiple modules
