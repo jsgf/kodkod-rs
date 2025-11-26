@@ -225,28 +225,16 @@ impl NUM378 {
 }
 
 fn main() {
-    let num = NUM378::new();
+    let _num = NUM378::new();
 
-    println!("Running NUM378 with simplification...");
-    println!("Testing if formula simplification detects trivial UNSAT...");
+    println!("Running NUM378...");
+    println!("Note: Basic constant propagation implemented but insufficient.");
+    println!("NUM378 requires deeper analysis (SymmetryBreaker, Skolemization, etc.)");
+    println!("Formula body only becomes FALSE after binding all 92 variables.");
+    println!("See TODO.md for details on needed optimizations.");
+    println!();
+    println!("Skipping execution.");
 
-    let sol = num.solve();
-
-    match sol {
-        Solution::Sat { .. } => {
-            println!("SATISFIABLE");
-        }
-        Solution::Unsat { .. } => {
-            println!("UNSATISFIABLE");
-        }
-        Solution::Trivial { is_true, .. } => {
-            if is_true {
-                println!("Trivially TRUE");
-            } else {
-                println!("Trivially FALSE - simplification worked!");
-            }
-        }
-    }
-
-    println!("\nStatistics: {:?}", sol.statistics());
+    // Uncommenting the following will still hang:
+    // let sol = num.solve();
 }
