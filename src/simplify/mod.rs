@@ -260,7 +260,8 @@ impl<'a> FormulaSimplifier<'a> {
 
         // Check if all declarations are simple (one_of UNIV)
         for decl in declarations.iter() {
-            if !matches!(decl.expression(), Expression::UNIV) {
+            // Check if expression is UNIV (the universe)
+            if !matches!(decl.expression(), &Expression::UNIV) {
                 return false;
             }
         }
