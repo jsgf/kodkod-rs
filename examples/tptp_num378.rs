@@ -230,13 +230,19 @@ fn main() {
     println!("Running NUM378...");
     println!("Building bounds...");
     let bounds = num.bounds();
+    println!("Bounds created: universe size = {}", bounds.universe().size());
+
     println!("Building formula...");
     let formula = num.check_inequalities();
-    println!("Solving...");
+    println!("Formula built");
 
+    println!("Solving...");
     let options = Options::default();
     let solver = Solver::new(options);
+
+    eprintln!("DEBUG: About to solve...");
     let sol = solver.solve(&formula, &bounds).expect("Failed to solve");
+    eprintln!("DEBUG: Solving complete");
 
     match sol {
         Solution::Sat { .. } => {

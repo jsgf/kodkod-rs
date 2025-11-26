@@ -475,18 +475,18 @@ impl<'a> FOL2BoolTranslator<'a> {
     ) -> BoolValue<'a> {
         match quantifier {
             Quantifier::Some => {
-                let mut acc = Vec::new();
+                let mut acc = None;
                 self.translate_exists(declarations, body, 0,
                                      BoolValue::Constant(BooleanConstant::TRUE),
                                      &mut acc);
-                self.interpreter.factory().or_multi(acc)
+                acc.unwrap_or(BoolValue::Constant(BooleanConstant::FALSE))
             }
             Quantifier::All => {
-                let mut acc = Vec::new();
+                let mut acc = None;
                 self.translate_forall(declarations, body, 0,
                                      BoolValue::Constant(BooleanConstant::FALSE),
                                      &mut acc);
-                self.interpreter.factory().and_multi(acc)
+                acc.unwrap_or(BoolValue::Constant(BooleanConstant::TRUE))
             }
         }
     }
@@ -499,14 +499,32 @@ impl<'a> FOL2BoolTranslator<'a> {
         formula: &Formula,
         current_decl: usize,
         decl_constraints: BoolValue<'a>,
-        acc: &mut Vec<BoolValue<'a>>
+        acc: &mut Option<BoolValue<'a>>
     ) {
+        // Short-circuit: if we've already found TRUE, stop
+        if let Some(BoolValue::Constant(BooleanConstant::TRUE)) = acc {
+            eprintln!("DEBUG: Short-circuit in EXISTS at decl {}", current_decl);
+            return;
+        }
+
         // Base case: all variables bound
         if current_decl >= decls.size() {
             let formula_val = self.translate_formula(formula);
             let factory = self.interpreter.factory();
             let result = factory.and(decl_constraints.clone(), formula_val);
-            acc.push(result);
+
+            // Accumulate with OR: acc = acc OR result
+            let old_acc = acc.as_ref().map(|v| format!("{:?}", v)).unwrap_or_else(|| "None".to_string());
+            *acc = Some(match acc.take() {
+                None => result.clone(),
+                Some(prev) => factory.or(prev, result.clone())
+            });
+            let new_acc = format!("{:?}", acc.as_ref().unwrap());
+            if old_acc != new_acc {
+                eprintln!("DEBUG: EXISTS accumulated: {} -> {}",
+                    if old_acc.len() > 50 { &old_acc[..50] } else { &old_acc },
+                    if new_acc.len() > 50 { &new_acc[..50] } else { &new_acc });
+            }
             return;
         }
 
@@ -514,6 +532,9 @@ impl<'a> FOL2BoolTranslator<'a> {
         let decl = decls.iter().nth(current_decl).unwrap();
         let var = decl.variable();
         let domain = self.translate_expression(decl.expression());
+
+        eprintln!("DEBUG: EXISTS processing decl {} (var: {}), domain capacity: {}",
+            current_decl, var.name(), domain.dimensions().capacity());
 
         // Create ground matrix for this variable
         let mut ground_value = self.interpreter.factory().matrix(*domain.dimensions());
@@ -527,6 +548,12 @@ impl<'a> FOL2BoolTranslator<'a> {
             .collect();
 
         for (index, value) in indices {
+            // Short-circuit check
+            if let Some(BoolValue::Constant(BooleanConstant::TRUE)) = acc {
+                eprintln!("DEBUG: Short-circuit breaking loop at decl {} after {} iterations", current_decl, index);
+                break;
+            }
+
             // Set this index to TRUE
             ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
 
@@ -555,8 +582,13 @@ impl<'a> FOL2BoolTranslator<'a> {
         formula: &Formula,
         current_decl: usize,
         decl_constraints: BoolValue<'a>,
-        acc: &mut Vec<BoolValue<'a>>
+        acc: &mut Option<BoolValue<'a>>
     ) {
+        // Short-circuit: if we've already found FALSE, stop
+        if let Some(BoolValue::Constant(BooleanConstant::FALSE)) = acc {
+            return;
+        }
+
         // Base case: all variables bound
         if current_decl >= decls.size() {
             let formula_val = self.translate_formula(formula);
@@ -564,7 +596,12 @@ impl<'a> FOL2BoolTranslator<'a> {
             // forall: decl_constraints ∨ formula
             // (NOT following my earlier comment - following Java exactly)
             let result = factory.or(decl_constraints.clone(), formula_val);
-            acc.push(result);
+
+            // Accumulate with AND: acc = acc AND result
+            *acc = Some(match acc.take() {
+                None => result,
+                Some(prev) => factory.and(prev, result)
+            });
             return;
         }
 
@@ -585,6 +622,11 @@ impl<'a> FOL2BoolTranslator<'a> {
             .collect();
 
         for (index, value) in indices {
+            // Short-circuit check
+            if let Some(BoolValue::Constant(BooleanConstant::FALSE)) = acc {
+                break;
+            }
+
             ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
             *self.env.borrow_mut().lookup_mut(&var).unwrap() = ground_value.clone();
 
