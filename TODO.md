@@ -3,11 +3,17 @@
   - Secondary goal is to make idiomatic Rust versions which are functionally identical to the Java
   - If an example fails because of a bug or missing feature, then you *MUST* fix the bug or implement the feature before moving on.
   - **EXCEPTION**: Features requiring substantial subsystems (>500 LOC) can be deferred and documented below
+  - **RELEVANT EXAMPLES**: Only examples that actually use the Kodkod API are tracked. Support files (List.java, Graph.java, parsers, databases) are excluded.
 - Port all remaining tests
   - Make sure there's a Rust test corresponding to every Java test
   - Like examples, *DO NOT* move on if there's a bug or missing feature
     - If, after explicit permission, there's a reason to skip a test for now, leave the test in a *failing* or with a `#[should_panic]` annotation so the gap is obvious
   - This excludes tests which are only specific to Java, like the JNI interfaces to solvers, or custom data structures which Rust has by default
+- After all examples are ported, add #[test] functions to examples
+  - Examples should keep their main() functions (for standalone execution)
+  - Add #[test] functions that invoke main functionality and assert expected outcomes
+  - This allows `cargo test` to validate all examples work correctly
+  - May require minor refactoring to expose testable functions
 - Implement missing optimizations
   - Revisit all should_panic tests and implement the features they require
 - **Implement proof/unsat core extraction system**
@@ -71,30 +77,32 @@ NOTES:
 - [x] Trees.java
 - [x] Viktor.java
 
-#### bmc/ (7 total)
-- [ ] List.java (Not a Kodkod example - it's the Java data structure being verified)
+#### bmc/ (4 relevant out of 7 total)
+- N/A List.java (Not a Kodkod example - it's the Java data structure being verified)
 - [x] ListCheck.java
 - [ ] ListDebug.java (Deferred - requires proof/unsat core extraction - see above)
 - [x] ListEncoding.java
 - [x] ListRepair.java
-- [x] ListSynth.java (Known bug: post() makes formula UNSAT, currently using partial formula)
-- [ ] ListViz.java (Visualization helper - can defer)
+- [x] ListSynth.java
+- N/A ListViz.java (Visualization helper - not a Kodkod example)
 
-#### csp/ (10 total)
-- [ ] BlockedNQueens.java
+#### csp/ (9 relevant out of 10 total)
+- [x] BlockedNQueens.java
 - [ ] BlockedNQueens2.java
-- [ ] Graph.java
+- N/A Graph.java (Support class - not a Kodkod example)
 - [x] GraphColoring.java
 - [ ] GraphColoring2.java
-- [ ] HamiltonianCycle.java
+- [x] HamiltonianCycle.java
 - [ ] HamiltonianCycle2.java
 - [x] LatinSquare.java
-- [ ] MagicSeries.java
+- [x] MagicSeries.java
 - [x] NQueens.java
 - [x] SocialGolfer.java
 
-#### sudoku/ (1 total - rest are support files)
+#### sudoku/ (1 relevant out of 3 total)
 - [x] Sudoku.java
+- N/A SudokuDatabase.java (Support class)
+- N/A SudokuParser.java (Support class)
 
 #### tptp/ (24 total)
 - [ ] ALG195.java
@@ -113,7 +121,7 @@ NOTES:
 - [ ] MED007.java
 - [ ] MED009.java
 - [ ] MGT066.java
-- [ ] NUM374.java
+- [x] NUM374.java
 - [ ] NUM378.java
 - [ ] Quasigroups7.java
 - [ ] SET943.java
@@ -147,7 +155,7 @@ NOTES:
 - [ ] ExamplesTest.java (tests that examples run)
 
 ### Summary
-- Examples: 27/63 complete (43%)
+- Examples: 28/61 relevant complete (46%) - excluding 5 support files (List.java, ListViz.java, Graph.java, SudokuDatabase.java, SudokuParser.java)
 - Unit Tests: 2/13 complete (15%)
 - Features completed:
   - IfExpression (Formula.then_else, BooleanFactory.ite, BooleanMatrix.choice)
