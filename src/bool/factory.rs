@@ -125,6 +125,20 @@ impl BooleanFactory {
             return inputs.into_iter().next().unwrap();
         }
 
+        // Flatten nested AND gates into a single multi-input AND
+        let mut flattened = Vec::new();
+        for input in inputs {
+            match input {
+                BoolValue::Formula(BooleanFormula { kind: FormulaKind::And(inner_inputs), .. }) => {
+                    // Flatten nested AND by extracting its inputs
+                    let inner = self.arena.resolve_handle(inner_inputs);
+                    flattened.extend_from_slice(inner);
+                }
+                other => flattened.push(other),
+            }
+        }
+        inputs = flattened;
+
         // Check for trivial cases
         if inputs.iter().any(|v| matches!(v, BoolValue::Constant(BooleanConstant::FALSE))) {
             return self.constant(false);
@@ -169,6 +183,34 @@ impl BooleanFactory {
             return inputs.into_iter().next().unwrap();
         }
 
+        // Apply absorption law: p AND (p OR q) = p
+        // Remove any OR formula that contains another input
+        let mut to_remove = Vec::new();
+        for i in 0..inputs.len() {
+            if let BoolValue::Formula(f) = &inputs[i] {
+                if let FormulaKind::Or(or_inputs_handle) = f.kind() {
+                    let or_inputs = self.arena.resolve_handle(*or_inputs_handle);
+                    // Check if any other input appears in this OR
+                    for j in 0..inputs.len() {
+                        if i != j && or_inputs.iter().any(|v| v == &inputs[j]) {
+                            // inputs[i] is (inputs[j] OR something), so remove it
+                            to_remove.push(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove in reverse order to maintain indices
+        for &i in to_remove.iter().rev() {
+            inputs.remove(i);
+        }
+
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
         // Check cache
         if self.options.sharing {
             let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
@@ -204,6 +246,20 @@ impl BooleanFactory {
         if inputs.len() == 1 {
             return inputs.into_iter().next().unwrap();
         }
+
+        // Flatten nested OR gates into a single multi-input OR
+        let mut flattened = Vec::new();
+        for input in inputs {
+            match input {
+                BoolValue::Formula(BooleanFormula { kind: FormulaKind::Or(inner_inputs), .. }) => {
+                    // Flatten nested OR by extracting its inputs
+                    let inner = self.arena.resolve_handle(inner_inputs);
+                    flattened.extend_from_slice(inner);
+                }
+                other => flattened.push(other),
+            }
+        }
+        inputs = flattened;
 
         // Check for trivial cases
         if inputs.iter().any(|v| matches!(v, BoolValue::Constant(BooleanConstant::TRUE))) {
@@ -249,6 +305,34 @@ impl BooleanFactory {
             return inputs.into_iter().next().unwrap();
         }
 
+        // Apply contraction (absorption) law: p OR (p AND q) = p
+        // Remove any AND formula that contains another input
+        let mut to_remove = Vec::new();
+        for i in 0..inputs.len() {
+            if let BoolValue::Formula(f) = &inputs[i] {
+                if let FormulaKind::And(and_inputs_handle) = f.kind() {
+                    let and_inputs = self.arena.resolve_handle(*and_inputs_handle);
+                    // Check if any other input appears in this AND
+                    for j in 0..inputs.len() {
+                        if i != j && and_inputs.iter().any(|v| v == &inputs[j]) {
+                            // inputs[i] is (inputs[j] AND something), so remove it
+                            to_remove.push(i);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove in reverse order to maintain indices
+        for &i in to_remove.iter().rev() {
+            inputs.remove(i);
+        }
+
+        if inputs.len() == 1 {
+            return inputs.into_iter().next().unwrap();
+        }
+
         // Check cache
         if self.options.sharing {
             let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
@@ -273,12 +357,15 @@ impl BooleanFactory {
 
     /// Creates a NOT gate
     pub fn not<'arena>(&'arena self, input: BoolValue<'arena>) -> BoolValue<'arena> {
-        // Check for trivial cases
-        if let BoolValue::Constant(c) = input {
-            return self.constant(match c {
-                BooleanConstant::TRUE => false,
-                BooleanConstant::FALSE => true,
-            });
+        // Check for optimizations
+        match &input {
+            BoolValue::Constant(BooleanConstant::TRUE) => return self.constant(false),
+            BoolValue::Constant(BooleanConstant::FALSE) => return self.constant(true),
+            BoolValue::Formula(BooleanFormula { kind: FormulaKind::Not(inner), .. }) => {
+                // Double negation: NOT(NOT(x)) = x
+                return self.arena.resolve_handle(*inner).clone();
+            }
+            _ => {}
         }
 
         // Check cache
@@ -315,6 +402,27 @@ impl BooleanFactory {
         // If then and else are the same, return that value
         if then_val == else_val {
             return then_val;
+        }
+
+        // ITE reductions to simpler boolean operations
+        match (&then_val, &else_val) {
+            // ITE(cond, TRUE, else) = cond OR else
+            (BoolValue::Constant(BooleanConstant::TRUE), _) => {
+                return self.or(condition, else_val);
+            }
+            // ITE(cond, FALSE, else) = !cond AND else
+            (BoolValue::Constant(BooleanConstant::FALSE), _) => {
+                return self.and(self.not(condition), else_val);
+            }
+            // ITE(cond, then, TRUE) = !cond OR then
+            (_, BoolValue::Constant(BooleanConstant::TRUE)) => {
+                return self.or(self.not(condition), then_val);
+            }
+            // ITE(cond, then, FALSE) = cond AND then
+            (_, BoolValue::Constant(BooleanConstant::FALSE)) => {
+                return self.and(condition, then_val);
+            }
+            _ => {}
         }
 
         // Check cache
@@ -569,10 +677,8 @@ mod tests {
     // Algebraic property tests following Java BooleanCircuitTest
 
     #[test]
-    #[should_panic(expected = "Double negation elimination failed")]
     fn not_involution() {
         // Following Java: testNot() - involution: !!a = a
-        // EXPECTED TO FAIL: Double negation elimination not implemented for formulas
         let factory = BooleanFactory::new(20, Options::default());
 
         // Constants
@@ -636,10 +742,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Absorption law failed")]
     fn and_idempotency_and_absorption() {
         // Following Java: testIdempotencyAbsorptionContraction for AND
-        // EXPECTED TO FAIL: Absorption law optimization not implemented
         let factory = BooleanFactory::new(10, Options::default());
 
         let v1 = factory.variable(1);
@@ -659,10 +763,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Absorption law failed")]
     fn or_idempotency_and_absorption() {
         // Following Java: testIdempotencyAbsorptionContraction for OR
-        // EXPECTED TO FAIL: Absorption law optimization not implemented
         let factory = BooleanFactory::new(10, Options::default());
 
         let v1 = factory.variable(1);
@@ -734,10 +836,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Canonical form failed")]
     fn and_associativity() {
         // Following Java: testParenthesis for AND
-        // EXPECTED TO FAIL: Canonical form generation not implemented
         let factory = BooleanFactory::new(10, Options::default());
 
         let v1 = factory.variable(1);
@@ -765,10 +865,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Canonical form failed")]
     fn or_associativity() {
         // Following Java: testParenthesis for OR
-        // EXPECTED TO FAIL: Canonical form generation not implemented
         let factory = BooleanFactory::new(10, Options::default());
 
         let v1 = factory.variable(1);
@@ -796,10 +894,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ITE reduction failed")]
     fn ite_reductions() {
         // Following Java: testITE
-        // EXPECTED TO FAIL: ITE to boolean operation conversion not implemented
         let factory = BooleanFactory::new(10, Options::default());
 
         let v1 = factory.variable(1);
