@@ -18,8 +18,6 @@ use std::collections::HashMap;
 pub struct Skolemizer<'a> {
     /// Bounds to which Skolem relations will be added
     bounds: &'a mut Bounds,
-    /// Options controlling skolemization depth
-    options: &'a BoolOptions,
     /// Maps original formulas to their skolemized versions
     cache: HashMap<Formula, Formula>,
     /// Environment mapping variables to their replacements
@@ -41,7 +39,6 @@ impl<'a> Skolemizer<'a> {
     pub fn new(bounds: &'a mut Bounds, options: &'a BoolOptions) -> Self {
         Self {
             bounds,
-            options,
             cache: HashMap::new(),
             replacement_env: HashMap::new(),
             non_skolems: Vec::new(),
@@ -352,13 +349,19 @@ impl<'a> Skolemizer<'a> {
         }
     }
 
-    fn add_skolem_bounds(&mut self, skolem: &Relation, decl: &Decl) {
-        // Add upper bound for Skolem relation
-        // For now, use a conservative upper bound - the cross product of universes
+    fn add_skolem_bounds(&mut self, skolem: &Relation, _decl: &Decl) {
+        // TODO: Implement proper bound computation like Java's upperBound() method
+        // Java version:
+        //   1. Computes upperBound(skolemDecl.expression(), skolemEnv) using FOL2BoolTranslator.approximate
+        //   2. Crosses with bounds of all non_skolem parameters
+        //   3. Creates TupleSet from matrixBound.denseIndices()
+        //
+        // For now, use conservative upper bound - entire universe^arity
+        // This is correct but less efficient than tight bounds would be
         let factory = self.bounds.universe().factory();
         let arity = skolem.arity();
 
-        // Upper bound is universe^arity
+        // Upper bound is universe^arity (conservative but sound)
         let upper = factory.all(arity);
 
         // Add the bound
@@ -494,9 +497,13 @@ impl<'a> Skolemizer<'a> {
                     expr.clone()
                 }
             }
-            IntExpression::Sum { decls, expr: inner } => {
-                // Sum has its own scope, but we might need to handle this more carefully
-                // For now, don't replace in the body as it has its own bindings
+            IntExpression::Sum { decls: _, expr: _ } => {
+                // Sum creates its own scope with declarations that shadow outer variables.
+                // We should not replace variables inside a Sum expression because:
+                // 1. Variables bound by the Sum's declarations should not be replaced
+                // 2. Free variables in the Sum should have been handled during skolemization
+                // Java version saves/restores environment when visiting Sum during skolemization,
+                // not during replacement
                 expr.clone()
             }
             IntExpression::If { condition, then_expr, else_expr } => {
