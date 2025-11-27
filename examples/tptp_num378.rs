@@ -215,7 +215,9 @@ impl NUM378 {
     }
 
     pub fn solve(&self) -> Solution {
-        let options = Options::default();
+        let mut options = Options::default();
+        // Enable skolemization with sufficient depth for 92 existential variables
+        options.bool_options.skolem_depth = Some(100);
         let solver = Solver::new(options);
         let formula = self.check_inequalities();
         let bounds = self.bounds();
@@ -225,16 +227,31 @@ impl NUM378 {
 }
 
 fn main() {
-    let _num = NUM378::new();
+    let num = NUM378::new();
 
     println!("Running NUM378...");
-    println!("Note: Basic constant propagation implemented but insufficient.");
-    println!("NUM378 requires deeper analysis (SymmetryBreaker, Skolemization, etc.)");
-    println!("Formula body only becomes FALSE after binding all 92 variables.");
-    println!("See TODO.md for details on needed optimizations.");
-    println!();
-    println!("Skipping execution.");
+    println!("Building bounds...");
+    let bounds = num.bounds();
 
-    // Uncommenting the following will still hang:
-    // let sol = num.solve();
+    println!("Building formula...");
+    let formula = num.check_inequalities();
+
+    println!("Solving...");
+    let start = std::time::Instant::now();
+    let mut options = Options::default();
+    options.bool_options.skolem_depth = Some(100);
+    let solver = Solver::new(options);
+
+    let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
+    let elapsed = start.elapsed();
+
+    println!("Solved in {:.2} seconds", elapsed.as_secs_f64());
+
+    if solution.is_sat() {
+        println!("SATISFIABLE");
+    } else {
+        println!("UNSATISFIABLE");
+    }
+
+    println!("Stats: {:?}", solution.statistics());
 }

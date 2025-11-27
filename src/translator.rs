@@ -262,6 +262,11 @@ impl<'a> FOL2BoolTranslator<'a> {
                         let one_val = matrix.one(factory);
                         factory.or(no_val, one_val)
                     }
+                    Multiplicity::Set => {
+                        // Set multiplicity as a formula constraint would mean the expression
+                        // can be any subset, which is always true
+                        factory.constant(true)
+                    }
                 }
             }
 

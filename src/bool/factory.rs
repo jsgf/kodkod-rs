@@ -15,6 +15,8 @@ pub struct Options {
     pub sharing: bool,
     /// Bitwidth for integer encoding (default: 32)
     pub bitwidth: usize,
+    /// Skolemization depth (default: 0, negative means disabled)
+    pub skolem_depth: Option<usize>,
 }
 
 impl Default for Options {
@@ -22,6 +24,7 @@ impl Default for Options {
         Self {
             sharing: true,
             bitwidth: 32,
+            skolem_depth: Some(0),
         }
     }
 }

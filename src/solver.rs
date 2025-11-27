@@ -86,12 +86,23 @@ impl Solver {
             simplified_formula
         };
 
+        // Step 0.75: Skolemize if enabled
+        let (skolemized_formula, final_bounds) = if self.options.bool_options.skolem_depth.is_some() {
+            // Skolemization modifies bounds by adding Skolem relations
+            let mut mutable_bounds = bounds.clone();
+            let mut skolemizer = crate::simplify::Skolemizer::new(&mut mutable_bounds, &self.options.bool_options);
+            let result = skolemizer.skolemize(&flattened_formula);
+            (result, mutable_bounds)
+        } else {
+            (flattened_formula.clone(), bounds.clone())
+        };
+
         let simplification_time = simplification_start.elapsed();
 
         eprintln!("DEBUG: Simplification took {:?}", simplification_time);
 
         // Check if formula simplified to a constant
-        match &flattened_formula {
+        match &skolemized_formula {
             Formula::Constant(true) => {
                 eprintln!("DEBUG: Formula simplified to TRUE");
                 return Ok(Solution::Trivial {
@@ -121,9 +132,10 @@ impl Solver {
 
         // Step 1: Translate formula to boolean circuit
         let translation_start = Instant::now();
+
         let translation_result = Translator::evaluate(
-            &flattened_formula,
-            bounds,
+            &skolemized_formula,
+            &final_bounds,
             &self.options.bool_options,
             self.options.symmetry_breaking,
         );
@@ -169,7 +181,7 @@ impl Solver {
 
         if is_sat {
             // Extract solution from SAT model
-            let instance = self.extract_instance(sat_solver, &interpreter, bounds)?;
+            let instance = self.extract_instance(sat_solver, &interpreter, &final_bounds)?;
             Ok(Solution::Sat { instance, stats })
         } else {
             Ok(Solution::Unsat { stats })

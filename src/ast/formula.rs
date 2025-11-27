@@ -197,6 +197,8 @@ pub enum Multiplicity {
     Lone,
     /// No elements
     No,
+    /// Any number of elements (no constraint)
+    Set,
 }
 
 /// Quantifiers
@@ -492,6 +494,15 @@ impl Decl {
         Self {
             variable,
             multiplicity: Multiplicity::Some,
+            expression,
+        }
+    }
+
+    /// Creates a new declaration with "set" multiplicity (no constraint)
+    pub fn set_of(variable: Variable, expression: Expression) -> Self {
+        Self {
+            variable,
+            multiplicity: Multiplicity::Set,
             expression,
         }
     }

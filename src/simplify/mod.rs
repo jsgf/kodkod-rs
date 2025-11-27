@@ -7,8 +7,10 @@
  */
 
 pub mod flattener;
+pub mod skolemizer;
 
 pub use flattener::FormulaFlattener;
+pub use skolemizer::Skolemizer;
 
 use crate::ast::{Formula, Expression, Decls, Quantifier};
 use crate::ast::formula::BinaryFormulaOp;
