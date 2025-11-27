@@ -90,7 +90,7 @@ impl Solver {
         let (skolemized_formula, final_bounds) = if self.options.bool_options.skolem_depth.is_some() {
             // Skolemization modifies bounds by adding Skolem relations
             let mut mutable_bounds = bounds.clone();
-            let mut skolemizer = crate::simplify::Skolemizer::new(&mut mutable_bounds, &self.options.bool_options);
+            let mut skolemizer = crate::simplify::Skolemizer::new(&mut mutable_bounds, &self.options);
             let result = skolemizer.skolemize(&flattened_formula);
             (result, mutable_bounds)
         } else {

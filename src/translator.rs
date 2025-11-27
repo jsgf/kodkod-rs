@@ -105,6 +105,16 @@ impl Translator {
         }
     }
 
+    /// Approximates an expression as a boolean matrix
+    /// This is used for computing upper bounds for Skolem relations
+    /// Following Java: FOL2BoolTranslator.approximate()
+    pub fn approximate_expression(expr: &Expression, bounds: &Bounds, options: &Options) -> Vec<usize> {
+        let interpreter = LeafInterpreter::from_bounds(bounds, options);
+        let translator = FOL2BoolTranslator::new(&interpreter);
+        let matrix = translator.translate_expression(expr);
+        matrix.dense_indices()
+    }
+
     /// Approximates a formula as a boolean matrix (not used in main solver)
     pub fn approximate(_formula: &Formula, bounds: &Bounds, options: &Options) -> ApproximationResult {
         let interpreter = LeafInterpreter::from_bounds(bounds, options);

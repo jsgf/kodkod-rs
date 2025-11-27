@@ -8,6 +8,7 @@ use crate::ast::{
 };
 use crate::instance::Bounds;
 use crate::bool::Options as BoolOptions;
+use crate::solver::Options;
 use std::collections::HashMap;
 
 /// Skolemizes existential quantifiers by replacing them with Skolem functions.
@@ -18,6 +19,8 @@ use std::collections::HashMap;
 pub struct Skolemizer<'a> {
     /// Bounds to which Skolem relations will be added
     bounds: &'a mut Bounds,
+    /// Solver options (needed for bound computation via translator)
+    solver_options: &'a Options,
     /// Maps original formulas to their skolemized versions
     cache: HashMap<Formula, Formula>,
     /// Environment mapping variables to their replacements
@@ -36,15 +39,16 @@ pub struct Skolemizer<'a> {
 
 impl<'a> Skolemizer<'a> {
     /// Creates a new Skolemizer with the given bounds and options
-    pub fn new(bounds: &'a mut Bounds, options: &'a BoolOptions) -> Self {
+    pub fn new(bounds: &'a mut Bounds, options: &'a Options) -> Self {
         Self {
             bounds,
+            solver_options: options,
             cache: HashMap::new(),
             replacement_env: HashMap::new(),
             non_skolems: Vec::new(),
             top_constraints: Vec::new(),
             negated: false,
-            skolem_depth: options.skolem_depth.unwrap_or(0) as i32,
+            skolem_depth: options.bool_options.skolem_depth.unwrap_or(0) as i32,
             skolem_counter: 0,
         }
     }
@@ -349,23 +353,40 @@ impl<'a> Skolemizer<'a> {
         }
     }
 
-    fn add_skolem_bounds(&mut self, skolem: &Relation, _decl: &Decl) {
-        // TODO: Implement proper bound computation like Java's upperBound() method
+    fn add_skolem_bounds(&mut self, skolem: &Relation, decl: &Decl) {
+        use crate::translator::Translator;
+
+        // TODO: Implement full Java approach with Environment tracking for parameter crossing
         // Java version:
-        //   1. Computes upperBound(skolemDecl.expression(), skolemEnv) using FOL2BoolTranslator.approximate
-        //   2. Crosses with bounds of all non_skolem parameters
-        //   3. Creates TupleSet from matrixBound.denseIndices()
+        //   1. Creates Environment with all non_skolem parameter bounds
+        //   2. Computes upperBound(skolemDecl.expression(), skolemEnv) using FOL2BoolTranslator.approximate
+        //   3. Crosses matrixBound with bounds of all non_skolem parameters
+        //   4. Creates TupleSet from matrixBound.denseIndices()
         //
-        // For now, use conservative upper bound - entire universe^arity
-        // This is correct but less efficient than tight bounds would be
+        // Current implementation: Use Translator::approximate_expression to get tight bounds
+        // This is better than factory.all() but doesn't yet handle parameter crossing for
+        // Skolem functions with non_skolem parameters
+
+        // Get dense indices for the expression (upper bound)
+        let dense_indices = Translator::approximate_expression(
+            decl.expression(),
+            self.bounds,
+            &self.solver_options.bool_options
+        );
+
+        // Create TupleSet from the dense indices
         let factory = self.bounds.universe().factory();
         let arity = skolem.arity();
 
-        // Upper bound is universe^arity (conservative but sound)
-        let upper = factory.all(arity);
-
-        // Add the bound
-        self.bounds.bound(skolem, factory.none(arity), upper).unwrap();
+        if dense_indices.is_empty() {
+            // Empty bound - use conservative fallback
+            let upper = factory.all(arity);
+            self.bounds.bound(skolem, factory.none(arity), upper).unwrap();
+        } else {
+            let skolem_bound = factory.set_of(arity, &dense_indices);
+            // Set lower to none (Skolem can be any subset) and upper to computed bound
+            self.bounds.bound(skolem, factory.none(arity), skolem_bound).unwrap();
+        }
     }
 
     fn replace_in_expression(&self, expr: &Expression) -> Expression {
@@ -543,7 +564,8 @@ mod tests {
     fn test_simple_skolemization() {
         let universe = Universe::new(&["A", "B", "C"]).unwrap();
         let mut bounds = Bounds::new(universe);
-        let options = BoolOptions::default();
+        let mut solver_options = crate::solver::Options::default();
+        solver_options.bool_options.skolem_depth = Some(10);  // Enable skolemization
 
         // ∃x. P(x) should become P($skolem_0)
         let x = Variable::unary("x");
@@ -557,7 +579,7 @@ mod tests {
             body: Box::new(Expression::from(x).in_set(Expression::from(p))),
         };
 
-        let mut skolemizer = Skolemizer::new(&mut bounds, &options);
+        let mut skolemizer = Skolemizer::new(&mut bounds, &solver_options);
         let result = skolemizer.skolemize(&formula);
 
         // Result should not have the quantifier
