@@ -296,7 +296,6 @@ impl FormulaFlattener {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Variable, Decl, Expression};
 
     #[test]
     fn test_double_negation() {
