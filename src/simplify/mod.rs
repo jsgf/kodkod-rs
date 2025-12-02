@@ -16,7 +16,6 @@ use crate::ast::{Formula, Expression, Decls, Quantifier};
 use crate::ast::formula::BinaryFormulaOp;
 use crate::instance::Bounds;
 use crate::bool::Options as BoolOptions;
-use std::collections::HashMap;
 
 /// Simplifies a formula by:
 /// 1. Constant propagation
@@ -33,19 +32,14 @@ pub fn simplify_formula(formula: &Formula, bounds: &Bounds, options: &BoolOption
 
 struct FormulaSimplifier<'a> {
     bounds: &'a Bounds,
-    options: &'a BoolOptions,
-    // Cache for simplified subformulas
-    cache: HashMap<Formula, Formula>,
     // Maximum domain size to eagerly evaluate quantifiers
     max_eager_domain: usize,
 }
 
 impl<'a> FormulaSimplifier<'a> {
-    fn new(bounds: &'a Bounds, options: &'a BoolOptions) -> Self {
+    fn new(bounds: &'a Bounds, _options: &'a BoolOptions) -> Self {
         FormulaSimplifier {
             bounds,
-            options,
-            cache: HashMap::new(),
             // Only eagerly evaluate quantifiers if domain is tiny
             // This prevents exponential blowup
             max_eager_domain: 3,

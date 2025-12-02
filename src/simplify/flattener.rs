@@ -12,10 +12,6 @@ use std::collections::HashMap;
 pub struct FormulaFlattener {
     /// Whether to break up quantifiers
     breakup_quantifiers: bool,
-    /// Map from flattened formulas to their sources
-    conjuncts: HashMap<Formula, Formula>,
-    /// Track whether we're under a negation
-    negated: bool,
     /// Cache of visited nodes to avoid recomputation
     visited: HashMap<(Formula, bool), Formula>,
 }
@@ -25,8 +21,6 @@ impl FormulaFlattener {
     pub fn new(breakup_quantifiers: bool) -> Self {
         Self {
             breakup_quantifiers,
-            conjuncts: HashMap::new(),
-            negated: false,
             visited: HashMap::new(),
         }
     }

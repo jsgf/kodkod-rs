@@ -7,7 +7,6 @@ use crate::ast::{
     BinaryFormulaOp,
 };
 use crate::instance::Bounds;
-use crate::bool::Options as BoolOptions;
 use crate::solver::Options;
 use std::collections::HashMap;
 

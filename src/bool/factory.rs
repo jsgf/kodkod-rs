@@ -6,6 +6,7 @@
 use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind, MatrixArena};
 use rustc_hash::FxHashMap;
 use std::cell::{Cell, RefCell};
+use std::collections::HashSet;
 use std::mem;
 
 /// Options for boolean factory
@@ -158,24 +159,24 @@ impl BooleanFactory {
         }
 
         // Check for contradictions (p AND !p = FALSE)
-        for i in 0..inputs.len() {
-            for j in (i+1)..inputs.len() {
-                // Check if inputs[j] is NOT(inputs[i]) or vice versa
-                if let BoolValue::Formula(f) = &inputs[j] {
-                    if let FormulaKind::Not(h) = f.kind() {
-                        if self.arena.resolve_handle(*h) == &inputs[i] {
-                            return self.constant(false);
-                        }
-                    }
-                }
-                if let BoolValue::Formula(f) = &inputs[i] {
-                    if let FormulaKind::Not(h) = f.kind() {
-                        if self.arena.resolve_handle(*h) == &inputs[j] {
-                            return self.constant(false);
-                        }
+        // Use a HashSet for O(n) checking instead of O(n²) nested loops
+        let mut seen_labels: HashSet<i32> = HashSet::new();
+        for input in &inputs {
+            let label = input.label();
+            // Check if we've seen the negation of this label
+            if seen_labels.contains(&-label) {
+                return self.constant(false);
+            }
+            // For NOT gates, also check if we've seen the inner formula
+            if let BoolValue::Formula(f) = input {
+                if let FormulaKind::Not(h) = f.kind() {
+                    let inner_label = self.arena.resolve_handle(*h).label();
+                    if seen_labels.contains(&inner_label) {
+                        return self.constant(false);
                     }
                 }
             }
+            seen_labels.insert(label);
         }
 
         // Remove duplicates (idempotency: p AND p = p)
@@ -188,18 +189,20 @@ impl BooleanFactory {
 
         // Apply absorption law: p AND (p OR q) = p
         // Remove any OR formula that contains another input
+        // Build a set of input labels for O(1) lookups
+        let input_labels: HashSet<i32> = inputs.iter().map(|v| v.label()).collect();
         let mut to_remove = Vec::new();
-        for i in 0..inputs.len() {
-            if let BoolValue::Formula(f) = &inputs[i] {
+        for (i, input) in inputs.iter().enumerate() {
+            if let BoolValue::Formula(f) = input {
                 if let FormulaKind::Or(or_inputs_handle) = f.kind() {
                     let or_inputs = self.arena.resolve_handle(*or_inputs_handle);
                     // Check if any other input appears in this OR
-                    for j in 0..inputs.len() {
-                        if i != j && or_inputs.iter().any(|v| v == &inputs[j]) {
-                            // inputs[i] is (inputs[j] OR something), so remove it
-                            to_remove.push(i);
-                            break;
-                        }
+                    // Now O(m) where m = or_inputs.len(), not O(n)
+                    if or_inputs.iter().any(|v| {
+                        let label = v.label();
+                        label != input.label() && input_labels.contains(&label)
+                    }) {
+                        to_remove.push(i);
                     }
                 }
             }
@@ -280,24 +283,24 @@ impl BooleanFactory {
         }
 
         // Check for excluded middle (p OR !p = TRUE)
-        for i in 0..inputs.len() {
-            for j in (i+1)..inputs.len() {
-                // Check if inputs[j] is NOT(inputs[i]) or vice versa
-                if let BoolValue::Formula(f) = &inputs[j] {
-                    if let FormulaKind::Not(h) = f.kind() {
-                        if self.arena.resolve_handle(*h) == &inputs[i] {
-                            return self.constant(true);
-                        }
-                    }
-                }
-                if let BoolValue::Formula(f) = &inputs[i] {
-                    if let FormulaKind::Not(h) = f.kind() {
-                        if self.arena.resolve_handle(*h) == &inputs[j] {
-                            return self.constant(true);
-                        }
+        // Use a HashSet for O(n) checking instead of O(n²) nested loops
+        let mut seen_labels: HashSet<i32> = HashSet::new();
+        for input in &inputs {
+            let label = input.label();
+            // Check if we've seen the negation of this label
+            if seen_labels.contains(&-label) {
+                return self.constant(true);
+            }
+            // For NOT gates, also check if we've seen the inner formula
+            if let BoolValue::Formula(f) = input {
+                if let FormulaKind::Not(h) = f.kind() {
+                    let inner_label = self.arena.resolve_handle(*h).label();
+                    if seen_labels.contains(&inner_label) {
+                        return self.constant(true);
                     }
                 }
             }
+            seen_labels.insert(label);
         }
 
         // Remove duplicates (idempotency: p OR p = p)
@@ -310,18 +313,20 @@ impl BooleanFactory {
 
         // Apply contraction (absorption) law: p OR (p AND q) = p
         // Remove any AND formula that contains another input
+        // Build a set of input labels for O(1) lookups
+        let input_labels: HashSet<i32> = inputs.iter().map(|v| v.label()).collect();
         let mut to_remove = Vec::new();
-        for i in 0..inputs.len() {
-            if let BoolValue::Formula(f) = &inputs[i] {
+        for (i, input) in inputs.iter().enumerate() {
+            if let BoolValue::Formula(f) = input {
                 if let FormulaKind::And(and_inputs_handle) = f.kind() {
                     let and_inputs = self.arena.resolve_handle(*and_inputs_handle);
                     // Check if any other input appears in this AND
-                    for j in 0..inputs.len() {
-                        if i != j && and_inputs.iter().any(|v| v == &inputs[j]) {
-                            // inputs[i] is (inputs[j] AND something), so remove it
-                            to_remove.push(i);
-                            break;
-                        }
+                    // Now O(m) where m = and_inputs.len(), not O(n)
+                    if and_inputs.iter().any(|v| {
+                        let label = v.label();
+                        label != input.label() && input_labels.contains(&label)
+                    }) {
+                        to_remove.push(i);
                     }
                 }
             }
