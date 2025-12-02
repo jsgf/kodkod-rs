@@ -15,7 +15,6 @@ pub use skolemizer::Skolemizer;
 use crate::ast::{Formula, Expression, Decls, Quantifier};
 use crate::ast::formula::BinaryFormulaOp;
 use crate::instance::Bounds;
-use crate::bool::Options as BoolOptions;
 
 /// Simplifies a formula by:
 /// 1. Constant propagation
@@ -25,8 +24,8 @@ use crate::bool::Options as BoolOptions;
 ///
 /// This is essential for performance on formulas with many quantified variables
 /// where the inner formula may be trivially false.
-pub fn simplify_formula(formula: &Formula, bounds: &Bounds, options: &BoolOptions) -> Formula {
-    let mut simplifier = FormulaSimplifier::new(bounds, options);
+pub fn simplify_formula(formula: &Formula, bounds: &Bounds) -> Formula {
+    let mut simplifier = FormulaSimplifier::new(bounds);
     simplifier.simplify(formula)
 }
 
@@ -37,7 +36,7 @@ struct FormulaSimplifier<'a> {
 }
 
 impl<'a> FormulaSimplifier<'a> {
-    fn new(bounds: &'a Bounds, _options: &'a BoolOptions) -> Self {
+    fn new(bounds: &'a Bounds) -> Self {
         FormulaSimplifier {
             bounds,
             // Only eagerly evaluate quantifiers if domain is tiny
@@ -239,7 +238,6 @@ mod tests {
         let atoms: Vec<&str> = vec!["A"];
         let u = Universe::new(&atoms).unwrap();
         let b = Bounds::new(u);
-        let opts = BoolOptions::default();
 
         // FALSE AND x = FALSE
         let f = Formula::Binary {
@@ -247,7 +245,7 @@ mod tests {
             left: Box::new(Formula::FALSE),
             right: Box::new(Formula::TRUE),
         };
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(false)));
 
         // TRUE AND TRUE = TRUE
@@ -256,7 +254,7 @@ mod tests {
             left: Box::new(Formula::TRUE),
             right: Box::new(Formula::TRUE),
         };
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
     }
 
@@ -265,14 +263,13 @@ mod tests {
         let atoms: Vec<&str> = vec!["A"];
         let u = Universe::new(&atoms).unwrap();
         let b = Bounds::new(u);
-        let opts = BoolOptions::default();
 
         // TRUE AND TRUE AND FALSE = FALSE
         let f = Formula::Nary {
             op: BinaryFormulaOp::And,
             formulas: vec![Formula::TRUE, Formula::TRUE, Formula::FALSE],
         };
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(false)));
 
         // TRUE AND TRUE AND TRUE = TRUE
@@ -280,7 +277,7 @@ mod tests {
             op: BinaryFormulaOp::And,
             formulas: vec![Formula::TRUE, Formula::TRUE, Formula::TRUE],
         };
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
     }
 
@@ -289,44 +286,43 @@ mod tests {
         let atoms: Vec<&str> = vec!["A"];
         let u = Universe::new(&atoms).unwrap();
         let b = Bounds::new(u);
-        let opts = BoolOptions::default();
 
         // Test that TRUE is recognized as constant
-        let result = simplify_formula(&Formula::TRUE, &b, &opts);
+        let result = simplify_formula(&Formula::TRUE, &b);
         assert!(matches!(result, Formula::Constant(true)));
 
         // Test that FALSE is recognized as constant
-        let result = simplify_formula(&Formula::FALSE, &b, &opts);
+        let result = simplify_formula(&Formula::FALSE, &b);
         assert!(matches!(result, Formula::Constant(false)));
 
         // Test TRUE AND FALSE = FALSE
         let f = Formula::and(Formula::TRUE, Formula::FALSE);
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(false)));
 
         // Test TRUE OR FALSE = TRUE
         let f = Formula::or(Formula::TRUE, Formula::FALSE);
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
 
         // Test FALSE OR FALSE = FALSE
         let f = Formula::or(Formula::FALSE, Formula::FALSE);
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(false)));
 
         // Test TRUE AND TRUE = TRUE
         let f = Formula::and(Formula::TRUE, Formula::TRUE);
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
 
         // Test NOT TRUE = FALSE
         let f = Formula::not(Formula::TRUE);
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(false)));
 
         // Test NOT FALSE = TRUE
         let f = Formula::not(Formula::FALSE);
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
     }
 
@@ -335,7 +331,6 @@ mod tests {
         let atoms: Vec<&str> = vec!["A"];
         let u = Universe::new(&atoms).unwrap();
         let b = Bounds::new(u);
-        let opts = BoolOptions::default();
 
         // Create a simple relation for testing
         let r = crate::ast::Relation::unary("r");
@@ -343,22 +338,22 @@ mod tests {
         // x AND x = x
         let x = crate::ast::Expression::from(r).some();
         let f = Formula::and(x.clone(), x.clone());
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert_eq!(result, x);
 
         // x OR x = x
         let f = Formula::or(x.clone(), x.clone());
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert_eq!(result, x);
 
         // x => x = TRUE
         let f = Formula::implies(x.clone(), x.clone());
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
 
         // x <=> x = TRUE
         let f = Formula::iff(x.clone(), x.clone());
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
     }
 
@@ -367,7 +362,6 @@ mod tests {
         let atoms: Vec<&str> = vec!["A", "B"];
         let u = Universe::new(&atoms).unwrap();
         let b = Bounds::new(u);
-        let opts = BoolOptions::default();
 
         let x = Variable::unary("x");
         let decls = Decls::from(Decl::one_of(x, Expression::UNIV));
@@ -378,7 +372,7 @@ mod tests {
             declarations: decls.clone(),
             body: Box::new(Formula::FALSE),
         };
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(false)));
 
         // forall x | FALSE = TRUE (vacuously true)
@@ -387,7 +381,7 @@ mod tests {
             declarations: decls.clone(),
             body: Box::new(Formula::FALSE),
         };
-        let result = simplify_formula(&f, &b, &opts);
+        let result = simplify_formula(&f, &b);
         assert!(matches!(result, Formula::Constant(true)));
     }
 }

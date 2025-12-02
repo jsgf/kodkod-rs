@@ -74,7 +74,7 @@ impl Solver {
     ) -> Result<Solution> {
         // Step 0: Simplify formula before translation
         let simplification_start = Instant::now();
-        let simplified_formula = crate::simplify::simplify_formula(formula, bounds, &self.options.bool_options);
+        let simplified_formula = crate::simplify::simplify_formula(formula, bounds);
 
         // Step 0.5: Flatten formula to NNF if enabled
         let flattened_formula = if self.options.flatten_formulas {
