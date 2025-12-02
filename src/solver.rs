@@ -216,8 +216,8 @@ impl Solver {
                     interpreter.lower_bounds().get(relation),
                     interpreter.upper_bounds().get(relation),
                 ) {
-                    let lower_indices = LeafInterpreter::tuple_set_to_indices(lower, interpreter.universe());
-                    let upper_indices = LeafInterpreter::tuple_set_to_indices(upper, interpreter.universe());
+                    let lower_indices = LeafInterpreter::tuple_set_to_indices(lower);
+                    let upper_indices = LeafInterpreter::tuple_set_to_indices(upper);
 
                     let mut var_id = var_range.start;
                     for &idx in &upper_indices {

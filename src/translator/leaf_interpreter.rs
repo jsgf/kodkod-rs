@@ -142,8 +142,8 @@ impl LeafInterpreter {
             .expect("Relation not in bounds");
 
         // Convert tuples to flat indices
-        let lower_indices = Self::tuple_set_to_indices(lower, &self.universe);
-        let upper_indices = Self::tuple_set_to_indices(upper, &self.universe);
+        let lower_indices = Self::tuple_set_to_indices(lower);
+        let upper_indices = Self::tuple_set_to_indices(upper);
 
         // Create matrix: upper indices define domain, lower indices are TRUE
         let dims = Dimensions::new(
@@ -248,7 +248,7 @@ impl LeafInterpreter {
 
     /// Converts a TupleSet to flat indices for BooleanMatrix
     /// Following Java pattern from LeafInterpreter
-    pub fn tuple_set_to_indices(tuple_set: &TupleSet, _universe: &Universe) -> Vec<usize> {
+    pub fn tuple_set_to_indices(tuple_set: &TupleSet) -> Vec<usize> {
         let mut indices = Vec::new();
 
         for tuple in tuple_set.iter() {
