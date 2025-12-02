@@ -184,7 +184,7 @@ impl<'a> Skolemizer<'a> {
 
         if skolemizable {
             // This is an existential quantifier (or universal under negation) - skolemize it
-            self.skolemize_quantifier(quantifier, declarations, body)
+            self.skolemize_quantifier(declarations, body)
         } else {
             // This is a universal quantifier (or existential under negation) - can't skolemize
             // but may be able to skolemize nested quantifiers
@@ -221,7 +221,7 @@ impl<'a> Skolemizer<'a> {
         }
     }
 
-    fn skolemize_quantifier(&mut self, _quantifier: Quantifier, declarations: &Decls, body: &Formula) -> Formula {
+    fn skolemize_quantifier(&mut self, declarations: &Decls, body: &Formula) -> Formula {
         let mut range_constraints = Vec::new();
         let mut domain_constraints = Vec::new();
 
