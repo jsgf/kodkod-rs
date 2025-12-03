@@ -3,7 +3,6 @@
 //! Based on Java: kodkod.engine.fol2sat.FormulaFlattener
 
 use crate::ast::{Formula, BinaryFormulaOp, Quantifier, Decls};
-use std::collections::HashMap;
 
 /// Flattens a formula by:
 /// 1. Converting to Negation Normal Form (NNF) - pushing negations to literals
@@ -12,8 +11,6 @@ use std::collections::HashMap;
 pub struct FormulaFlattener {
     /// Whether to break up quantifiers
     breakup_quantifiers: bool,
-    /// Cache of visited nodes to avoid recomputation
-    visited: HashMap<(Formula, bool), Formula>,
 }
 
 impl FormulaFlattener {
@@ -21,7 +18,6 @@ impl FormulaFlattener {
     pub fn new(breakup_quantifiers: bool) -> Self {
         Self {
             breakup_quantifiers,
-            visited: HashMap::new(),
         }
     }
 
@@ -61,13 +57,7 @@ impl FormulaFlattener {
 
     /// Visit a formula and return its flattened form
     fn visit_formula(&mut self, formula: &Formula, negated: bool) -> Formula {
-        // Check cache
-        let key = (formula.clone(), negated);
-        if let Some(cached) = self.visited.get(&key) {
-            return cached.clone();
-        }
-
-        let result = match formula {
+        match formula {
             Formula::Constant(b) => {
                 // Negating a constant flips it
                 Formula::Constant(if negated { !b } else { *b })
@@ -99,10 +89,7 @@ impl FormulaFlattener {
                     other.clone()
                 }
             }
-        };
-
-        self.visited.insert(key, result.clone());
-        result
+        }
     }
 
     /// Visit a binary formula
