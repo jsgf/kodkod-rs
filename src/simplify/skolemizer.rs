@@ -51,6 +51,10 @@ impl<'a> Skolemizer<'a> {
 
     /// Skolemizes the given formula
     pub fn skolemize(&mut self, formula: &Formula) -> Formula {
+        // Early exit: if there are no quantifiers, there's nothing to skolemize
+        if !has_quantifiers(formula) {
+            return formula.clone();
+        }
         self.visit_formula(formula)
     }
 
@@ -661,6 +665,21 @@ impl<'a> Skolemizer<'a> {
             // Constants don't need replacement
             IntExpression::Constant(_) => expr.clone(),
         }
+    }
+}
+
+/// Checks if a formula contains any quantifiers
+pub fn has_quantifiers(formula: &Formula) -> bool {
+    match formula {
+        Formula::Constant(_) => false,
+        Formula::RelationPredicate(_) => false,
+        Formula::IntComparison { .. } => false,
+        Formula::Comparison { .. } => false,
+        Formula::Multiplicity { .. } => false,
+        Formula::Not(inner) => has_quantifiers(inner),
+        Formula::Binary { left, right, .. } => has_quantifiers(left) || has_quantifiers(right),
+        Formula::Nary { formulas, .. } => formulas.iter().any(has_quantifiers),
+        Formula::Quantified { .. } => true,
     }
 }
 

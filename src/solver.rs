@@ -88,11 +88,17 @@ impl Solver {
 
         // Step 0.75: Skolemize if enabled
         let (skolemized_formula, mut final_bounds) = if self.options.bool_options.skolem_depth.is_some() {
-            // Skolemization modifies bounds by adding Skolem relations
-            let mut mutable_bounds = bounds.clone();
-            let mut skolemizer = crate::simplify::Skolemizer::new(&mut mutable_bounds, &self.options);
-            let result = skolemizer.skolemize(&flattened_formula);
-            (result, mutable_bounds)
+            // Check if formula has quantifiers before cloning/skolemizing
+            if crate::simplify::skolemizer::has_quantifiers(&flattened_formula) {
+                // Skolemization modifies bounds by adding Skolem relations
+                let mut mutable_bounds = bounds.clone();
+                let mut skolemizer = crate::simplify::Skolemizer::new(&mut mutable_bounds, &self.options);
+                let result = skolemizer.skolemize(&flattened_formula);
+                (result, mutable_bounds)
+            } else {
+                // No quantifiers, skip skolemization entirely
+                (flattened_formula.clone(), bounds.clone())
+            }
         } else {
             (flattened_formula.clone(), bounds.clone())
         };
