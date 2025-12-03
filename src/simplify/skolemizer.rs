@@ -20,8 +20,6 @@ pub struct Skolemizer<'a> {
     bounds: &'a mut Bounds,
     /// Solver options (needed for bound computation via translator)
     solver_options: &'a Options,
-    /// Maps original formulas to their skolemized versions
-    cache: HashMap<Formula, Formula>,
     /// Environment mapping variables to their replacements
     replacement_env: HashMap<Variable, Expression>,
     /// Non-skolemizable declarations in current scope
@@ -42,7 +40,6 @@ impl<'a> Skolemizer<'a> {
         Self {
             bounds,
             solver_options: options,
-            cache: HashMap::new(),
             replacement_env: HashMap::new(),
             non_skolems: Vec::new(),
             top_constraints: Vec::new(),
@@ -58,10 +55,10 @@ impl<'a> Skolemizer<'a> {
     }
 
     fn visit_formula(&mut self, formula: &Formula) -> Formula {
-        // Check cache
-        if let Some(cached) = self.cache.get(formula) {
-            return cached.clone();
-        }
+        // NOTE: Caching is disabled because the same formula may appear with different
+        // replacement environments. The Java version only caches formulas with no free
+        // variables, but we haven't implemented that check yet.
+        // TODO: Implement proper caching that considers free variables
 
         let result = match formula {
             Formula::Constant(_) => formula.clone(),
@@ -168,12 +165,38 @@ impl<'a> Skolemizer<'a> {
                 }
             }
 
-            // For other formula types, just return as-is
-            _ => formula.clone(),
+            // RelationPredicate only contains Relations, no variables to replace
+            Formula::RelationPredicate(_) => formula.clone(),
         };
 
-        self.cache.insert(formula.clone(), result.clone());
+        // Caching disabled - see note at top of function
         result
+    }
+
+    /// Visits a declaration, replacing any variables in its expression according to
+    /// the current replacement environment. This is essential for nested quantifiers
+    /// where inner quantifier domains may reference outer quantified variables.
+    fn visit_decl(&mut self, decl: &Decl) -> Decl {
+        // Save skolem depth and disable skolemization inside declarations
+        let old_depth = self.skolem_depth;
+        self.skolem_depth = -1;
+
+        // Replace variables in the declaration's expression
+        let replaced_expr = self.replace_in_expression(decl.expression());
+
+        // Restore skolem depth
+        self.skolem_depth = old_depth;
+
+        // Return new declaration if expression changed, otherwise return original
+        if replaced_expr == *decl.expression() {
+            decl.clone()
+        } else {
+            Decl::new(
+                decl.variable().clone(),
+                decl.multiplicity(),
+                replaced_expr,
+            )
+        }
     }
 
     fn visit_quantified(&mut self, quantifier: Quantifier, declarations: &Decls, body: &Formula) -> Formula {
@@ -190,11 +213,24 @@ impl<'a> Skolemizer<'a> {
             // but may be able to skolemize nested quantifiers
 
             let old_non_skolems_len = self.non_skolems.len();
+            let old_env = self.replacement_env.clone();
 
-            // Add these declarations to non-skolems (they become parameters for nested skolems)
+            // Visit each declaration to replace variables in their expressions,
+            // then add the visited declarations to non-skolems and extend the
+            // replacement environment with identity mappings
+            let mut visited_decls = Vec::new();
             for decl in declarations.iter() {
-                self.non_skolems.push(decl.clone());
+                let visited_decl = self.visit_decl(decl);
+                self.non_skolems.push(visited_decl.clone());
+                // Extend environment with identity mapping so the variable doesn't get
+                // replaced inside the quantifier body
+                self.replacement_env.insert(
+                    visited_decl.variable().clone(),
+                    Expression::from(visited_decl.variable().clone())
+                );
+                visited_decls.push(visited_decl);
             }
+            let visited_decls = Decls::from_vec(visited_decls);
 
             // Visit the body
             let can_skolemize_below = self.skolem_depth >= self.non_skolems.len() as i32;
@@ -212,10 +248,12 @@ impl<'a> Skolemizer<'a> {
 
             // Remove the declarations we added
             self.non_skolems.truncate(old_non_skolems_len);
+            // Restore replacement environment
+            self.replacement_env = old_env;
 
             Formula::Quantified {
                 quantifier,
-                declarations: declarations.clone(),
+                declarations: visited_decls,
                 body: Box::new(body_result),
             }
         }
@@ -230,7 +268,12 @@ impl<'a> Skolemizer<'a> {
 
         // For each declaration, create a Skolem constant/function
         for decl in declarations.iter() {
-            let var = decl.variable();
+            // Visit the declaration to replace any variables in its expression
+            // This is critical for nested quantifiers: if we have
+            // exists u. exists v (domain: u.E), the second declaration's
+            // expression must have u replaced with $skolem_0
+            let skolem_decl = self.visit_decl(decl);
+            let var = skolem_decl.variable();
 
             // Create Skolem relation
             // Arity = variable arity + number of non-skolem parameters
@@ -250,10 +293,10 @@ impl<'a> Skolemizer<'a> {
             }
 
             // Add constraint that Skolem is in the declared expression
-            range_constraints.push(skolem_expr.clone().in_set(decl.expression().clone()));
+            range_constraints.push(skolem_expr.clone().in_set(skolem_decl.expression().clone()));
 
             // Add multiplicity constraint if needed
-            match decl.multiplicity() {
+            match skolem_decl.multiplicity() {
                 Multiplicity::One => {
                     range_constraints.push(skolem_expr.clone().one());
                 }
@@ -276,14 +319,14 @@ impl<'a> Skolemizer<'a> {
 
             // If there are parameters, add domain constraint
             if !self.non_skolems.is_empty() {
-                domain_constraints.push(self.domain_constraint(&skolem, decl));
+                domain_constraints.push(self.domain_constraint(&skolem, &skolem_decl));
             }
 
             // Add Skolem to replacement environment
             self.replacement_env.insert(var.clone(), skolem_expr);
 
             // Add bounds for the Skolem relation
-            self.add_skolem_bounds(&skolem, decl);
+            self.add_skolem_bounds(&skolem, &skolem_decl);
         }
 
         // Visit the body with the new replacements
@@ -388,7 +431,7 @@ impl<'a> Skolemizer<'a> {
         }
     }
 
-    fn replace_in_expression(&self, expr: &Expression) -> Expression {
+    fn replace_in_expression(&mut self, expr: &Expression) -> Expression {
         match expr {
             Expression::Variable(var) => {
                 // Check if this variable has a replacement
@@ -440,31 +483,72 @@ impl<'a> Skolemizer<'a> {
                 }
             }
             Expression::If { condition, then_expr, else_expr, arity } => {
+                let condition_replaced = self.visit_formula(condition);
                 let then_replaced = self.replace_in_expression(then_expr);
                 let else_replaced = self.replace_in_expression(else_expr);
-                // Note: condition is a Formula, would need separate handling
-                if then_replaced == **then_expr && else_replaced == **else_expr {
+                if condition_replaced == **condition && then_replaced == **then_expr && else_replaced == **else_expr {
                     expr.clone()
                 } else {
                     Expression::If {
-                        condition: condition.clone(),
+                        condition: Box::new(condition_replaced),
                         then_expr: Box::new(then_replaced),
                         else_expr: Box::new(else_replaced),
                         arity: *arity,
                     }
                 }
             }
-            Expression::Comprehension { .. } => {
-                // Comprehensions have their own scope, don't replace variables in them
-                // This may need more careful handling
-                expr.clone()
+            Expression::Comprehension { declarations, formula } => {
+                // Comprehensions have their own scope - save and restore the replacement environment
+                // But we still need to visit the decls and formula to replace free variables
+                let old_env = self.replacement_env.clone();
+
+                // Visit declarations (which extends environment with identity mappings for bound vars)
+                let mut replaced_decls = Vec::new();
+                let mut any_changed = false;
+                for decl in declarations.iter() {
+                    let replaced_decl = self.visit_decl(decl);
+                    if replaced_decl != *decl {
+                        any_changed = true;
+                    }
+                    // Extend environment with identity mapping for this variable
+                    // (so it doesn't get replaced inside the comprehension body)
+                    self.replacement_env.insert(decl.variable().clone(), Expression::from(decl.variable().clone()));
+                    replaced_decls.push(replaced_decl);
+                }
+                let replaced_decls = Decls::from_vec(replaced_decls);
+
+                // Visit the formula
+                let replaced_formula = self.visit_formula(formula);
+
+                // Restore environment
+                self.replacement_env = old_env;
+
+                if !any_changed && replaced_formula == **formula {
+                    expr.clone()
+                } else {
+                    Expression::Comprehension {
+                        declarations: replaced_decls,
+                        formula: Box::new(replaced_formula),
+                    }
+                }
             }
-            // For other expression types, just return as-is
-            _ => expr.clone(),
+            Expression::IntToExprCast { int_expr, op } => {
+                let replaced_int_expr = self.replace_in_int_expression(int_expr);
+                if replaced_int_expr == **int_expr {
+                    expr.clone()
+                } else {
+                    Expression::IntToExprCast {
+                        int_expr: Box::new(replaced_int_expr),
+                        op: *op,
+                    }
+                }
+            }
+            // Leaf expressions - no variables to replace
+            Expression::Relation(_) | Expression::Constant(_) => expr.clone(),
         }
     }
 
-    fn replace_in_int_expression(&self, expr: &crate::ast::IntExpression) -> crate::ast::IntExpression {
+    fn replace_in_int_expression(&mut self, expr: &crate::ast::IntExpression) -> crate::ast::IntExpression {
         use crate::ast::IntExpression;
 
         match expr {
@@ -517,24 +601,50 @@ impl<'a> Skolemizer<'a> {
                     expr.clone()
                 }
             }
-            IntExpression::Sum { decls: _, expr: _ } => {
-                // Sum creates its own scope with declarations that shadow outer variables.
-                // We should not replace variables inside a Sum expression because:
-                // 1. Variables bound by the Sum's declarations should not be replaced
-                // 2. Free variables in the Sum should have been handled during skolemization
-                // Java version saves/restores environment when visiting Sum during skolemization,
-                // not during replacement
-                expr.clone()
+            IntExpression::Sum { decls, expr: sum_expr } => {
+                // Sum creates its own scope - save and restore the replacement environment
+                // But we still need to visit the decls and expr to replace free variables
+                let old_env = self.replacement_env.clone();
+
+                // Visit declarations (which extends environment with identity mappings for bound vars)
+                let mut replaced_decls = Vec::new();
+                let mut any_changed = false;
+                for decl in decls.iter() {
+                    let replaced_decl = self.visit_decl(decl);
+                    if replaced_decl != *decl {
+                        any_changed = true;
+                    }
+                    // Extend environment with identity mapping for this variable
+                    // (so it doesn't get replaced inside the sum body)
+                    self.replacement_env.insert(decl.variable().clone(), Expression::from(decl.variable().clone()));
+                    replaced_decls.push(replaced_decl);
+                }
+                let replaced_decls = Decls::from_vec(replaced_decls);
+
+                // Visit the expression
+                let replaced_expr = self.replace_in_int_expression(sum_expr);
+
+                // Restore environment
+                self.replacement_env = old_env;
+
+                if !any_changed && replaced_expr == **sum_expr {
+                    expr.clone()
+                } else {
+                    IntExpression::Sum {
+                        decls: replaced_decls,
+                        expr: Box::new(replaced_expr),
+                    }
+                }
             }
             IntExpression::If { condition, then_expr, else_expr } => {
-                // Note: condition is a Formula, would need separate handling
+                let condition_replaced = self.visit_formula(condition);
                 let then_replaced = self.replace_in_int_expression(then_expr);
                 let else_replaced = self.replace_in_int_expression(else_expr);
-                if then_replaced == **then_expr && else_replaced == **else_expr {
+                if condition_replaced == **condition && then_replaced == **then_expr && else_replaced == **else_expr {
                     expr.clone()
                 } else {
                     IntExpression::If {
-                        condition: condition.clone(),
+                        condition: Box::new(condition_replaced),
                         then_expr: Box::new(then_replaced),
                         else_expr: Box::new(else_replaced),
                     }

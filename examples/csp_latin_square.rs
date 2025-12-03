@@ -130,7 +130,7 @@ fn usage() {
     std::process::exit(1);
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
@@ -181,4 +181,26 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
+}
+
+
+#[test]
+fn test_csp_latin_square_small() {
+    // Test with a 5x5 Latin Square (n=3 is UNSAT with these constraints)
+    let n = 5;
+    let ls = LatinSquare::new();
+    let formula = ls.latin().and(ls.qg5()).and(ls.idempotent());
+    let bounds = ls.bounds(n).unwrap();
+
+    let solver = Solver::new(Options::default());
+    let solution = solver.solve(&formula, &bounds).unwrap();
+
+    // 5x5 Latin Square should be satisfiable
+    assert!(solution.is_sat(), "5x5 Latin Square should have a solution");
+
+    println!("Latin Square test passed - SAT as expected");
 }

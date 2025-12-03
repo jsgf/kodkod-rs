@@ -182,7 +182,7 @@ impl HamiltonianCycle {
     }
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     let args: Vec<String> = std::env::args().collect();
 
     let n = if args.len() > 1 {
@@ -235,4 +235,14 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
         stats.translation_time(), stats.solving_time(), stats.total_time());
 
     Ok(())
+}
+
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
+}
+
+#[test]
+fn test_csp_hamiltonian_cycle_runs() {
+    // Test that the example runs without panicking
+    run().unwrap();
 }

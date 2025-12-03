@@ -10,3 +10,6 @@
 - When choosing between adding features, moving on or fixing bugs, you *MUST* choose to fix any outstanding bugs. Bug fixing is the *ABSOLUTE* highest priority.
 - use --release for any long-running test or example
 - Java kodkod jar files are in ../kodkod/build, and probably need to be explicitly put in the classpath
+- *NEVER* use a raw pointer as a hash key
+- Prefer using nested match patterns and a single match rather than nesting matches themselves.
+- Put `use` statements at the top of the file.

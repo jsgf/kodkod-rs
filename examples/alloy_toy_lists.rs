@@ -14,7 +14,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     println!("=== Toy Lists Specification ===\n");
 
     // Create universe: list elements
@@ -107,6 +107,10 @@ fn main() {
             eprintln!("Error: {:?}", e);
         }
     }
+}
+
+fn main() {
+    run()
 }
 
 fn build_spec(
@@ -269,4 +273,10 @@ fn build_spec(
 
     // Combine all specs with AND
     Formula::and_all(specs)
+}
+
+#[test]
+fn test_alloy_toy_lists_runs() {
+    // Test that the example runs without panicking
+    run();
 }

@@ -108,9 +108,33 @@ impl Translator {
     /// Approximates an expression as a boolean matrix
     /// This is used for computing upper bounds for Skolem relations
     /// Following Java: FOL2BoolTranslator.approximate()
-    pub fn approximate_expression(expr: &Expression, bounds: &Bounds, options: &Options) -> Vec<usize> {
+    pub fn approximate_expression(
+        expr: &Expression,
+        bounds: &Bounds,
+        options: &Options,
+    ) -> Vec<usize> {
+        Self::approximate_expression_with_env(expr, bounds, options, None)
+    }
+
+    /// Approximates an expression with an optional environment for variable bindings
+    /// Following Java: FOL2BoolTranslator.approximate(Expression, LeafInterpreter, Environment)
+    pub fn approximate_expression_with_env(
+        expr: &Expression,
+        bounds: &Bounds,
+        options: &Options,
+        env: Option<&BooleanMatrix<'_>>,
+    ) -> Vec<usize> {
         let interpreter = LeafInterpreter::from_bounds(bounds, options);
         let translator = FOL2BoolTranslator::new(&interpreter);
+
+        // If an environment is provided, we need to use it
+        // For now, if env is provided but we can't use it, return empty (conservative)
+        if env.is_some() {
+            // TODO: Implement environment parameter passing
+            // For now, return empty to trigger conservative bounds
+            return Vec::new();
+        }
+
         let matrix = translator.translate_expression(expr);
         matrix.dense_indices()
     }
@@ -192,9 +216,13 @@ struct FOL2BoolTranslator<'a> {
 
 impl<'a> FOL2BoolTranslator<'a> {
     fn new(interpreter: &'a LeafInterpreter) -> Self {
+        Self::with_env(interpreter, Environment::empty())
+    }
+
+    fn with_env(interpreter: &'a LeafInterpreter, env: Environment<'a>) -> Self {
         Self {
             interpreter,
-            env: RefCell::new(Environment::empty()),
+            env: RefCell::new(env),
             relation_cache: RefCell::new(FxHashMap::default()),
             constant_cache: RefCell::new(FxHashMap::default()),
         }

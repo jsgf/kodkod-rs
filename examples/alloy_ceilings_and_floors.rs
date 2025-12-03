@@ -181,7 +181,7 @@ impl CeilingsAndFloors {
     }
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("=== Ceilings and Floors ===\n");
     println!("Paul Simon: 'One Man's Ceiling Is Another Man's Floor'\n");
 
@@ -219,4 +219,14 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
         stats2.translation_time(), stats2.solving_time(), stats2.total_time());
 
     Ok(())
+}
+
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
+}
+
+#[test]
+fn test_alloy_ceilings_and_floors_runs() {
+    // Test that the example runs without panicking
+    run().unwrap();
 }

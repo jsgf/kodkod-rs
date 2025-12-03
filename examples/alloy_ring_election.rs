@@ -309,7 +309,7 @@ impl RingElection {
     }
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("=== Ring Election Protocol ===\n");
 
     let model = RingElection::new();
@@ -345,8 +345,8 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("  Translation: {}ms, Solving: {}ms, Total: {}ms\n",
         stats2.translation_time(), stats2.solving_time(), stats2.total_time());
 
-    // Test 3: run looplessPath for smaller scope (13 Time is too slow)
-    println!("Test 3: Run looplessPath for 7 Time, 3 Process");
+    // Test 3: run looplessPath
+    println!("Test 3: Run looplessPath for 3 Process, 7 Time");
     println!("Formula: invariants && looplessPath\n");
 
     let formula3 = model.invariants().and(model.loopless_path());
@@ -360,4 +360,14 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
         stats3.translation_time(), stats3.solving_time(), stats3.total_time());
 
     Ok(())
+}
+
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
+}
+
+#[test]
+fn test_alloy_ring_election_runs() {
+    // Test that the example runs without panicking
+    run().unwrap();
 }

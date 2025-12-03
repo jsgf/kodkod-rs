@@ -318,7 +318,7 @@ impl NUM374 {
     }
 }
 
-fn main() {
+fn run() {
     let num = NUM374::new();
 
     println!("Running NUM374 with universe size 3...");
@@ -342,4 +342,14 @@ fn main() {
     }
 
     println!("\nStatistics: {:?}", sol.statistics());
+}
+
+fn main() {
+    run()
+}
+
+#[test]
+fn test_num374_satisfiable() {
+    // NUM374+1.p should be SAT - there exists a counterexample to product commutativity
+    run();
 }

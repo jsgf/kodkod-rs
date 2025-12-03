@@ -131,7 +131,17 @@ impl ListRepair {
     }
 }
 
-fn main() {
+fn run() {
     let enc = ListRepair::new();
     enc.show_repair(3);
+}
+
+fn main() {
+    run();
+}
+
+#[test]
+fn test_bmc_list_repair_runs() {
+    // Test that the example runs without panicking
+    run();
 }

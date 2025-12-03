@@ -112,7 +112,7 @@ impl Toughnut {
     }
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("=== Toughnut - Domino Covering Problem ===\n");
 
     let n = 4; // 4x4 board
@@ -177,4 +177,14 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
         stats.translation_time(), stats.solving_time(), stats.total_time());
 
     Ok(())
+}
+
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
+}
+
+#[test]
+fn test_alloy_toughnut_runs() {
+    // Test that the example runs without panicking
+    run().unwrap();
 }

@@ -7,7 +7,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{atom_as_str, Bounds, Instance, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     println!("=== 4x4 Sudoku Solver ===\n");
 
     // Create a 4x4 Sudoku solver
@@ -79,6 +79,10 @@ fn main() {
             eprintln!("Error: {}", e);
         }
     }
+}
+
+fn main() {
+    run()
 }
 
 fn print_puzzle(clues: &[(usize, usize, usize)], n: usize) {
@@ -338,4 +342,10 @@ impl Sudoku {
 
         bounds
     }
+}
+
+#[test]
+fn test_sudoku_runs() {
+    // Test that the example runs without panicking
+    run();
 }

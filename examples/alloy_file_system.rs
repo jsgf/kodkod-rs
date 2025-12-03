@@ -13,7 +13,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     let scope = 2;  // Smaller scope to avoid overflow
     println!(
         "=== File System Specification (scope {}) ===\n",
@@ -123,6 +123,10 @@ fn main() {
     }
 }
 
+fn main() {
+    run()
+}
+
 /// Basic declarations and constraints
 fn decls(obj: &Relation, file: &Relation, dir: &Relation, root: &Relation) -> Formula {
     // File and Dir partition Object
@@ -161,4 +165,10 @@ fn check_no_dir_aliases(obj: &Relation, file: &Relation, dir: &Relation, root: &
     let check = no_dir_aliases(dir, contents).not();
 
     d.and(check)
+}
+
+#[test]
+fn test_alloy_file_system_runs() {
+    // Test that the example runs without panicking
+    run();
 }

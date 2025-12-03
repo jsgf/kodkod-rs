@@ -398,7 +398,17 @@ impl ListSynth {
     }
 }
 
-fn main() {
+fn run() {
     let enc = ListSynth::new();
     enc.show_synth(3);
+}
+
+fn main() {
+    run();
+}
+
+#[test]
+fn test_bmc_list_synth_runs() {
+    // Test that the example runs without panicking
+    run();
 }

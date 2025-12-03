@@ -8,7 +8,7 @@ use kodkod_rs::ast::{Expression, Relation};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     // Create universe matching list_synth counterexample
     let u = Universe::new(&["l0", "n0", "n1", "n2", "nil"]).unwrap();
     let mut bounds = Bounds::new(u);
@@ -88,4 +88,13 @@ fn main() {
         }
     });
     eprintln!("Stats: {:?}", result2.statistics());
+}
+
+fn main() {
+    run()
+}
+#[test]
+fn test_test_acyclic_override_bug_runs() {
+    // Test that the example runs without panicking
+    run();
 }

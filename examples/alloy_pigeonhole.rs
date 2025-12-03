@@ -111,7 +111,7 @@ impl Pigeonhole {
     }
 }
 
-fn main() {
+fn run() {
     println!("=== Pigeonhole Principle Solver ===\n");
 
     let test_cases = vec![
@@ -146,4 +146,30 @@ fn main() {
         }
         println!();
     }
+}
+
+fn main() {
+    run()
+}
+
+#[cfg(test)]
+
+#[test]
+fn test_pigeonhole_principle() {
+    let model = Pigeonhole::new();
+    let formula = model.declarations().and(model.pigeon_per_hole());
+
+    // Test case 1: 3 pigeons, 3 holes - should be SAT
+    let bounds = model.bounds(3, 3).expect("Failed to create bounds");
+    let solver = Solver::new(Options::default());
+    let solution = solver.solve(&formula, &bounds).expect("Solver should not error");
+    assert!(solution.is_sat(), "3 pigeons, 3 holes should be SAT");
+
+    // Test case 2: 4 pigeons, 3 holes - should be UNSAT (pigeonhole principle)
+    let bounds = model.bounds(4, 3).expect("Failed to create bounds");
+    let solver = Solver::new(Options::default());
+    let solution = solver.solve(&formula, &bounds).expect("Solver should not error");
+    assert!(!solution.is_sat(), "4 pigeons, 3 holes should be UNSAT");
+
+    println!("Pigeonhole test passed");
 }

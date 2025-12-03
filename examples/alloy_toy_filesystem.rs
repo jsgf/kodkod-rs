@@ -89,7 +89,7 @@ impl ToyFilesystem {
     }
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     let toy = ToyFilesystem::new();
     let formula = toy.constraints();
 
@@ -102,4 +102,14 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("{solution:#?}");
 
     Ok(())
+}
+
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
+}
+
+#[test]
+fn test_alloy_toy_filesystem_runs() {
+    // Test that the example runs without panicking
+    run().unwrap();
 }

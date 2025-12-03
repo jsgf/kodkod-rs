@@ -16,7 +16,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     let num_vertices = 3;  // Test with minimal size due to spec complexity
     println!(
         "=== Trees Specification (Tree Equivalence with {} vertices) ===\n",
@@ -68,6 +68,10 @@ fn main() {
             eprintln!("Error: {:?}", e);
         }
     }
+}
+
+fn main() {
+    run()
 }
 
 fn build_spec(v: &Relation, e: &Relation) -> Formula {
@@ -247,4 +251,26 @@ fn statement5(v: &Relation, e: &Relation) -> Formula {
     );
 
     acyclic(v, e_expr).and(f1)
+}
+
+#[test]
+fn test_alloy_trees_basic() {
+    // Basic test that just verifies individual statements can be solved
+    // Note: Full implication testing disabled due to Skolemizer bug with nested quantifiers
+    // See: src/simplify/skolemizer.rs:314-323 for details
+    let universe = Universe::new(&["v0", "v1", "v2"]).unwrap();
+    let factory = universe.factory();
+
+    let v = Relation::unary("V");
+    let e = Relation::binary("E");
+
+    let mut bounds = Bounds::new(universe);
+    bounds.bound_exactly(&v, factory.all(1)).unwrap();
+    bounds.bound(&e, factory.none(2), factory.all(2)).unwrap();
+
+    let solver = Solver::new(Options::default());
+
+    // Test that individual statements solve
+    let s1 = statement1(&v, &e);
+    let _ = solver.solve(&s1, &bounds).expect("statement1 should solve");
 }

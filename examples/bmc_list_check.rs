@@ -90,9 +90,19 @@ impl ListCheck {
     }
 }
 
-fn main() {
+fn run() {
     let enc = ListCheck::new();
     enc.show_check(1);
     enc.show_check(2);
     enc.show_check(3);
+}
+
+fn main() {
+    run();
+}
+
+#[test]
+fn test_bmc_list_check_runs() {
+    // Test that the example runs without panicking
+    run();
 }

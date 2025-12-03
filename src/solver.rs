@@ -87,7 +87,7 @@ impl Solver {
         };
 
         // Step 0.75: Skolemize if enabled
-        let (skolemized_formula, final_bounds) = if self.options.bool_options.skolem_depth.is_some() {
+        let (skolemized_formula, mut final_bounds) = if self.options.bool_options.skolem_depth.is_some() {
             // Skolemization modifies bounds by adding Skolem relations
             let mut mutable_bounds = bounds.clone();
             let mut skolemizer = crate::simplify::Skolemizer::new(&mut mutable_bounds, &self.options);
@@ -97,12 +97,34 @@ impl Solver {
             (flattened_formula.clone(), bounds.clone())
         };
 
+        // Step 0.8: Break matrix symmetries for relation predicates
+        // This modifies bounds to make predicates trivially true, reducing CNF size
+        let optimized_formula = if self.options.symmetry_breaking > 0 {
+            let predicates = extract_predicates(&skolemized_formula);
+            if !predicates.is_empty() {
+                let mut breaker = crate::engine::SymmetryBreaker::new(final_bounds.clone());
+                let broken = breaker.break_matrix_symmetries(&predicates, false);
+                if !broken.is_empty() {
+                    // Update bounds with the modified bounds from the breaker
+                    final_bounds = breaker.into_bounds();
+                    // Replace broken predicates with TRUE (they're now enforced by bounds)
+                    replace_predicates(&skolemized_formula, &broken)
+                } else {
+                    skolemized_formula
+                }
+            } else {
+                skolemized_formula
+            }
+        } else {
+            skolemized_formula
+        };
+
         let simplification_time = simplification_start.elapsed();
 
         eprintln!("DEBUG: Simplification took {:?}", simplification_time);
 
         // Check if formula simplified to a constant
-        match &skolemized_formula {
+        match &optimized_formula {
             Formula::Constant(true) => {
                 eprintln!("DEBUG: Formula simplified to TRUE");
                 return Ok(Solution::Trivial {
@@ -134,7 +156,7 @@ impl Solver {
         let translation_start = Instant::now();
 
         let translation_result = Translator::evaluate(
-            &skolemized_formula,
+            &optimized_formula,
             &final_bounds,
             &self.options.bool_options,
             self.options.symmetry_breaking,
@@ -337,6 +359,77 @@ impl Statistics {
     pub fn num_clauses(&self) -> u32 {
         self.num_clauses
     }
+}
+
+/// Extracts all RelationPredicates from a formula
+fn extract_predicates(formula: &Formula) -> Vec<crate::ast::RelationPredicate> {
+    use crate::ast::RelationPredicate;
+
+    let mut predicates = Vec::new();
+
+    fn visit(f: &Formula, preds: &mut Vec<RelationPredicate>) {
+        match f {
+            Formula::RelationPredicate(pred) => {
+                preds.push(pred.clone());
+            }
+            Formula::Not(inner) => visit(inner, preds),
+            Formula::Binary { left, right, .. } => {
+                visit(left, preds);
+                visit(right, preds);
+            }
+            Formula::Nary { formulas, .. } => {
+                for sub in formulas {
+                    visit(sub, preds);
+                }
+            }
+            Formula::Quantified { body, .. } => {
+                visit(body, preds);
+            }
+            _ => {}
+        }
+    }
+
+    visit(formula, &mut predicates);
+    predicates
+}
+
+/// Replaces RelationPredicates in a formula with their replacement formulas
+fn replace_predicates(
+    formula: &Formula,
+    replacements: &rustc_hash::FxHashMap<crate::ast::RelationPredicate, Formula>,
+) -> Formula {
+    fn visit(
+        f: &Formula,
+        reps: &rustc_hash::FxHashMap<crate::ast::RelationPredicate, Formula>,
+    ) -> Formula {
+        match f {
+            Formula::RelationPredicate(pred) => {
+                if let Some(replacement) = reps.get(pred) {
+                    replacement.clone()
+                } else {
+                    f.clone()
+                }
+            }
+            Formula::Not(inner) => Formula::Not(Box::new(visit(inner, reps))),
+            Formula::Binary { op, left, right } => Formula::Binary {
+                op: *op,
+                left: Box::new(visit(left, reps)),
+                right: Box::new(visit(right, reps)),
+            },
+            Formula::Nary { op, formulas } => Formula::Nary {
+                op: *op,
+                formulas: formulas.iter().map(|sub| visit(sub, reps)).collect(),
+            },
+            Formula::Quantified { quantifier, declarations, body } => Formula::Quantified {
+                quantifier: *quantifier,
+                declarations: declarations.clone(),
+                body: Box::new(visit(body, reps)),
+            },
+            _ => f.clone(),
+        }
+    }
+
+    visit(formula, replacements)
 }
 
 #[cfg(test)]

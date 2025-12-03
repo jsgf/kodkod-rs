@@ -148,7 +148,7 @@ impl MagicSeries {
     }
 }
 
-fn main() {
+fn run() {
     let args: Vec<String> = std::env::args().collect();
 
     let max = if args.len() > 1 {
@@ -174,4 +174,30 @@ fn main() {
     let sol = solver.solve(&f, &b).expect("Failed to solve");
 
     model.print(&sol);
+}
+
+fn main() {
+    run()
+}
+
+
+#[test]
+fn test_csp_magic_series_small() {
+    // Test with a small Magic Series (n=4)
+    let max = 4;
+    let ms = MagicSeries::new();
+    let formula = ms.magic();
+    let bounds = ms.bounds(max);
+
+    let mut options = Options::default();
+    let bitwidth = 33 - (max as u32).leading_zeros();
+    options.bool_options.bitwidth = bitwidth as usize;
+
+    let solver = Solver::new(options);
+    let solution = solver.solve(&formula, &bounds).expect("Solver should not error");
+
+    // Magic Series of size 4 should be satisfiable
+    assert!(solution.is_sat(), "Magic Series of size 4 should have a solution");
+
+    println!("Magic Series test passed - SAT as expected");
 }

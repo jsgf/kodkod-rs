@@ -470,14 +470,19 @@ pub struct Decl {
 }
 
 impl Decl {
+    /// Creates a new declaration with the given multiplicity
+    pub fn new(variable: Variable, multiplicity: Multiplicity, expression: Expression) -> Self {
+        Self {
+            variable,
+            multiplicity,
+            expression,
+        }
+    }
+
     /// Creates a new declaration with "one of" multiplicity
     /// Takes owned values since Variable and Expression clone cheaply (Arc-based)
     pub fn one_of(variable: Variable, expression: Expression) -> Self {
-        Self {
-            variable,
-            multiplicity: Multiplicity::One,
-            expression,
-        }
+        Self::new(variable, Multiplicity::One, expression)
     }
 
     /// Creates a new declaration with "lone" multiplicity

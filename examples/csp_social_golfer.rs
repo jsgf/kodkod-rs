@@ -205,7 +205,7 @@ fn usage() {
     std::process::exit(1);
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 5 {
@@ -262,4 +262,40 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("Total time: {} ms", elapsed.as_millis());
 
     Ok(())
+}
+
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
+}
+
+
+#[test]
+fn test_csp_social_golfer_runs() {
+    // Test that the example runs without error
+    // Note: This particular configuration may be UNSAT depending on constraints
+    let players = 4;
+    let groups = 2;
+    let weeks = 1;
+    let size = 2;
+
+    let sg = SocialGolfer::new();
+    let formula = sg.schedule();
+    let bounds = sg.bounds(players, groups, weeks, size).unwrap();
+
+    let mut options = Options::default();
+    options.symmetry_breaking = 1000;
+    let total = groups * weeks;
+    let bitwidth = if total > 0 {
+        let lz = total.leading_zeros();
+        32_usize.saturating_sub(lz as usize).max(1)
+    } else {
+        1
+    };
+    options.bool_options.bitwidth = bitwidth;
+
+    let solver = Solver::new(options);
+    let _solution = solver.solve(&formula, &bounds).unwrap();
+
+    // Test just verifies that solving completes without error
+    println!("Social Golfer test passed - solver completed");
 }

@@ -170,7 +170,7 @@ impl Viktor {
     }
 }
 
-fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     println!("=== Viktor - Kuncak Hypothesis (n=3) ===\n");
 
     let model = Viktor::new();
@@ -191,4 +191,9 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
         stats.translation_time(), stats.solving_time(), stats.total_time());
 
     Ok(())
+}
+
+// No #[test] because its too long-running.
+fn main() -> Result<(), kodkod_rs::error::KodkodError> {
+    run()
 }

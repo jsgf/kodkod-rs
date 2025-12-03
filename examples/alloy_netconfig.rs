@@ -9,7 +9,7 @@ use kodkod_rs::{
 };
 use std::time::Instant;
 
-fn main() {
+fn run() {
     let scope = std::env::args()
         .nth(1)
         .and_then(|arg| arg.parse::<usize>().ok())
@@ -148,4 +148,14 @@ fn main() {
             + constraint_time.as_secs_f64()
             + stats.total_time() as f64 / 1000.0)
     );
+}
+
+fn main() {
+    run()
+}
+
+#[test]
+fn test_alloy_netconfig_runs() {
+    // Test that the example runs without panicking
+    run();
 }

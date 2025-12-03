@@ -120,9 +120,19 @@ fn write4(dst: &mut [i32], pos: usize, src: &[i32; 4]) {
     dst[pos + 3] = src[3];
 }
 
-fn main() {
+fn run() {
     let a = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
     println!("a = {a:?}");
     println!("transpose(a) = {:?}", transpose(&a));
     println!("transposeShufps(a) = {:?}", transpose_shufps(&a));
+}
+
+fn main() {
+    run()
+}
+
+#[test]
+fn test_xpose_transpose4x4_runs() {
+    // Test that the example runs without panicking
+    run();
 }

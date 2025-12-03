@@ -29,6 +29,11 @@ impl SymmetryBreaker {
         }
     }
 
+    /// Consumes the breaker and returns the (potentially modified) bounds
+    pub fn into_bounds(self) -> Bounds {
+        self.bounds
+    }
+
     /// Generates a symmetry breaking predicate (SBP)
     ///
     /// Creates a lex-leader circuit that enforces canonical ordering

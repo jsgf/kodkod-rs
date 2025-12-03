@@ -8,7 +8,7 @@ use kodkod_rs::ast::{Expression, Relation};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     // Create universe
     let u = Universe::new(&["a", "b", "c", "nil"]).unwrap();
     let mut bounds = Bounds::new(u);
@@ -59,13 +59,29 @@ fn main() {
     bounds2.bound_exactly(&nil, t2.tuple_set(&[&["nil"]]).unwrap()).unwrap();
     bounds2.bound_exactly(&a_rel, t2.tuple_set(&[&["a"]]).unwrap()).unwrap();
 
+    // Recreate r_tuples for this universe
+    let mut r_tuples2 = t2.none(2);
+    r_tuples2.add(t2.tuple(&["a", "b"]).unwrap()).unwrap();
+    r_tuples2.add(t2.tuple(&["b", "c"]).unwrap()).unwrap();
+    r_tuples2.add(t2.tuple(&["c", "nil"]).unwrap()).unwrap();
+
     // Use partial bounds instead of exact
     let atoms_set = t2.tuple_set(&[&["a"], &["b"], &["c"], &["nil"]]).unwrap();
     let all_pairs = atoms_set.product(&atoms_set).unwrap();
-    bounds2.bound(&r, r_tuples, all_pairs).unwrap();
+    bounds2.bound(&r, r_tuples2, all_pairs).unwrap();
 
     let result2 = solver.solve(&formula, &bounds2).expect("Solve failed");
 
     eprintln!("Result: {:?}", result2);
     eprintln!("Stats: {:?}", result2.statistics());
+}
+
+fn main() {
+    run()
+}
+
+#[test]
+fn test_test_translator_bug_runs() {
+    // Test that the example runs without panicking
+    run();
 }

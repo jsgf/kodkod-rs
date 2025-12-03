@@ -314,3 +314,4 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
 
     Ok(())
 }
+

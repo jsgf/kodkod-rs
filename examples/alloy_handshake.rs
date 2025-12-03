@@ -207,7 +207,7 @@ impl Handshake {
     }
 }
 
-fn main() {
+fn run() {
     println!("=== Handshake Puzzle Solver ===\n");
 
     for num_persons in 2..=6 {
@@ -247,4 +247,14 @@ fn main() {
         }
         println!();
     }
+}
+
+fn main() {
+    run()
+}
+
+#[test]
+fn test_alloy_handshake_runs() {
+    // Test that the example runs without panicking
+    run();
 }

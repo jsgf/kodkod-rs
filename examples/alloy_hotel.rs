@@ -13,7 +13,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     let scope = 2;
     println!("=== Hotel Example (scope: {}) ===\n", scope);
 
@@ -137,4 +137,14 @@ fn main() {
             eprintln!("Error: {:?}", e);
         }
     }
+}
+
+fn main() {
+    run()
+}
+
+#[test]
+fn test_alloy_hotel_runs() {
+    // Test that the example runs without panicking
+    run();
 }

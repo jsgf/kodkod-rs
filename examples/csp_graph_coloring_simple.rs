@@ -10,7 +10,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() {
     // Define a simple graph: vertices [0, 1, 2, 3, 4]
     // Edges (adjacency list): 0-1, 1-2, 2-3, 3-4, 4-0 (a cycle)
     let edges = vec![
@@ -37,6 +37,10 @@ fn main() {
         println!("=== Graph Coloring: {num_colors} colors ===\n");
         solve_graph_coloring(&edges, num_colors, expected_sat);
     }
+}
+
+fn main() {
+    run()
 }
 
 fn solve_graph_coloring(edges: &[(usize, usize)], num_colors: usize, expected_sat: bool) {
@@ -150,4 +154,10 @@ fn solve_graph_coloring(edges: &[(usize, usize)], num_colors: usize, expected_sa
         }
     }
     println!();
+}
+
+#[test]
+fn test_csp_graph_coloring_simple_runs() {
+    // Test that the example runs without panicking
+    run();
 }

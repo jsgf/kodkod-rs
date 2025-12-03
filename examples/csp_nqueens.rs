@@ -598,7 +598,7 @@ fn usage() {
     std::process::exit(1);
 }
 
-fn main() {
+fn run() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 3 {
@@ -632,6 +632,10 @@ fn main() {
     }
 }
 
+fn main() {
+    run()
+}
+
 fn solve_and_print<T: NQueens>(model: &T, n: usize) {
     let f = model.rules();
     let b = model.bounds();
@@ -657,4 +661,25 @@ fn solve_and_print<T: NQueens>(model: &T, n: usize) {
     }
 
     println!("{:?}", sol.statistics());
+}
+
+
+#[test]
+fn test_csp_nqueens_small() {
+    // Test with a small N-Queens problem (4-Queens)
+    let n = 4;
+    let queens = RelQueens::new(n);
+    let formula = queens.rules();
+    let bounds = queens.bounds();
+
+    let mut options = Options::default();
+    options.bool_options.bitwidth = 33 - (n as i32 - 1).leading_zeros() as usize;
+
+    let solver = Solver::new(options);
+    let solution = solver.solve(&formula, &bounds).expect("Solver should not error");
+
+    // 4-Queens should be satisfiable
+    assert!(solution.is_sat(), "4-Queens should have a solution");
+
+    println!("N-Queens test passed - SAT as expected");
 }

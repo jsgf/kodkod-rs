@@ -226,7 +226,7 @@ impl NUM378 {
     }
 }
 
-fn main() {
+fn run() {
     let num = NUM378::new();
 
     println!("Running NUM378...");
@@ -254,4 +254,14 @@ fn main() {
     }
 
     println!("Stats: {:?}", solution.statistics());
+}
+
+fn main() {
+    run()
+}
+
+#[test]
+fn test_num378_unsatisfiable() {
+    // NUM378+1.020.015.p should be UNSAT
+    run();
 }
