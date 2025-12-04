@@ -95,15 +95,18 @@
   - **Findings**:
     - Java: 10533 vars, 36835 clauses (translation 86ms, solving 1796ms)
     - Rust (before caching): 18132 vars, 41792 clauses (translation 13s, solving 1.4s)
-    - Rust (after caching): 18132 vars, 41792 clauses (translation 22ms, solving 0.9s)
+    - Rust (after full cache): 18132 vars, 41792 clauses (translation 20ms, solving 0.7-2.6s)
   - **Root cause**: Missing expression caching in Rust translator
-  - **Fix implemented**: Expression caching using Rc pointer identity (src/translator.rs)
-    - Uses RcKey wrapper for safe pointer-identity based HashMap keys
-    - Only caches when not inside a quantifier (to avoid free variable issues)
-    - Translation speedup: 13s → 22ms (590x faster)
+  - **Fix implemented**: Full FOL2BoolCache parity with Java (src/translator/cache.rs ~500 LOC)
+    - SharingDetector: Finds nodes that appear multiple times in AST
+    - FreeVariableCollector: Tracks free variables for each node
+    - NoVarRecord/MultiVarRecord: Cache with variable binding support
+    - TranslationCache: Full cache with lookup keyed by node + variable bindings
+    - Translation speedup: 13s → 20ms (650x faster)
   - **Remaining gap**: Rust still generates 1.72x more CNF variables than Java
-    - May be due to different BooleanFactory optimizations or Tseitin encoding
-    - Java's full FOL2BoolCache also tracks variable bindings for quantified contexts
+    - NOT due to caching (full Java-parity cache now implemented)
+    - Must be due to different BooleanFactory optimizations or Tseitin encoding
+    - Future investigation: Compare BooleanFactory.and_multi/or_multi behavior
   - **Note**: Integer bounds MUST be set for synthesis examples using IntConstant.toExpression()
 - **Implement proof/unsat core extraction system**
   - Required for: ListDebug.java example

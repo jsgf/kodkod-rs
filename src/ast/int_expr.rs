@@ -120,6 +120,11 @@ impl IntExpression {
         &self.0
     }
 
+    /// Returns a raw pointer to the inner expression for identity-based caching
+    pub fn as_ptr(&self) -> *const IntExpressionInner {
+        Rc::as_ptr(&self.0)
+    }
+
     /// Integer constant
     pub fn constant(value: i32) -> Self {
         IntExpression(Rc::new(IntExpressionInner::Constant(value)))

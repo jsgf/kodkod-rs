@@ -5,64 +5,17 @@
 
 mod leaf_interpreter;
 mod environment;
+mod cache;
 
 pub use leaf_interpreter::LeafInterpreter;
 pub use environment::Environment;
 
+use cache::TranslationCache;
 use crate::ast::*;
 use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Int, Options};
 use crate::instance::{Bounds, Instance};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::rc::Rc;
-
-/// Pointer-identity key for caching AST node translations.
-/// Uses Rc pointer comparison like Java's IdentityHashMap.
-/// Holds the Rc to ensure the pointer remains valid while in the cache.
-/// Following Java: FOL2BoolCache uses IdentityHashMap<Node, Record>
-struct RcKey<T>(Rc<T>);
-
-impl<T> Clone for RcKey<T> {
-    fn clone(&self) -> Self {
-        RcKey(Rc::clone(&self.0))
-    }
-}
-
-impl<T> PartialEq for RcKey<T> {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-impl<T> Eq for RcKey<T> {}
-
-impl<T> std::hash::Hash for RcKey<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Rc::as_ptr(&self.0).hash(state)
-    }
-}
-
-impl RcKey<ExpressionInner> {
-    /// Create cache key from Expression if it's Rc-wrapped
-    fn from_expr(expr: &Expression) -> Option<Self> {
-        match expr {
-            Expression::Ref(rc) => Some(RcKey(Rc::clone(rc))),
-            // Constants are handled separately
-            _ => None,
-        }
-    }
-}
-
-impl RcKey<FormulaInner> {
-    /// Create cache key from Formula if it's Rc-wrapped
-    fn from_formula(formula: &Formula) -> Option<Self> {
-        match formula {
-            Formula::Ref(rc) => Some(RcKey(Rc::clone(rc))),
-            // Constants are handled separately
-            _ => None,
-        }
-    }
-}
 
 /// Result of translating a formula to a boolean circuit
 ///
@@ -125,8 +78,12 @@ impl Translator {
     ) -> TranslationResult {
         let interpreter = LeafInterpreter::from_bounds(bounds, options);
 
+        // Build translation cache with shared node detection and free variable analysis
+        // Following Java: FOL2BoolCache built from AnnotatedNode
+        let cache = TranslationCache::new(formula);
+
         let value = {
-            let translator = FOL2BoolTranslator::new(&interpreter);
+            let translator = FOL2BoolTranslator::with_cache(&interpreter, cache);
             let mut circuit = translator.translate_formula(formula);
 
             // Generate and conjoin symmetry breaking predicate if enabled
@@ -258,29 +215,32 @@ impl Translator {
 struct FOL2BoolTranslator<'a> {
     interpreter: &'a LeafInterpreter,
     env: RefCell<Environment<'a>>,
-    // Phase 1 leaf caching: cache relation and constant interpretations
+    // Leaf caching: cache relation and constant interpretations
     relation_cache: RefCell<FxHashMap<Relation, BooleanMatrix<'a>>>,
     constant_cache: RefCell<FxHashMap<ConstantExpr, BooleanMatrix<'a>>>,
-    // Phase 2 expression caching: cache compound expression translations by pointer identity
-    // Following Java: FOL2BoolCache with IdentityHashMap<Node, Record>
-    // Uses RcKey to hold the Rc and ensure pointer validity
-    expr_cache: RefCell<FxHashMap<RcKey<ExpressionInner>, BooleanMatrix<'a>>>,
-    formula_cache: RefCell<FxHashMap<RcKey<FormulaInner>, BoolValue<'a>>>,
+    // Full translation cache with free variable tracking
+    // Following Java: FOL2BoolCache with NoVarRecord/MultiVarRecord
+    cache: RefCell<TranslationCache<'a>>,
 }
 
 impl<'a> FOL2BoolTranslator<'a> {
     fn new(interpreter: &'a LeafInterpreter) -> Self {
-        Self::with_env(interpreter, Environment::empty())
-    }
-
-    fn with_env(interpreter: &'a LeafInterpreter, env: Environment<'a>) -> Self {
         Self {
             interpreter,
-            env: RefCell::new(env),
+            env: RefCell::new(Environment::empty()),
             relation_cache: RefCell::new(FxHashMap::default()),
             constant_cache: RefCell::new(FxHashMap::default()),
-            expr_cache: RefCell::new(FxHashMap::default()),
-            formula_cache: RefCell::new(FxHashMap::default()),
+            cache: RefCell::new(TranslationCache::empty()),
+        }
+    }
+
+    fn with_cache(interpreter: &'a LeafInterpreter, cache: TranslationCache<'a>) -> Self {
+        Self {
+            interpreter,
+            env: RefCell::new(Environment::empty()),
+            relation_cache: RefCell::new(FxHashMap::default()),
+            constant_cache: RefCell::new(FxHashMap::default()),
+            cache: RefCell::new(cache),
         }
     }
 
@@ -394,27 +354,21 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Expression translation
     /// Following Java: FOL2BoolTranslator.visit(Expression)
     fn translate_expression(&self, expr: &Expression) -> BooleanMatrix<'a> {
-        // Check pointer-identity cache first for Rc-wrapped expressions
-        // Following Java: FOL2BoolCache.lookup() with IdentityHashMap
-        // Only use cache when environment is empty (not inside a quantifier)
-        // to avoid incorrect caching of expressions with free variables.
-        let env_empty = self.env.borrow().is_empty();
-        if env_empty {
-            if let Some(key) = RcKey::from_expr(expr) {
-                if let Some(cached) = self.expr_cache.borrow().get(&key) {
-                    return cached.clone();
-                }
+        // Check translation cache (handles both shared nodes and free variables)
+        // Following Java: FOL2BoolCache.lookup()
+        {
+            let env = self.env.borrow();
+            if let Some(cached) = self.cache.borrow().lookup_expr(expr, &env) {
+                return cached;
             }
         }
 
         let result = self.translate_expression_inner(expr);
 
-        // Cache the result for Rc-wrapped expressions when not inside a quantifier
-        // Full Java behavior would also track variable bindings for nodes inside quantifiers.
-        if env_empty {
-            if let Some(key) = RcKey::from_expr(expr) {
-                self.expr_cache.borrow_mut().insert(key, result.clone());
-            }
+        // Cache the result
+        {
+            let env = self.env.borrow();
+            self.cache.borrow_mut().cache_expr(expr, result.clone(), &env);
         }
 
         result
