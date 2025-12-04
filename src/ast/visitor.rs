@@ -4,9 +4,9 @@
 //! from the Java version. Instead, we provide pattern matching on enum variants
 //! and optional visitor traits for convenience.
 
-use super::formula::{Decls, Formula};
+use super::formula::{Decls, Formula, FormulaInner};
 use super::int_expr::IntExpression;
-use super::{Expression, Relation, Variable};
+use super::{Expression, ExpressionInner, Relation, Variable};
 
 /// A visitor that can traverse expressions and return values
 ///
@@ -18,32 +18,32 @@ pub trait ExpressionVisitor {
 
     /// Visit an expression
     fn visit_expression(&mut self, expr: &Expression) -> Self::Output {
-        match expr {
-            Expression::Relation(r) => self.visit_relation(r),
-            Expression::Variable(v) => self.visit_variable(v),
-            Expression::Constant(_) => self.visit_constant(expr),
-            Expression::Binary { left, right, .. } => {
+        match &*expr.inner() {
+            ExpressionInner::Relation(r) => self.visit_relation(r),
+            ExpressionInner::Variable(v) => self.visit_variable(v),
+            ExpressionInner::Constant(_) => self.visit_constant(expr),
+            ExpressionInner::Binary { left, right, .. } => {
                 self.visit_expression(left);
                 self.visit_expression(right);
                 self.visit_binary(expr)
             }
-            Expression::Unary { expr: inner, .. } => {
+            ExpressionInner::Unary { expr: inner, .. } => {
                 self.visit_expression(inner);
                 self.visit_unary(expr)
             }
-            Expression::Nary { exprs, .. } => {
+            ExpressionInner::Nary { exprs, .. } => {
                 for e in exprs {
                     self.visit_expression(e);
                 }
                 self.visit_nary(expr)
             }
-            Expression::Comprehension { declarations, formula } => {
+            ExpressionInner::Comprehension { declarations, formula } => {
                 self.visit_comprehension(expr, declarations, formula)
             }
-            Expression::IntToExprCast { int_expr, .. } => {
+            ExpressionInner::IntToExprCast { int_expr, .. } => {
                 self.visit_int_to_expr_cast(expr, int_expr)
             }
-            Expression::If { condition, then_expr, else_expr, .. } => {
+            ExpressionInner::If { condition, then_expr, else_expr, .. } => {
                 self.visit_if(expr, condition, then_expr, else_expr)
             }
         }
@@ -90,36 +90,36 @@ pub trait FormulaVisitor {
 
     /// Visit a formula
     fn visit_formula(&mut self, formula: &Formula) -> Self::Output {
-        match formula {
-            Formula::Constant(_) => self.visit_constant(formula),
-            Formula::Binary { left, right, .. } => {
+        match &*formula.inner() {
+            FormulaInner::Constant(_) => self.visit_constant(formula),
+            FormulaInner::Binary { left, right, .. } => {
                 self.visit_formula(left);
                 self.visit_formula(right);
                 self.visit_binary(formula)
             }
-            Formula::Nary { formulas, .. } => {
+            FormulaInner::Nary { formulas, .. } => {
                 for f in formulas {
                     self.visit_formula(f);
                 }
                 self.visit_nary(formula)
             }
-            Formula::Not(inner) => {
+            FormulaInner::Not(inner) => {
                 self.visit_formula(inner);
                 self.visit_not(formula)
             }
-            Formula::Comparison { .. } => self.visit_comparison(formula),
-            Formula::Multiplicity { .. } => self.visit_multiplicity(formula),
-            Formula::Quantified { declarations, body, .. } => {
+            FormulaInner::Comparison { .. } => self.visit_comparison(formula),
+            FormulaInner::Multiplicity { .. } => self.visit_multiplicity(formula),
+            FormulaInner::Quantified { declarations, body, .. } => {
                 self.visit_decls(declarations);
                 self.visit_formula(body);
                 self.visit_quantified(formula)
             }
-            Formula::IntComparison { left, right, .. } => {
+            FormulaInner::IntComparison { left, right, .. } => {
                 self.visit_int_expression(left);
                 self.visit_int_expression(right);
                 self.visit_int_comparison(formula)
             }
-            Formula::RelationPredicate(pred) => {
+            FormulaInner::RelationPredicate(pred) => {
                 // Convert to constraints and visit that
                 let constraints = pred.to_constraints();
                 self.visit_formula(&constraints)

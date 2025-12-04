@@ -3,7 +3,7 @@
 //! Based on Java: kodkod.engine.fol2sat.Skolemizer
 
 use crate::ast::{
-    Formula, Expression, Quantifier, Decls, Decl, Variable, Relation, Multiplicity,
+    Formula, FormulaInner, Expression, ExpressionInner, Quantifier, Decls, Decl, Variable, Relation, Multiplicity,
     BinaryFormulaOp,
 };
 use crate::instance::Bounds;
@@ -64,18 +64,18 @@ impl<'a> Skolemizer<'a> {
         // variables, but we haven't implemented that check yet.
         // TODO: Implement proper caching that considers free variables
 
-        let result = match formula {
-            Formula::Constant(_) => formula.clone(),
+        let result = match &*formula.inner() {
+            FormulaInner::Constant(_) => formula.clone(),
 
-            Formula::Not(inner) => {
+            FormulaInner::Not(inner) => {
                 // Flip negation state
                 self.negated = !self.negated;
-                let result = Formula::Not(Box::new(self.visit_formula(inner)));
+                let result = self.visit_formula(inner).not();
                 self.negated = !self.negated;
                 result
             }
 
-            Formula::Binary { op, left, right } => {
+            FormulaInner::Binary { op, left, right } => {
                 match op {
                     BinaryFormulaOp::Implies => {
                         // p => q is treated as !p OR q for negation tracking
@@ -83,29 +83,39 @@ impl<'a> Skolemizer<'a> {
                         let left_result = self.visit_formula(left);
                         self.negated = !self.negated;
                         let right_result = self.visit_formula(right);
-                        Formula::Binary {
-                            op: *op,
-                            left: Box::new(left_result),
-                            right: Box::new(right_result),
-                        }
+                        left_result.implies(right_result)
                     }
-                    _ => {
+                    BinaryFormulaOp::And => {
                         let left_result = self.visit_formula(left);
                         let right_result = self.visit_formula(right);
-                        if left_result == **left && right_result == **right {
+                        if left_result == *left && right_result == *right {
                             formula.clone()
                         } else {
-                            Formula::Binary {
-                                op: *op,
-                                left: Box::new(left_result),
-                                right: Box::new(right_result),
-                            }
+                            left_result.and(right_result)
+                        }
+                    }
+                    BinaryFormulaOp::Or => {
+                        let left_result = self.visit_formula(left);
+                        let right_result = self.visit_formula(right);
+                        if left_result == *left && right_result == *right {
+                            formula.clone()
+                        } else {
+                            left_result.or(right_result)
+                        }
+                    }
+                    BinaryFormulaOp::Iff => {
+                        let left_result = self.visit_formula(left);
+                        let right_result = self.visit_formula(right);
+                        if left_result == *left && right_result == *right {
+                            formula.clone()
+                        } else {
+                            left_result.iff(right_result)
                         }
                     }
                 }
             }
 
-            Formula::Nary { op, formulas } => {
+            FormulaInner::Nary { op, formulas } => {
                 let mut changed = false;
                 let results: Vec<Formula> = formulas.iter().map(|f| {
                     let result = self.visit_formula(f);
@@ -116,61 +126,63 @@ impl<'a> Skolemizer<'a> {
                 }).collect();
 
                 if changed {
-                    Formula::Nary { op: *op, formulas: results }
+                    match op {
+                        BinaryFormulaOp::And => Formula::and_all(results),
+                        BinaryFormulaOp::Or => Formula::or_all(results),
+                        _ => formula.clone(),
+                    }
                 } else {
                     formula.clone()
                 }
             }
 
-            Formula::Quantified { quantifier, declarations, body } => {
+            FormulaInner::Quantified { quantifier, declarations, body } => {
                 self.visit_quantified(*quantifier, declarations, body)
             }
 
-            Formula::Comparison { op, left, right } => {
+            FormulaInner::Comparison { op, left, right } => {
                 // Replace variables in expressions
                 let left_replaced = self.replace_in_expression(left);
                 let right_replaced = self.replace_in_expression(right);
                 if left_replaced == *left && right_replaced == *right {
                     formula.clone()
                 } else {
-                    Formula::Comparison {
-                        op: *op,
-                        left: left_replaced,
-                        right: right_replaced,
+                    match op {
+                        crate::ast::CompareOp::Equals => left_replaced.equals(right_replaced),
+                        crate::ast::CompareOp::Subset => left_replaced.in_set(right_replaced),
                     }
                 }
             }
 
-            Formula::IntComparison { op, left, right } => {
+            FormulaInner::IntComparison { op, left, right } => {
                 // Replace variables in integer expressions
                 let left_replaced = self.replace_in_int_expression(left);
                 let right_replaced = self.replace_in_int_expression(right);
                 if left_replaced == **left && right_replaced == **right {
                     formula.clone()
                 } else {
-                    Formula::IntComparison {
-                        op: *op,
-                        left: Box::new(left_replaced),
-                        right: Box::new(right_replaced),
-                    }
+                    Formula::int_comparison(left_replaced, *op, right_replaced)
                 }
             }
 
-            Formula::Multiplicity { mult, expr } => {
+            FormulaInner::Multiplicity { mult, expr } => {
                 // Replace variables in expression
                 let expr_replaced = self.replace_in_expression(expr);
                 if expr_replaced == *expr {
                     formula.clone()
                 } else {
-                    Formula::Multiplicity {
-                        mult: *mult,
-                        expr: expr_replaced,
+                    match mult {
+                        Multiplicity::Some => expr_replaced.some(),
+                        Multiplicity::One => expr_replaced.one(),
+                        Multiplicity::Lone => expr_replaced.lone(),
+                        Multiplicity::No => expr_replaced.no(),
+                        Multiplicity::Set => formula.clone(),
                     }
                 }
             }
 
             // RelationPredicate only contains Relations, no variables to replace
-            Formula::RelationPredicate(_) => formula.clone(),
+            FormulaInner::RelationPredicate(_) => formula.clone(),
         };
 
         // Caching disabled - see note at top of function
@@ -255,10 +267,9 @@ impl<'a> Skolemizer<'a> {
             // Restore replacement environment
             self.replacement_env = old_env;
 
-            Formula::Quantified {
-                quantifier,
-                declarations: visited_decls,
-                body: Box::new(body_result),
+            match quantifier {
+                Quantifier::All => Formula::forall(visited_decls, body_result),
+                Quantifier::Some => Formula::exists(visited_decls, body_result),
             }
         }
     }
@@ -346,9 +357,9 @@ impl<'a> Skolemizer<'a> {
         if !range_constraints.is_empty() {
             let range_formula = Formula::and_all(range_constraints);
             result = if self.negated {
-                Formula::implies(range_formula, result)
+                range_formula.implies(result)
             } else {
-                Formula::and(range_formula, result)
+                range_formula.and(result)
             };
         }
 
@@ -361,9 +372,9 @@ impl<'a> Skolemizer<'a> {
         if self.replacement_env.is_empty() && !self.top_constraints.is_empty() {
             let constraints = Formula::and_all(self.top_constraints.drain(..).collect());
             result = if self.negated {
-                Formula::implies(constraints, result)
+                constraints.implies(result)
             } else {
-                Formula::and(constraints, result)
+                constraints.and(result)
             };
         }
 
@@ -391,11 +402,7 @@ impl<'a> Skolemizer<'a> {
         if param_decls.is_empty() {
             constraint
         } else {
-            Formula::Quantified {
-                quantifier: Quantifier::All,
-                declarations: Decls::from_vec(param_decls),
-                body: Box::new(constraint),
-            }
+            Formula::forall(Decls::from_vec(param_decls), constraint)
         }
     }
 
@@ -436,8 +443,8 @@ impl<'a> Skolemizer<'a> {
     }
 
     fn replace_in_expression(&mut self, expr: &Expression) -> Expression {
-        match expr {
-            Expression::Variable(var) => {
+        match &*expr.inner() {
+            ExpressionInner::Variable(var) => {
                 // Check if this variable has a replacement
                 if let Some(replacement) = self.replacement_env.get(var) {
                     replacement.clone()
@@ -445,32 +452,36 @@ impl<'a> Skolemizer<'a> {
                     expr.clone()
                 }
             }
-            Expression::Binary { op, left, right, arity } => {
+            ExpressionInner::Binary { op, left, right, arity: _ } => {
                 let left_replaced = self.replace_in_expression(left);
                 let right_replaced = self.replace_in_expression(right);
-                if left_replaced == **left && right_replaced == **right {
+                if left_replaced == *left && right_replaced == *right {
                     expr.clone()
                 } else {
-                    Expression::Binary {
-                        op: *op,
-                        left: Box::new(left_replaced),
-                        right: Box::new(right_replaced),
-                        arity: *arity,
+                    // Use the binary method to construct the expression
+                    match op {
+                        crate::ast::BinaryOp::Join => left_replaced.join(right_replaced),
+                        crate::ast::BinaryOp::Product => left_replaced.product(right_replaced),
+                        crate::ast::BinaryOp::Union => left_replaced.union(right_replaced),
+                        crate::ast::BinaryOp::Difference => left_replaced.difference(right_replaced),
+                        crate::ast::BinaryOp::Intersection => left_replaced.intersection(right_replaced),
+                        crate::ast::BinaryOp::Override => left_replaced.override_with(right_replaced),
                     }
                 }
             }
-            Expression::Unary { op, expr: sub } => {
+            ExpressionInner::Unary { op, expr: sub } => {
                 let sub_replaced = self.replace_in_expression(sub);
-                if sub_replaced == **sub {
+                if sub_replaced == *sub {
                     expr.clone()
                 } else {
-                    Expression::Unary {
-                        op: *op,
-                        expr: Box::new(sub_replaced),
+                    match op {
+                        crate::ast::UnaryOp::Transpose => sub_replaced.transpose(),
+                        crate::ast::UnaryOp::Closure => sub_replaced.closure(),
+                        crate::ast::UnaryOp::ReflexiveClosure => sub_replaced.reflexive_closure(),
                     }
                 }
             }
-            Expression::Nary { exprs, arity } => {
+            ExpressionInner::Nary { exprs, arity: _ } => {
                 let mut changed = false;
                 let results: Vec<Expression> = exprs.iter().map(|e| {
                     let result = self.replace_in_expression(e);
@@ -481,27 +492,22 @@ impl<'a> Skolemizer<'a> {
                 }).collect();
 
                 if changed {
-                    Expression::Nary { exprs: results, arity: *arity }
+                    Expression::union_all(results)
                 } else {
                     expr.clone()
                 }
             }
-            Expression::If { condition, then_expr, else_expr, arity } => {
+            ExpressionInner::If { condition, then_expr, else_expr, arity } => {
                 let condition_replaced = self.visit_formula(condition);
                 let then_replaced = self.replace_in_expression(then_expr);
                 let else_replaced = self.replace_in_expression(else_expr);
-                if condition_replaced == **condition && then_replaced == **then_expr && else_replaced == **else_expr {
+                if condition_replaced == *condition && then_replaced == *then_expr && else_replaced == *else_expr {
                     expr.clone()
                 } else {
-                    Expression::If {
-                        condition: Box::new(condition_replaced),
-                        then_expr: Box::new(then_replaced),
-                        else_expr: Box::new(else_replaced),
-                        arity: *arity,
-                    }
+                    Expression::if_then_else(condition_replaced, then_replaced, else_replaced, *arity)
                 }
             }
-            Expression::Comprehension { declarations, formula } => {
+            ExpressionInner::Comprehension { declarations, formula } => {
                 // Comprehensions have their own scope - save and restore the replacement environment
                 // But we still need to visit the decls and formula to replace free variables
                 let old_env = self.replacement_env.clone();
@@ -527,69 +533,56 @@ impl<'a> Skolemizer<'a> {
                 // Restore environment
                 self.replacement_env = old_env;
 
-                if !any_changed && replaced_formula == **formula {
+                if !any_changed && replaced_formula == *formula {
                     expr.clone()
                 } else {
-                    Expression::Comprehension {
-                        declarations: replaced_decls,
-                        formula: Box::new(replaced_formula),
-                    }
+                    Expression::comprehension(replaced_decls, replaced_formula)
                 }
             }
-            Expression::IntToExprCast { int_expr, op } => {
+            ExpressionInner::IntToExprCast { int_expr, op } => {
                 let replaced_int_expr = self.replace_in_int_expression(int_expr);
                 if replaced_int_expr == **int_expr {
                     expr.clone()
                 } else {
-                    Expression::IntToExprCast {
-                        int_expr: Box::new(replaced_int_expr),
-                        op: *op,
-                    }
+                    Expression::int_to_expr(replaced_int_expr, *op)
                 }
             }
             // Leaf expressions - no variables to replace
-            Expression::Relation(_) | Expression::Constant(_) => expr.clone(),
+            ExpressionInner::Relation(_) | ExpressionInner::Constant(_) => expr.clone(),
         }
     }
 
     fn replace_in_int_expression(&mut self, expr: &crate::ast::IntExpression) -> crate::ast::IntExpression {
-        use crate::ast::IntExpression;
+        use crate::ast::{IntExpression, IntExpressionInner};
 
-        match expr {
-            IntExpression::Cardinality(inner_expr) => {
+        match &*expr.inner() {
+            IntExpressionInner::Cardinality(inner_expr) => {
                 // Replace variables in the expression
                 let replaced = self.replace_in_expression(inner_expr);
                 if replaced == *inner_expr {
                     expr.clone()
                 } else {
-                    IntExpression::Cardinality(replaced)
+                    IntExpression::cardinality(replaced)
                 }
             }
-            IntExpression::Binary { left, op, right } => {
+            IntExpressionInner::Binary { left, op, right } => {
                 let left_replaced = self.replace_in_int_expression(left);
                 let right_replaced = self.replace_in_int_expression(right);
-                if left_replaced == **left && right_replaced == **right {
+                if left_replaced == *left && right_replaced == *right {
                     expr.clone()
                 } else {
-                    IntExpression::Binary {
-                        left: Box::new(left_replaced),
-                        op: *op,
-                        right: Box::new(right_replaced),
-                    }
+                    IntExpression::binary(left_replaced, *op, right_replaced)
                 }
             }
-            IntExpression::Unary { op, expr: inner } => {
+            IntExpressionInner::Unary { op, expr: inner } => {
                 let inner_replaced = self.replace_in_int_expression(inner);
-                if inner_replaced == **inner {
+                if inner_replaced == *inner {
                     expr.clone()
                 } else {
-                    IntExpression::Unary {
-                        op: *op,
-                        expr: Box::new(inner_replaced),
-                    }
+                    IntExpression::unary(*op, inner_replaced)
                 }
             }
-            IntExpression::Nary { exprs } => {
+            IntExpressionInner::Nary { exprs } => {
                 let mut changed = false;
                 let results: Vec<IntExpression> = exprs.iter().map(|e| {
                     let result = self.replace_in_int_expression(e);
@@ -600,12 +593,12 @@ impl<'a> Skolemizer<'a> {
                 }).collect();
 
                 if changed {
-                    IntExpression::Nary { exprs: results }
+                    IntExpression::sum_all(results)
                 } else {
                     expr.clone()
                 }
             }
-            IntExpression::Sum { decls, expr: sum_expr } => {
+            IntExpressionInner::Sum { decls, expr: sum_expr } => {
                 // Sum creates its own scope - save and restore the replacement environment
                 // But we still need to visit the decls and expr to replace free variables
                 let old_env = self.replacement_env.clone();
@@ -631,55 +624,48 @@ impl<'a> Skolemizer<'a> {
                 // Restore environment
                 self.replacement_env = old_env;
 
-                if !any_changed && replaced_expr == **sum_expr {
+                if !any_changed && replaced_expr == *sum_expr {
                     expr.clone()
                 } else {
-                    IntExpression::Sum {
-                        decls: replaced_decls,
-                        expr: Box::new(replaced_expr),
-                    }
+                    IntExpression::sum(replaced_decls, replaced_expr)
                 }
             }
-            IntExpression::If { condition, then_expr, else_expr } => {
+            IntExpressionInner::If { condition, then_expr, else_expr } => {
                 let condition_replaced = self.visit_formula(condition);
                 let then_replaced = self.replace_in_int_expression(then_expr);
                 let else_replaced = self.replace_in_int_expression(else_expr);
-                if condition_replaced == **condition && then_replaced == **then_expr && else_replaced == **else_expr {
+                if condition_replaced == *condition && then_replaced == *then_expr && else_replaced == *else_expr {
                     expr.clone()
                 } else {
-                    IntExpression::If {
-                        condition: Box::new(condition_replaced),
-                        then_expr: Box::new(then_replaced),
-                        else_expr: Box::new(else_replaced),
-                    }
+                    IntExpression::if_then_else(condition_replaced, then_replaced, else_replaced)
                 }
             }
-            IntExpression::ExprCast(inner_expr) => {
+            IntExpressionInner::ExprCast(inner_expr) => {
                 let replaced = self.replace_in_expression(inner_expr);
                 if replaced == *inner_expr {
                     expr.clone()
                 } else {
-                    IntExpression::ExprCast(replaced)
+                    IntExpression::expr_cast(replaced)
                 }
             }
             // Constants don't need replacement
-            IntExpression::Constant(_) => expr.clone(),
+            IntExpressionInner::Constant(_) => expr.clone(),
         }
     }
 }
 
 /// Checks if a formula contains any quantifiers
 pub fn has_quantifiers(formula: &Formula) -> bool {
-    match formula {
-        Formula::Constant(_) => false,
-        Formula::RelationPredicate(_) => false,
-        Formula::IntComparison { .. } => false,
-        Formula::Comparison { .. } => false,
-        Formula::Multiplicity { .. } => false,
-        Formula::Not(inner) => has_quantifiers(inner),
-        Formula::Binary { left, right, .. } => has_quantifiers(left) || has_quantifiers(right),
-        Formula::Nary { formulas, .. } => formulas.iter().any(has_quantifiers),
-        Formula::Quantified { .. } => true,
+    match &*formula.inner() {
+        FormulaInner::Constant(_) => false,
+        FormulaInner::RelationPredicate(_) => false,
+        FormulaInner::IntComparison { .. } => false,
+        FormulaInner::Comparison { .. } => false,
+        FormulaInner::Multiplicity { .. } => false,
+        FormulaInner::Not(inner) => has_quantifiers(inner),
+        FormulaInner::Binary { left, right, .. } => has_quantifiers(left) || has_quantifiers(right),
+        FormulaInner::Nary { formulas, .. } => formulas.iter().any(has_quantifiers),
+        FormulaInner::Quantified { .. } => true,
     }
 }
 
@@ -701,16 +687,15 @@ mod tests {
         let factory = bounds.universe().factory();
         bounds.bound(&p, factory.none(1), factory.all(1)).unwrap();
 
-        let formula = Formula::Quantified {
-            quantifier: Quantifier::Some,
-            declarations: Decls::from(Decl::one_of(x.clone(), Expression::UNIV)),
-            body: Box::new(Expression::from(x).in_set(Expression::from(p))),
-        };
+        let formula = Formula::exists(
+            Decls::from(Decl::one_of(x.clone(), Expression::UNIV)),
+            Expression::from(x).in_set(Expression::from(p)),
+        );
 
         let mut skolemizer = Skolemizer::new(&mut bounds, &solver_options);
         let result = skolemizer.skolemize(&formula);
 
         // Result should not have the quantifier
-        assert!(!matches!(result, Formula::Quantified { .. }));
+        assert!(!matches!(&*result.inner(), FormulaInner::Quantified { .. }));
     }
 }

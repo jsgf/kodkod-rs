@@ -51,7 +51,7 @@ impl HamiltonianCycle {
     /// Returns a formula that defines a Hamiltonian cycle
     fn cycle_definition(&self) -> Formula {
         // cycle is a function from vertices that have outgoing edges to vertices that have incoming edges
-        let f0 = Formula::RelationPredicate(
+        let f0 = Formula::relation_predicate(
             kodkod_rs::ast::RelationPredicate::Function {
                 relation: self.cycle.clone(),
                 domain: Expression::from(self.edges.clone()).join(Expression::from(self.vertex.clone())),

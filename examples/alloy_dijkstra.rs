@@ -48,14 +48,14 @@ impl Dijkstra {
     /// sig Mutex {}
     /// sig State { holds, waits: Process -> Mutex }
     fn declarations(&self) -> Formula {
-        let f1 = Formula::RelationPredicate(RelationPredicate::TotalOrdering {
+        let f1 = Formula::relation_predicate(RelationPredicate::TotalOrdering {
             relation: self.sord.clone(),
             ordered: self.state.clone(),
             first: self.sfirst.clone(),
             last: self.slast.clone(),
         });
 
-        let f2 = Formula::RelationPredicate(RelationPredicate::TotalOrdering {
+        let f2 = Formula::relation_predicate(RelationPredicate::TotalOrdering {
             relation: self.mord.clone(),
             ordered: self.mutex.clone(),
             first: self.mfirst.clone(),

@@ -12,7 +12,7 @@ pub mod skolemizer;
 pub use flattener::FormulaFlattener;
 pub use skolemizer::Skolemizer;
 
-use crate::ast::{Formula, Expression, Decls, Quantifier};
+use crate::ast::{Formula, FormulaInner, Decls, Quantifier};
 use crate::ast::formula::BinaryFormulaOp;
 use crate::instance::Bounds;
 
@@ -46,9 +46,9 @@ impl<'a> FormulaSimplifier<'a> {
     }
 
     fn simplify(&mut self, formula: &Formula) -> Formula {
-        use Formula::*;
+        use FormulaInner::*;
 
-        match formula {
+        match &*formula.inner() {
             // Constants stay as-is
             Constant(_) => formula.clone(),
 
@@ -72,10 +72,10 @@ impl<'a> FormulaSimplifier<'a> {
             // Negation: apply De Morgan's laws and constant rules
             Not(inner) => {
                 let inner_simp = self.simplify(inner);
-                match inner_simp {
-                    Constant(b) => Formula::Constant(!b),
-                    Not(inner2) => *inner2, // NOT NOT x = x
-                    _ => Formula::Not(Box::new(inner_simp)),
+                match &*inner_simp.inner() {
+                    Constant(b) => Formula::constant(!b),
+                    Not(inner2) => inner2.clone(),
+                    _ => inner_simp.not(),
                 }
             }
 
@@ -94,47 +94,56 @@ impl<'a> FormulaSimplifier<'a> {
 
     fn simplify_binary(&self, op: &BinaryFormulaOp, left: Formula, right: Formula) -> Formula {
         use BinaryFormulaOp::*;
-        use Formula::Constant;
 
-        match (op, left, right) {
+        // Helper to check if formula is constant
+        let is_true = |f: &Formula| matches!(&*f.inner(), FormulaInner::Constant(true));
+        let is_false = |f: &Formula| matches!(&*f.inner(), FormulaInner::Constant(false));
+
+        match op {
             // AND simplifications
-            (And, Constant(false), _) | (And, _, Constant(false)) => Formula::FALSE,
-            (And, Constant(true), other) | (And, other, Constant(true)) => other,
-            (And, left, right) if left == right => left, // x AND x = x
+            And if is_false(&left) || is_false(&right) => Formula::FALSE,
+            And if is_true(&left) => right,
+            And if is_true(&right) => left,
+            And if left == right => left, // x AND x = x
 
             // OR simplifications
-            (Or, Constant(true), _) | (Or, _, Constant(true)) => Formula::TRUE,
-            (Or, Constant(false), other) | (Or, other, Constant(false)) => other,
-            (Or, left, right) if left == right => left, // x OR x = x
+            Or if is_true(&left) || is_true(&right) => Formula::TRUE,
+            Or if is_false(&left) => right,
+            Or if is_false(&right) => left,
+            Or if left == right => left, // x OR x = x
 
             // IMPLIES simplifications
-            (Implies, Constant(false), _) | (Implies, _, Constant(true)) => Formula::TRUE,
-            (Implies, Constant(true), other) => other,
-            (Implies, other, Constant(false)) => Formula::Not(Box::new(other)),
-            (Implies, left, right) if left == right => Formula::TRUE, // x => x = TRUE
+            Implies if is_false(&left) || is_true(&right) => Formula::TRUE,
+            Implies if is_true(&left) => right,
+            Implies if is_false(&right) => left.not(),
+            Implies if left == right => Formula::TRUE, // x => x = TRUE
 
             // IFF simplifications
-            (Iff, Constant(true), other) | (Iff, other, Constant(true)) => other,
-            (Iff, Constant(false), other) | (Iff, other, Constant(false)) => Formula::Not(Box::new(other)),
-            (Iff, left, right) if left == right => Formula::TRUE, // x <=> x = TRUE
+            Iff if is_true(&left) => right,
+            Iff if is_true(&right) => left,
+            Iff if is_false(&left) => right.not(),
+            Iff if is_false(&right) => left.not(),
+            Iff if left == right => Formula::TRUE, // x <=> x = TRUE
 
             // Default: keep the formula
-            (op, left, right) => Formula::Binary {
-                op: *op,
-                left: Box::new(left),
-                right: Box::new(right),
-            }
+            And => left.and(right),
+            Or => left.or(right),
+            Implies => left.implies(right),
+            Iff => left.iff(right),
         }
     }
 
     fn simplify_nary(&self, op: BinaryFormulaOp, formulas: &mut Vec<Formula>) -> Formula {
         use BinaryFormulaOp::*;
 
+        let is_true = |f: &Formula| matches!(&*f.inner(), FormulaInner::Constant(true));
+        let is_false = |f: &Formula| matches!(&*f.inner(), FormulaInner::Constant(false));
+
         match op {
             And => {
                 // Remove TRUE, detect FALSE
-                formulas.retain(|f| !matches!(f, Formula::Constant(true)));
-                if formulas.iter().any(|f| matches!(f, Formula::Constant(false))) {
+                formulas.retain(|f| !is_true(f));
+                if formulas.iter().any(|f| is_false(f)) {
                     return Formula::FALSE;
                 }
                 if formulas.is_empty() {
@@ -143,12 +152,12 @@ impl<'a> FormulaSimplifier<'a> {
                 if formulas.len() == 1 {
                     return formulas[0].clone();
                 }
-                Formula::Nary { op: And, formulas: formulas.clone() }
+                Formula::and_all(formulas.clone())
             }
             Or => {
                 // Remove FALSE, detect TRUE
-                formulas.retain(|f| !matches!(f, Formula::Constant(false)));
-                if formulas.iter().any(|f| matches!(f, Formula::Constant(true))) {
+                formulas.retain(|f| !is_false(f));
+                if formulas.iter().any(|f| is_true(f)) {
                     return Formula::TRUE;
                 }
                 if formulas.is_empty() {
@@ -157,20 +166,20 @@ impl<'a> FormulaSimplifier<'a> {
                 if formulas.len() == 1 {
                     return formulas[0].clone();
                 }
-                Formula::Nary { op: Or, formulas: formulas.clone() }
+                Formula::or_all(formulas.clone())
             }
-            _ => Formula::Nary { op, formulas: formulas.clone() }
+            _ => Formula::and_all(formulas.clone()) // Fallback, shouldn't happen
         }
     }
 
     fn simplify_quantified(&self, quantifier: Quantifier, declarations: &Decls, body: Formula) -> Formula {
         // If body is constant, quantifier doesn't matter
-        match body {
-            Formula::Constant(true) => {
+        match &*body.inner() {
+            FormulaInner::Constant(true) => {
                 // forall x | TRUE = TRUE, exists x | TRUE = TRUE
                 return Formula::TRUE;
             }
-            Formula::Constant(false) => {
+            FormulaInner::Constant(false) => {
                 match quantifier {
                     Quantifier::All => return Formula::TRUE, // forall x | FALSE = TRUE (vacuous)
                     Quantifier::Some => return Formula::FALSE, // exists x | FALSE = FALSE
@@ -189,10 +198,9 @@ impl<'a> FormulaSimplifier<'a> {
                 }
 
                 // Keep the quantified formula with simplified body
-                Formula::Quantified {
-                    quantifier,
-                    declarations: declarations.clone(),
-                    body: Box::new(body),
+                match quantifier {
+                    Quantifier::All => Formula::forall(declarations.clone(), body),
+                    Quantifier::Some => Formula::exists(declarations.clone(), body),
                 }
             }
         }
@@ -207,7 +215,7 @@ impl<'a> FormulaSimplifier<'a> {
         // Check if all declarations are simple (one_of UNIV)
         for decl in declarations.iter() {
             // Check if expression is UNIV (the universe)
-            if !matches!(decl.expression(), &Expression::UNIV) {
+            if !matches!(&*decl.expression().inner(), crate::ast::ExpressionInner::Constant(crate::ast::ConstantExpr::Univ)) {
                 return false;
             }
         }
@@ -230,7 +238,7 @@ impl<'a> FormulaSimplifier<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Variable, Decl};
+    use crate::ast::{Variable, Decl, Expression};
     use crate::instance::Universe;
 
     #[test]
@@ -240,22 +248,14 @@ mod tests {
         let b = Bounds::new(u);
 
         // FALSE AND x = FALSE
-        let f = Formula::Binary {
-            op: BinaryFormulaOp::And,
-            left: Box::new(Formula::FALSE),
-            right: Box::new(Formula::TRUE),
-        };
+        let f = Formula::FALSE.and(Formula::TRUE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(false)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(false)));
 
         // TRUE AND TRUE = TRUE
-        let f = Formula::Binary {
-            op: BinaryFormulaOp::And,
-            left: Box::new(Formula::TRUE),
-            right: Box::new(Formula::TRUE),
-        };
+        let f = Formula::TRUE.and(Formula::TRUE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
     }
 
     #[test]
@@ -265,20 +265,14 @@ mod tests {
         let b = Bounds::new(u);
 
         // TRUE AND TRUE AND FALSE = FALSE
-        let f = Formula::Nary {
-            op: BinaryFormulaOp::And,
-            formulas: vec![Formula::TRUE, Formula::TRUE, Formula::FALSE],
-        };
+        let f = Formula::and_all(vec![Formula::TRUE, Formula::TRUE, Formula::FALSE]);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(false)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(false)));
 
         // TRUE AND TRUE AND TRUE = TRUE
-        let f = Formula::Nary {
-            op: BinaryFormulaOp::And,
-            formulas: vec![Formula::TRUE, Formula::TRUE, Formula::TRUE],
-        };
+        let f = Formula::and_all(vec![Formula::TRUE, Formula::TRUE, Formula::TRUE]);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
     }
 
     #[test]
@@ -289,41 +283,41 @@ mod tests {
 
         // Test that TRUE is recognized as constant
         let result = simplify_formula(&Formula::TRUE, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
 
         // Test that FALSE is recognized as constant
         let result = simplify_formula(&Formula::FALSE, &b);
-        assert!(matches!(result, Formula::Constant(false)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(false)));
 
         // Test TRUE AND FALSE = FALSE
-        let f = Formula::and(Formula::TRUE, Formula::FALSE);
+        let f = Formula::TRUE.and(Formula::FALSE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(false)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(false)));
 
         // Test TRUE OR FALSE = TRUE
-        let f = Formula::or(Formula::TRUE, Formula::FALSE);
+        let f = Formula::TRUE.or(Formula::FALSE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
 
         // Test FALSE OR FALSE = FALSE
-        let f = Formula::or(Formula::FALSE, Formula::FALSE);
+        let f = Formula::FALSE.or(Formula::FALSE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(false)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(false)));
 
         // Test TRUE AND TRUE = TRUE
-        let f = Formula::and(Formula::TRUE, Formula::TRUE);
+        let f = Formula::TRUE.and(Formula::TRUE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
 
         // Test NOT TRUE = FALSE
-        let f = Formula::not(Formula::TRUE);
+        let f = Formula::TRUE.not();
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(false)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(false)));
 
         // Test NOT FALSE = TRUE
-        let f = Formula::not(Formula::FALSE);
+        let f = Formula::FALSE.not();
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
     }
 
     #[test]
@@ -337,24 +331,24 @@ mod tests {
 
         // x AND x = x
         let x = crate::ast::Expression::from(r).some();
-        let f = Formula::and(x.clone(), x.clone());
+        let f = x.clone().and(x.clone());
         let result = simplify_formula(&f, &b);
         assert_eq!(result, x);
 
         // x OR x = x
-        let f = Formula::or(x.clone(), x.clone());
+        let f = x.clone().or(x.clone());
         let result = simplify_formula(&f, &b);
         assert_eq!(result, x);
 
         // x => x = TRUE
-        let f = Formula::implies(x.clone(), x.clone());
+        let f = x.clone().implies(x.clone());
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
 
         // x <=> x = TRUE
-        let f = Formula::iff(x.clone(), x.clone());
+        let f = x.clone().iff(x.clone());
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
     }
 
     #[test]
@@ -367,21 +361,13 @@ mod tests {
         let decls = Decls::from(Decl::one_of(x, Expression::UNIV));
 
         // exists x | FALSE = FALSE
-        let f = Formula::Quantified {
-            quantifier: Quantifier::Some,
-            declarations: decls.clone(),
-            body: Box::new(Formula::FALSE),
-        };
+        let f = Formula::exists(decls.clone(), Formula::FALSE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(false)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(false)));
 
         // forall x | FALSE = TRUE (vacuously true)
-        let f = Formula::Quantified {
-            quantifier: Quantifier::All,
-            declarations: decls.clone(),
-            body: Box::new(Formula::FALSE),
-        };
+        let f = Formula::forall(decls.clone(), Formula::FALSE);
         let result = simplify_formula(&f, &b);
-        assert!(matches!(result, Formula::Constant(true)));
+        assert!(matches!(&*result.inner(), FormulaInner::Constant(true)));
     }
 }

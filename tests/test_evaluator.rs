@@ -198,11 +198,7 @@ fn test_evaluate_int_expression_sum() {
     let evaluator = Evaluator::new(&instance);
 
     // Evaluate #R1 + #R2 should return 3
-    let int_expr = IntExpression::Binary {
-        left: Box::new(Expression::from(r1).count()),
-        op: kodkod_rs::ast::IntBinaryOp::Plus,
-        right: Box::new(Expression::from(r2).count()),
-    };
+    let int_expr = Expression::from(r1).count().plus(Expression::from(r2).count());
     let result = evaluator.evaluate_int_expression(&int_expr);
 
     assert_eq!(result, 3);

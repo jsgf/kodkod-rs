@@ -7,13 +7,15 @@ pub mod int_expr;
 pub mod visitor;
 
 pub use formula::{
-    BinaryFormulaOp, CompareOp, Decl, Decls, Formula, Multiplicity, Quantifier,
+    BinaryFormulaOp, CompareOp, Decl, Decls, Formula, FormulaInner, Multiplicity, Quantifier,
     RelationPredicate, RelationPredicateName,
 };
-pub use int_expr::{IntBinaryOp, IntCompareOp, IntExpression, IntUnaryOp};
+pub use int_expr::{IntBinaryOp, IntCompareOp, IntExpression, IntExpressionInner, IntUnaryOp};
 pub use visitor::{ExpressionVisitor, FormulaVisitor};
 
+use std::borrow::Cow;
 use std::fmt;
+use std::rc::Rc;
 use std::sync::Arc;
 
 /// A relation - a named variable in relational logic
@@ -75,7 +77,7 @@ impl Relation {
     /// Returns a formula stating that this relation is acyclic
     pub fn acyclic(self) -> crate::ast::formula::Formula {
         use crate::ast::formula::{Formula, RelationPredicate};
-        Formula::RelationPredicate(RelationPredicate::acyclic(self))
+        Formula::relation_predicate(RelationPredicate::acyclic(self))
     }
 
     /// Creates a function predicate for this relation
@@ -83,7 +85,7 @@ impl Relation {
     /// Returns a formula stating that this relation is a total function from domain to range
     pub fn function(self, domain: Expression, range: Expression) -> crate::ast::formula::Formula {
         use crate::ast::formula::{Formula, RelationPredicate};
-        Formula::RelationPredicate(RelationPredicate::function(self, domain, range))
+        Formula::relation_predicate(RelationPredicate::function(self, domain, range))
     }
 }
 
@@ -218,10 +220,50 @@ pub enum IntCastOp {
     BitsetCast,
 }
 
-/// A relational expression
+/// A relational expression (reference-counted for efficient sharing)
+#[derive(Clone, Debug)]
+pub enum Expression {
+    /// Reference-counted shared expression (for compound expressions)
+    Ref(Rc<ExpressionInner>),
+    /// Universal relation (all atoms), arity 1
+    Univ,
+    /// Identity relation (diagonal), arity 2
+    Iden,
+    /// Empty relation, arity 1
+    None,
+    /// Integer atoms, arity 1
+    Ints,
+}
+
+impl Expression {
+    /// Universal relation constant
+    pub const UNIV: Expression = Expression::Univ;
+    /// Identity relation constant
+    pub const IDEN: Expression = Expression::Iden;
+    /// Empty relation constant
+    pub const NONE: Expression = Expression::None;
+    /// Integer atoms constant
+    pub const INTS: Expression = Expression::Ints;
+}
+
+impl PartialEq for Expression {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner() == other.inner()
+    }
+}
+
+impl Eq for Expression {}
+
+impl std::hash::Hash for Expression {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner().hash(state);
+    }
+}
+
+/// Inner representation of a relational expression
 #[expect(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Expression {
+pub enum ExpressionInner {
     /// A relation (leaf)
     Relation(Relation),
     /// A variable (leaf)
@@ -230,15 +272,15 @@ pub enum Expression {
     Constant(ConstantExpr),
     /// Binary expression (e.g., join, product, union)
     Binary {
-        left: Box<Expression>,
+        left: Expression,
         op: BinaryOp,
-        right: Box<Expression>,
+        right: Expression,
         arity: usize,
     },
     /// Unary expression (e.g., transpose, closure)
     Unary {
         op: UnaryOp,
-        expr: Box<Expression>,
+        expr: Expression,
     },
     /// N-ary union
     Nary {
@@ -248,7 +290,7 @@ pub enum Expression {
     /// Set comprehension {decls | formula}
     Comprehension {
         declarations: Decls,
-        formula: Box<Formula>,
+        formula: Formula,
     },
     /// Cast integer expression to relational expression
     IntToExprCast {
@@ -257,9 +299,9 @@ pub enum Expression {
     },
     /// If-then-else expression
     If {
-        condition: Box<Formula>,
-        then_expr: Box<Expression>,
-        else_expr: Box<Expression>,
+        condition: Formula,
+        then_expr: Expression,
+        else_expr: Expression,
         arity: usize,
     },
 }
@@ -279,31 +321,64 @@ pub enum ConstantExpr {
 
 impl Expression {
     /// Universal relation constant
-    pub const UNIV: Expression = Expression::Constant(ConstantExpr::Univ);
+    #[inline]
+    #[deprecated(note = "Use Expression::UNIV constant instead")]
+    pub fn univ() -> Expression {
+        Expression::UNIV
+    }
     /// Identity relation constant
-    pub const IDEN: Expression = Expression::Constant(ConstantExpr::Iden);
+    #[inline]
+    #[deprecated(note = "Use Expression::IDEN constant instead")]
+    pub fn iden() -> Expression {
+        Expression::IDEN
+    }
     /// Empty relation constant
-    pub const NONE: Expression = Expression::Constant(ConstantExpr::None);
+    #[inline]
+    #[deprecated(note = "Use Expression::NONE constant instead")]
+    pub fn none() -> Expression {
+        Expression::NONE
+    }
     /// Integer relation constant
-    pub const INTS: Expression = Expression::Constant(ConstantExpr::Ints);
+    #[inline]
+    #[deprecated(note = "Use Expression::INTS constant instead")]
+    pub fn ints() -> Expression {
+        Expression::INTS
+    }
+
+    /// Returns a reference to the inner expression
+    pub fn inner(&self) -> Cow<'_, ExpressionInner> {
+        match self {
+            Expression::Ref(rc) => Cow::Borrowed(rc.as_ref()),
+            Expression::Univ => Cow::Owned(ExpressionInner::Constant(ConstantExpr::Univ)),
+            Expression::Iden => Cow::Owned(ExpressionInner::Constant(ConstantExpr::Iden)),
+            Expression::None => Cow::Owned(ExpressionInner::Constant(ConstantExpr::None)),
+            Expression::Ints => Cow::Owned(ExpressionInner::Constant(ConstantExpr::Ints)),
+        }
+    }
 
     /// Returns the arity of this expression
     pub fn arity(&self) -> usize {
         match self {
-            Expression::Relation(r) => r.arity(),
-            Expression::Variable(v) => v.arity(),
-            Expression::Constant(c) => match c {
-                ConstantExpr::Univ => 1,
-                ConstantExpr::Iden => 2,
-                ConstantExpr::None => 1,
-                ConstantExpr::Ints => 1,
+            Expression::Univ => 1,
+            Expression::Iden => 2,
+            Expression::None => 1,
+            Expression::Ints => 1,
+            Expression::Ref(rc) => match rc.as_ref() {
+                ExpressionInner::Relation(r) => r.arity(),
+                ExpressionInner::Variable(v) => v.arity(),
+                ExpressionInner::Constant(c) => match c {
+                    ConstantExpr::Univ => 1,
+                    ConstantExpr::Iden => 2,
+                    ConstantExpr::None => 1,
+                    ConstantExpr::Ints => 1,
+                },
+                ExpressionInner::Binary { arity, .. } => *arity,
+                ExpressionInner::Unary { .. } => 2,
+                ExpressionInner::Nary { arity, .. } => *arity,
+                ExpressionInner::Comprehension { declarations, .. } => declarations.size(),
+                ExpressionInner::IntToExprCast { .. } => 1,
+                ExpressionInner::If { arity, .. } => *arity,
             },
-            Expression::Binary { arity, .. } => *arity,
-            Expression::Unary { .. } => 2,
-            Expression::Nary { arity, .. } => *arity,
-            Expression::Comprehension { declarations, .. } => declarations.size(),
-            Expression::IntToExprCast { .. } => 1,
-            Expression::If { arity, .. } => *arity,
         }
     }
 
@@ -340,28 +415,28 @@ impl Expression {
     /// Transpose
     pub fn transpose(self) -> Expression {
         assert_eq!(self.arity(), 2, "transpose requires arity 2");
-        Expression::Unary {
+        Expression::Ref(Rc::new(ExpressionInner::Unary {
             op: UnaryOp::Transpose,
-            expr: Box::new(self),
-        }
+            expr: self,
+        }))
     }
 
     /// Transitive closure
     pub fn closure(self) -> Expression {
         assert_eq!(self.arity(), 2, "closure requires arity 2");
-        Expression::Unary {
+        Expression::Ref(Rc::new(ExpressionInner::Unary {
             op: UnaryOp::Closure,
-            expr: Box::new(self),
-        }
+            expr: self,
+        }))
     }
 
     /// Reflexive transitive closure
     pub fn reflexive_closure(self) -> Expression {
         assert_eq!(self.arity(), 2, "reflexive_closure requires arity 2");
-        Expression::Unary {
+        Expression::Ref(Rc::new(ExpressionInner::Unary {
             op: UnaryOp::ReflexiveClosure,
-            expr: Box::new(self),
-        }
+            expr: self,
+        }))
     }
 
     fn binary(self, op: BinaryOp, other: Expression) -> Expression {
@@ -390,12 +465,12 @@ impl Expression {
             BinaryOp::Product => self.arity() + other.arity(),
         };
 
-        Expression::Binary {
-            left: Box::new(self),
+        Expression::Ref(Rc::new(ExpressionInner::Binary {
+            left: self,
             op,
-            right: Box::new(other),
+            right: other,
             arity,
-        }
+        }))
     }
 
     /// Create an n-ary union from multiple expressions
@@ -414,7 +489,7 @@ impl Expression {
             );
         }
 
-        Expression::Nary { exprs, arity }
+        Expression::Ref(Rc::new(ExpressionInner::Nary { exprs, arity }))
     }
 
     /// Check membership in a relation (convenience method)
@@ -427,37 +502,63 @@ impl Expression {
     /// Following Java: Expression.sum() - returns the sum of integer atoms
     /// Note: For cardinality use `count()`, for quantified sum use `sum_over(decls)`
     pub fn sum_int(self) -> IntExpression {
-        IntExpression::ExprCast(self)
+        IntExpression::expr_cast(self)
     }
 
     /// Cardinality of this expression
     /// Following Java: Expression.cardinality() - returns #this
     pub fn cardinality(self) -> IntExpression {
-        IntExpression::Cardinality(self)
+        IntExpression::cardinality(self)
+    }
+
+    /// Creates an if-then-else expression
+    pub fn if_then_else(condition: Formula, then_expr: Expression, else_expr: Expression, arity: usize) -> Expression {
+        Expression::Ref(Rc::new(ExpressionInner::If {
+            condition,
+            then_expr,
+            else_expr,
+            arity,
+        }))
+    }
+
+    /// Creates a comprehension expression
+    pub fn comprehension(declarations: Decls, formula: Formula) -> Expression {
+        Expression::Ref(Rc::new(ExpressionInner::Comprehension {
+            declarations,
+            formula,
+        }))
+    }
+
+    /// Creates an int-to-expression cast
+    pub fn int_to_expr(int_expr: IntExpression, op: IntCastOp) -> Expression {
+        Expression::Ref(Rc::new(ExpressionInner::IntToExprCast {
+            int_expr: Box::new(int_expr),
+            op,
+        }))
     }
 }
 
 impl From<Relation> for Expression {
     fn from(r: Relation) -> Self {
-        Expression::Relation(r)
+        Expression::Ref(Rc::new(ExpressionInner::Relation(r)))
     }
 }
 
 impl From<&Relation> for Expression {
     fn from(r: &Relation) -> Self {
-        Expression::Relation(r.clone())
+        Expression::Ref(Rc::new(ExpressionInner::Relation(r.clone())))
     }
 }
 
 impl From<Variable> for Expression {
     fn from(v: Variable) -> Self {
-        Expression::Variable(v)
+        Expression::Ref(Rc::new(ExpressionInner::Variable(v)))
     }
 }
 
 impl From<&Variable> for Expression {
     fn from(v: &Variable) -> Self {
-        Expression::Variable(v.clone())
+        Expression::Ref(Rc::new(ExpressionInner::Variable(v.clone())))
     }
 }
 

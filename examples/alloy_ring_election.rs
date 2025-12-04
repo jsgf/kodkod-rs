@@ -45,14 +45,14 @@ impl RingElection {
 
     /// Declarations: Process and Time with total orderings, succ as function
     fn declarations(&self) -> Formula {
-        let ord_time = Formula::RelationPredicate(RelationPredicate::TotalOrdering {
+        let ord_time = Formula::relation_predicate(RelationPredicate::TotalOrdering {
             relation: self.tord.clone(),
             ordered: self.time.clone(),
             first: self.tfirst.clone(),
             last: self.tlast.clone(),
         });
 
-        let ord_process = Formula::RelationPredicate(RelationPredicate::TotalOrdering {
+        let ord_process = Formula::relation_predicate(RelationPredicate::TotalOrdering {
             relation: self.pord.clone(),
             ordered: self.process.clone(),
             first: self.pfirst.clone(),

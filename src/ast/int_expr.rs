@@ -1,5 +1,6 @@
 //! Integer expression types
 
+use std::rc::Rc;
 use super::{Decls, Expression, Formula};
 
 /// Binary operators for integer expressions
@@ -57,22 +58,40 @@ pub enum IntCompareOp {
     Gte,
 }
 
-/// An expression that evaluates to an integer
+/// An expression that evaluates to an integer (reference-counted for efficient sharing)
+#[derive(Clone, Debug)]
+pub struct IntExpression(Rc<IntExpressionInner>);
+
+impl PartialEq for IntExpression {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_ref() == other.0.as_ref()
+    }
+}
+
+impl Eq for IntExpression {}
+
+impl std::hash::Hash for IntExpression {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.as_ref().hash(state);
+    }
+}
+
+/// Inner representation of an integer expression
 #[expect(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum IntExpression {
+pub enum IntExpressionInner {
     /// Integer constant
     Constant(i32),
     /// Binary operation
     Binary {
-        left: Box<IntExpression>,
+        left: IntExpression,
         op: IntBinaryOp,
-        right: Box<IntExpression>,
+        right: IntExpression,
     },
     /// Unary operation
     Unary {
         op: IntUnaryOp,
-        expr: Box<IntExpression>,
+        expr: IntExpression,
     },
     /// N-ary sum
     Nary {
@@ -83,83 +102,98 @@ pub enum IntExpression {
     /// Sum over declarations
     Sum {
         decls: Decls,
-        expr: Box<IntExpression>,
+        expr: IntExpression,
     },
     /// If-then-else for integers
     If {
-        condition: Box<Formula>,
-        then_expr: Box<IntExpression>,
-        else_expr: Box<IntExpression>,
+        condition: Formula,
+        then_expr: IntExpression,
+        else_expr: IntExpression,
     },
     /// Cast expression to int (for bitset representation)
     ExprCast(Expression),
 }
 
 impl IntExpression {
+    /// Returns a reference to the inner expression
+    pub fn inner(&self) -> &IntExpressionInner {
+        &self.0
+    }
+
     /// Integer constant
     pub fn constant(value: i32) -> Self {
-        IntExpression::Constant(value)
+        IntExpression(Rc::new(IntExpressionInner::Constant(value)))
     }
 
     /// Addition
     pub fn plus(self, other: IntExpression) -> Self {
-        IntExpression::Binary {
-            left: Box::new(self),
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
             op: IntBinaryOp::Plus,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// Subtraction
     pub fn minus(self, other: IntExpression) -> Self {
-        IntExpression::Binary {
-            left: Box::new(self),
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
             op: IntBinaryOp::Minus,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// Multiplication
     pub fn multiply(self, other: IntExpression) -> Self {
-        IntExpression::Binary {
-            left: Box::new(self),
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
             op: IntBinaryOp::Multiply,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// Division
     pub fn divide(self, other: IntExpression) -> Self {
-        IntExpression::Binary {
-            left: Box::new(self),
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
             op: IntBinaryOp::Divide,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// Modulo
     pub fn modulo(self, other: IntExpression) -> Self {
-        IntExpression::Binary {
-            left: Box::new(self),
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
             op: IntBinaryOp::Modulo,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
+    }
+
+    /// Generic binary operation
+    pub fn binary(left: IntExpression, op: IntBinaryOp, right: IntExpression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::Binary { left, op, right }))
+    }
+
+    /// Generic unary operation
+    pub fn unary(op: IntUnaryOp, expr: IntExpression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::Unary { op, expr }))
     }
 
     /// Negation
     pub fn negate(self) -> Self {
-        IntExpression::Unary {
+        IntExpression(Rc::new(IntExpressionInner::Unary {
             op: IntUnaryOp::Negate,
-            expr: Box::new(self),
-        }
+            expr: self,
+        }))
     }
 
     /// Absolute value
     pub fn abs(self) -> Self {
-        IntExpression::Unary {
+        IntExpression(Rc::new(IntExpressionInner::Unary {
             op: IntUnaryOp::Abs,
-            expr: Box::new(self),
-        }
+            expr: self,
+        }))
     }
 
     /// N-ary sum
@@ -168,76 +202,62 @@ impl IntExpression {
         if exprs.len() == 1 {
             return exprs.into_iter().next().unwrap();
         }
-        IntExpression::Nary { exprs }
+        IntExpression(Rc::new(IntExpressionInner::Nary { exprs }))
     }
 
     /// Sum over declarations
     pub fn sum(decls: Decls, expr: IntExpression) -> Self {
-        IntExpression::Sum {
-            decls,
-            expr: Box::new(expr),
-        }
+        IntExpression(Rc::new(IntExpressionInner::Sum { decls, expr }))
+    }
+
+    /// Cardinality of an expression
+    pub fn cardinality(expr: Expression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::Cardinality(expr)))
+    }
+
+    /// Cast expression to int
+    pub fn expr_cast(expr: Expression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::ExprCast(expr)))
+    }
+
+    /// If-then-else for integers
+    pub fn if_then_else(condition: Formula, then_expr: IntExpression, else_expr: IntExpression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::If { condition, then_expr, else_expr }))
     }
 
     /// Equal to
     pub fn eq(self, other: IntExpression) -> Formula {
-        Formula::IntComparison {
-            left: Box::new(self),
-            op: IntCompareOp::Eq,
-            right: Box::new(other),
-        }
+        Formula::int_comparison(self, IntCompareOp::Eq, other)
     }
 
     /// Less than
     pub fn lt(self, other: IntExpression) -> Formula {
-        Formula::IntComparison {
-            left: Box::new(self),
-            op: IntCompareOp::Lt,
-            right: Box::new(other),
-        }
+        Formula::int_comparison(self, IntCompareOp::Lt, other)
     }
 
     /// Less than or equal
     pub fn lte(self, other: IntExpression) -> Formula {
-        Formula::IntComparison {
-            left: Box::new(self),
-            op: IntCompareOp::Lte,
-            right: Box::new(other),
-        }
+        Formula::int_comparison(self, IntCompareOp::Lte, other)
     }
 
     /// Greater than
     pub fn gt(self, other: IntExpression) -> Formula {
-        Formula::IntComparison {
-            left: Box::new(self),
-            op: IntCompareOp::Gt,
-            right: Box::new(other),
-        }
+        Formula::int_comparison(self, IntCompareOp::Gt, other)
     }
 
     /// Greater than or equal
     pub fn gte(self, other: IntExpression) -> Formula {
-        Formula::IntComparison {
-            left: Box::new(self),
-            op: IntCompareOp::Gte,
-            right: Box::new(other),
-        }
+        Formula::int_comparison(self, IntCompareOp::Gte, other)
     }
 
     /// Convert to an expression representing a singleton set containing the atom for this integer
     pub fn to_expression(self) -> Expression {
-        Expression::IntToExprCast {
-            int_expr: Box::new(self),
-            op: super::IntCastOp::IntCast,
-        }
+        Expression::int_to_expr(self, super::IntCastOp::IntCast)
     }
 
     /// Convert to an expression representing the set of powers of 2 (bits) in this integer
     pub fn to_bitset(self) -> Expression {
-        Expression::IntToExprCast {
-            int_expr: Box::new(self),
-            op: super::IntCastOp::BitsetCast,
-        }
+        Expression::int_to_expr(self, super::IntCastOp::BitsetCast)
     }
 }
 
@@ -251,32 +271,29 @@ impl From<IntExpression> for Expression {
 impl Expression {
     /// Cardinality (#expr)
     pub fn count(self) -> IntExpression {
-        IntExpression::Cardinality(self)
+        IntExpression::cardinality(self)
     }
 
     /// Sum of integer atoms in expression (cast expression to int via SUM)
     pub fn sum_cast(self) -> IntExpression {
-        IntExpression::ExprCast(self)
+        IntExpression::expr_cast(self)
     }
 
     /// Sum of expression values over declarations
     pub fn sum(self, decls: Decls) -> IntExpression {
-        IntExpression::Sum {
-            decls,
-            expr: Box::new(IntExpression::ExprCast(self)),
-        }
+        IntExpression::sum(decls, IntExpression::expr_cast(self))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Expression, Formula, Relation, Variable, Decl};
+    use super::super::{Expression, ExpressionInner, FormulaInner, Relation, Variable, Decl};
     use super::*;
 
     #[test]
     fn int_constants() {
         let i = IntExpression::constant(42);
-        assert!(matches!(i, IntExpression::Constant(42)));
+        assert!(matches!(i.inner(), IntExpressionInner::Constant(42)));
     }
 
     #[test]
@@ -285,16 +302,16 @@ mod tests {
         let b = IntExpression::constant(5);
 
         let sum = a.clone().plus(b.clone());
-        assert!(matches!(sum, IntExpression::Binary { op: IntBinaryOp::Plus, .. }));
+        assert!(matches!(sum.inner(), IntExpressionInner::Binary { op: IntBinaryOp::Plus, .. }));
 
         let diff = a.clone().minus(b.clone());
-        assert!(matches!(diff, IntExpression::Binary { op: IntBinaryOp::Minus, .. }));
+        assert!(matches!(diff.inner(), IntExpressionInner::Binary { op: IntBinaryOp::Minus, .. }));
 
         let prod = a.clone().multiply(b.clone());
-        assert!(matches!(prod, IntExpression::Binary { op: IntBinaryOp::Multiply, .. }));
+        assert!(matches!(prod.inner(), IntExpressionInner::Binary { op: IntBinaryOp::Multiply, .. }));
 
         let quot = a.divide(b);
-        assert!(matches!(quot, IntExpression::Binary { op: IntBinaryOp::Divide, .. }));
+        assert!(matches!(quot.inner(), IntExpressionInner::Binary { op: IntBinaryOp::Divide, .. }));
     }
 
     #[test]
@@ -302,10 +319,10 @@ mod tests {
         let a = IntExpression::constant(-5);
 
         let neg = a.clone().negate();
-        assert!(matches!(neg, IntExpression::Unary { op: IntUnaryOp::Negate, .. }));
+        assert!(matches!(neg.inner(), IntExpressionInner::Unary { op: IntUnaryOp::Negate, .. }));
 
         let abs = a.abs();
-        assert!(matches!(abs, IntExpression::Unary { op: IntUnaryOp::Abs, .. }));
+        assert!(matches!(abs.inner(), IntExpressionInner::Unary { op: IntUnaryOp::Abs, .. }));
     }
 
     #[test]
@@ -314,20 +331,20 @@ mod tests {
         let b = IntExpression::constant(5);
 
         let eq = a.clone().eq(b.clone());
-        assert!(matches!(eq, Formula::IntComparison { op: IntCompareOp::Eq, .. }));
+        assert!(matches!(&*eq.inner(), FormulaInner::IntComparison { op: IntCompareOp::Eq, .. }));
 
         let lt = a.clone().lt(b.clone());
-        assert!(matches!(lt, Formula::IntComparison { op: IntCompareOp::Lt, .. }));
+        assert!(matches!(&*lt.inner(), FormulaInner::IntComparison { op: IntCompareOp::Lt, .. }));
 
         let gt = a.gt(b);
-        assert!(matches!(gt, Formula::IntComparison { op: IntCompareOp::Gt, .. }));
+        assert!(matches!(&*gt.inner(), FormulaInner::IntComparison { op: IntCompareOp::Gt, .. }));
     }
 
     #[test]
     fn cardinality() {
         let r = Relation::unary("Person");
         let card = Expression::from(r).count();
-        assert!(matches!(card, IntExpression::Cardinality(_)));
+        assert!(matches!(card.inner(), IntExpressionInner::Cardinality(_)));
     }
 
     #[test]
@@ -338,7 +355,7 @@ mod tests {
         let decls = Decls::from(decl);
 
         let sum = Expression::from(person).sum(decls);
-        assert!(matches!(sum, IntExpression::Sum { .. }));
+        assert!(matches!(sum.inner(), IntExpressionInner::Sum { .. }));
     }
 
     #[test]
@@ -348,7 +365,7 @@ mod tests {
         let c = IntExpression::constant(3);
 
         let sum = IntExpression::sum_all(vec![a, b, c]);
-        assert!(matches!(sum, IntExpression::Nary { .. }));
+        assert!(matches!(sum.inner(), IntExpressionInner::Nary { .. }));
     }
 
     #[test]
@@ -359,12 +376,12 @@ mod tests {
         let expr = int_expr.to_expression();
 
         // Should create IntToExprCast with IntCast operator
-        assert!(matches!(expr, Expression::IntToExprCast { op: IntCastOp::IntCast, .. }));
+        assert!(matches!(&*expr.inner(), ExpressionInner::IntToExprCast { op: IntCastOp::IntCast, .. }));
 
         // Test From trait
         let int_expr2 = IntExpression::constant(10);
         let expr2: Expression = int_expr2.into();
-        assert!(matches!(expr2, Expression::IntToExprCast { op: IntCastOp::IntCast, .. }));
+        assert!(matches!(&*expr2.inner(), ExpressionInner::IntToExprCast { op: IntCastOp::IntCast, .. }));
     }
 
     #[test]
@@ -375,7 +392,7 @@ mod tests {
         let expr = int_expr.to_bitset();
 
         // Should create IntToExprCast with BitsetCast operator
-        assert!(matches!(expr, Expression::IntToExprCast { op: IntCastOp::BitsetCast, .. }));
+        assert!(matches!(&*expr.inner(), ExpressionInner::IntToExprCast { op: IntCastOp::BitsetCast, .. }));
     }
 
     #[test]

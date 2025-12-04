@@ -267,8 +267,9 @@ impl ListEncoding {
      */
     pub fn acyclic(&self, expr: &Expression) -> Formula {
         // Special handling for relations that enables better symmetry breaking
-        match expr {
-            Expression::Relation(r) => r.clone().acyclic(),
+        use kodkod_rs::ast::ExpressionInner;
+        match &*expr.inner() {
+            ExpressionInner::Relation(r) => r.clone().acyclic(),
             _ => {
                 assert_eq!(expr.arity(), 2, "Acyclic requires binary expression");
                 expr.clone().closure().intersection(Expression::IDEN).no()
@@ -283,8 +284,9 @@ impl ListEncoding {
      */
     pub fn function(&self, expr: &Expression, domain: &Expression, range: &Expression) -> Formula {
         // Special handling for relations that enables better symmetry breaking
-        match expr {
-            Expression::Relation(r) => r.clone().function(domain.clone(), range.clone()),
+        use kodkod_rs::ast::ExpressionInner;
+        match &*expr.inner() {
+            ExpressionInner::Relation(r) => r.clone().function(domain.clone(), range.clone()),
             _ => {
                 assert_eq!(domain.arity(), 1, "Domain must be unary");
                 assert_eq!(range.arity(), 1, "Range must be unary");

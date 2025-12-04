@@ -133,8 +133,8 @@ impl Transpose4x4UnaryL {
 
     /// Returns an expression that represents the transpose of m using shufps.
     fn transpose_shufps(&self, m: Expression) -> Expression {
-        let s = Expression::UNIV.product(int_expr(0)); // s = new int[16];
-        let t = Expression::UNIV.product(int_expr(0)); // t = new int[16];
+        let s = Expression::univ().product(int_expr(0)); // s = new int[16];
+        let t = Expression::univ().product(int_expr(0)); // t = new int[16];
 
         let s0 = self.wr4(
             s.clone(),

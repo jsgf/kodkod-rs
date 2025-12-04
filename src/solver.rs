@@ -130,8 +130,8 @@ impl Solver {
         eprintln!("DEBUG: Simplification took {:?}", simplification_time);
 
         // Check if formula simplified to a constant
-        match &optimized_formula {
-            Formula::Constant(true) => {
+        match &*optimized_formula.inner() {
+            FormulaInner::Constant(true) => {
                 eprintln!("DEBUG: Formula simplified to TRUE");
                 return Ok(Solution::Trivial {
                     is_true: true,
@@ -143,7 +143,7 @@ impl Solver {
                     },
                 });
             }
-            Formula::Constant(false) => {
+            FormulaInner::Constant(false) => {
                 eprintln!("DEBUG: Formula simplified to FALSE");
                 return Ok(Solution::Trivial {
                     is_true: false,
@@ -374,21 +374,21 @@ fn extract_predicates(formula: &Formula) -> Vec<crate::ast::RelationPredicate> {
     let mut predicates = Vec::new();
 
     fn visit(f: &Formula, preds: &mut Vec<RelationPredicate>) {
-        match f {
-            Formula::RelationPredicate(pred) => {
+        match &*f.inner() {
+            FormulaInner::RelationPredicate(pred) => {
                 preds.push(pred.clone());
             }
-            Formula::Not(inner) => visit(inner, preds),
-            Formula::Binary { left, right, .. } => {
+            FormulaInner::Not(inner) => visit(inner, preds),
+            FormulaInner::Binary { left, right, .. } => {
                 visit(left, preds);
                 visit(right, preds);
             }
-            Formula::Nary { formulas, .. } => {
+            FormulaInner::Nary { formulas, .. } => {
                 for sub in formulas {
                     visit(sub, preds);
                 }
             }
-            Formula::Quantified { body, .. } => {
+            FormulaInner::Quantified { body, .. } => {
                 visit(body, preds);
             }
             _ => {}
@@ -408,29 +408,39 @@ fn replace_predicates(
         f: &Formula,
         reps: &rustc_hash::FxHashMap<crate::ast::RelationPredicate, Formula>,
     ) -> Formula {
-        match f {
-            Formula::RelationPredicate(pred) => {
+        match &*f.inner() {
+            FormulaInner::RelationPredicate(pred) => {
                 if let Some(replacement) = reps.get(pred) {
                     replacement.clone()
                 } else {
                     f.clone()
                 }
             }
-            Formula::Not(inner) => Formula::Not(Box::new(visit(inner, reps))),
-            Formula::Binary { op, left, right } => Formula::Binary {
-                op: *op,
-                left: Box::new(visit(left, reps)),
-                right: Box::new(visit(right, reps)),
-            },
-            Formula::Nary { op, formulas } => Formula::Nary {
-                op: *op,
-                formulas: formulas.iter().map(|sub| visit(sub, reps)).collect(),
-            },
-            Formula::Quantified { quantifier, declarations, body } => Formula::Quantified {
-                quantifier: *quantifier,
-                declarations: declarations.clone(),
-                body: Box::new(visit(body, reps)),
-            },
+            FormulaInner::Not(inner) => visit(inner, reps).not(),
+            FormulaInner::Binary { op, left, right } => {
+                let l = visit(left, reps);
+                let r = visit(right, reps);
+                match op {
+                    BinaryFormulaOp::And => l.and(r),
+                    BinaryFormulaOp::Or => l.or(r),
+                    BinaryFormulaOp::Implies => l.implies(r),
+                    BinaryFormulaOp::Iff => l.iff(r),
+                }
+            }
+            FormulaInner::Nary { op, formulas } => {
+                let replaced: Vec<Formula> = formulas.iter().map(|sub| visit(sub, reps)).collect();
+                match op {
+                    BinaryFormulaOp::And => Formula::and_all(replaced),
+                    BinaryFormulaOp::Or => Formula::or_all(replaced),
+                    _ => Formula::and_all(replaced),
+                }
+            }
+            FormulaInner::Quantified { quantifier, declarations, body } => {
+                match quantifier {
+                    Quantifier::All => Formula::forall(declarations.clone(), visit(body, reps)),
+                    Quantifier::Some => Formula::exists(declarations.clone(), visit(body, reps)),
+                }
+            }
             _ => f.clone(),
         }
     }

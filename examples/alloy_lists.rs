@@ -55,7 +55,7 @@ impl Lists {
             .in_set(Expression::from(self.list.clone())
                 .product(Expression::from(self.list.clone())));
 
-        let f4 = Formula::RelationPredicate(
+        let f4 = Formula::relation_predicate(
             kodkod_rs::ast::formula::RelationPredicate::function(
                 self.car.clone(),
                 Expression::from(self.non_empty_list.clone()),
@@ -63,7 +63,7 @@ impl Lists {
             )
         );
 
-        let f5 = Formula::RelationPredicate(
+        let f5 = Formula::relation_predicate(
             kodkod_rs::ast::formula::RelationPredicate::function(
                 self.cdr.clone(),
                 Expression::from(self.non_empty_list.clone()),

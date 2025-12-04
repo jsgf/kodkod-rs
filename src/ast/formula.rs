@@ -1,5 +1,8 @@
 //! Formula types for first-order logic
 
+use std::borrow::Cow;
+use std::rc::Rc;
+
 use super::int_expr::{IntCompareOp, IntExpression};
 use super::{Expression, Relation, Variable};
 
@@ -210,17 +213,51 @@ pub enum Quantifier {
     Some,
 }
 
-/// A first-order formula
+/// A first-order formula (reference-counted for efficient sharing)
+#[derive(Clone, Debug)]
+pub enum Formula {
+    /// Reference-counted shared formula (for compound formulas)
+    Ref(Rc<FormulaInner>),
+    /// Constant TRUE (inline, no allocation)
+    True,
+    /// Constant FALSE (inline, no allocation)
+    False,
+}
+
+impl Formula {
+    /// Constant TRUE formula
+    pub const TRUE: Formula = Formula::True;
+
+    /// Constant FALSE formula
+    pub const FALSE: Formula = Formula::False;
+}
+
+impl PartialEq for Formula {
+    fn eq(&self, other: &Self) -> bool {
+        // Use structural equality through the inner representation
+        self.inner() == other.inner()
+    }
+}
+
+impl Eq for Formula {}
+
+impl std::hash::Hash for Formula {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner().hash(state);
+    }
+}
+
+/// Inner representation of a formula
 #[expect(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Formula {
+pub enum FormulaInner {
     /// Constant formula (TRUE or FALSE)
     Constant(bool),
     /// Binary formula (AND, OR, IFF, IMPLIES)
     Binary {
-        left: Box<Formula>,
+        left: Formula,
         op: BinaryFormulaOp,
-        right: Box<Formula>,
+        right: Formula,
     },
     /// N-ary formula (conjunction/disjunction of multiple formulas)
     Nary {
@@ -228,7 +265,7 @@ pub enum Formula {
         formulas: Vec<Formula>,
     },
     /// Negation
-    Not(Box<Formula>),
+    Not(Formula),
     /// Expression comparison (equals, subset)
     Comparison {
         left: Expression,
@@ -244,7 +281,7 @@ pub enum Formula {
     Quantified {
         quantifier: Quantifier,
         declarations: Decls,
-        body: Box<Formula>,
+        body: Formula,
     },
     /// Integer comparison
     IntComparison {
@@ -258,54 +295,63 @@ pub enum Formula {
 
 impl Formula {
     /// Constant TRUE formula
-    pub const TRUE: Formula = Formula::Constant(true);
+    #[inline]
+    #[deprecated(note = "Use Formula::TRUE constant instead")]
+    pub fn r#true() -> Formula {
+        Formula::TRUE
+    }
+
     /// Constant FALSE formula
-    pub const FALSE: Formula = Formula::Constant(false);
+    #[inline]
+    #[deprecated(note = "Use Formula::FALSE constant instead")]
+    pub fn r#false() -> Formula {
+        Formula::FALSE
+    }
 
     /// Returns a constant formula with the given value
     pub fn constant(value: bool) -> Formula {
-        Formula::Constant(value)
+        if value { Formula::TRUE } else { Formula::FALSE }
     }
 
     /// Logical AND
     pub fn and(self, other: Formula) -> Formula {
-        Formula::Binary {
-            left: Box::new(self),
+        Formula::Ref(Rc::new(FormulaInner::Binary {
+            left: self,
             op: BinaryFormulaOp::And,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// Logical OR
     pub fn or(self, other: Formula) -> Formula {
-        Formula::Binary {
-            left: Box::new(self),
+        Formula::Ref(Rc::new(FormulaInner::Binary {
+            left: self,
             op: BinaryFormulaOp::Or,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// If and only if (biconditional)
     pub fn iff(self, other: Formula) -> Formula {
-        Formula::Binary {
-            left: Box::new(self),
+        Formula::Ref(Rc::new(FormulaInner::Binary {
+            left: self,
             op: BinaryFormulaOp::Iff,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// Implication
     pub fn implies(self, other: Formula) -> Formula {
-        Formula::Binary {
-            left: Box::new(self),
+        Formula::Ref(Rc::new(FormulaInner::Binary {
+            left: self,
             op: BinaryFormulaOp::Implies,
-            right: Box::new(other),
-        }
+            right: other,
+        }))
     }
 
     /// Negation
     pub fn not(self) -> Formula {
-        Formula::Not(Box::new(self))
+        Formula::Ref(Rc::new(FormulaInner::Not(self)))
     }
 
     /// N-ary conjunction
@@ -316,10 +362,10 @@ impl Formula {
         if formulas.len() == 1 {
             return formulas.into_iter().next().unwrap();
         }
-        Formula::Nary {
+        Formula::Ref(Rc::new(FormulaInner::Nary {
             op: BinaryFormulaOp::And,
             formulas,
-        }
+        }))
     }
 
     /// N-ary disjunction
@@ -330,30 +376,53 @@ impl Formula {
         if formulas.len() == 1 {
             return formulas.into_iter().next().unwrap();
         }
-        Formula::Nary {
+        Formula::Ref(Rc::new(FormulaInner::Nary {
             op: BinaryFormulaOp::Or,
             formulas,
-        }
+        }))
     }
 
     /// Universal quantification (forall)
     pub fn forall(declarations: Decls, body: Formula) -> Formula {
-        Formula::Quantified {
+        Formula::Ref(Rc::new(FormulaInner::Quantified {
             quantifier: Quantifier::All,
             declarations,
-            body: Box::new(body),
-        }
+            body,
+        }))
     }
 
     /// Existential quantification (exists)
     pub fn exists(declarations: Decls, body: Formula) -> Formula {
-        Formula::Quantified {
+        Formula::Ref(Rc::new(FormulaInner::Quantified {
             quantifier: Quantifier::Some,
             declarations,
-            body: Box::new(body),
+            body,
+        }))
+    }
+
+    /// Returns a reference to the inner formula
+    /// Returns Cow::Borrowed for Ref variant, Cow::Owned for True/False
+    pub fn inner(&self) -> Cow<'_, FormulaInner> {
+        match self {
+            Formula::Ref(rc) => Cow::Borrowed(rc.as_ref()),
+            Formula::True => Cow::Owned(FormulaInner::Constant(true)),
+            Formula::False => Cow::Owned(FormulaInner::Constant(false)),
         }
     }
 
+    /// Creates an integer comparison formula
+    pub fn int_comparison(left: IntExpression, op: IntCompareOp, right: IntExpression) -> Formula {
+        Formula::Ref(Rc::new(FormulaInner::IntComparison {
+            left: Box::new(left),
+            op,
+            right: Box::new(right),
+        }))
+    }
+
+    /// Creates a relation predicate formula
+    pub fn relation_predicate(pred: RelationPredicate) -> Formula {
+        Formula::Ref(Rc::new(FormulaInner::RelationPredicate(pred)))
+    }
 
     /// If-then-else for expressions
     /// Following Java: Formula.thenElse(Expression, Expression)
@@ -373,33 +442,24 @@ impl Formula {
             else_expr.arity()
         );
         let arity = then_expr.arity();
-        Expression::If {
-            condition: Box::new(self),
-            then_expr: Box::new(then_expr),
-            else_expr: Box::new(else_expr),
-            arity,
-        }
+        Expression::if_then_else(self, then_expr, else_expr, arity)
     }
 
     /// If-then-else for integer expressions
     /// Following Java: Formula.thenElse(IntExpression, IntExpression)
     pub fn then_else_int(self, then_expr: IntExpression, else_expr: IntExpression) -> IntExpression {
-        IntExpression::If {
-            condition: Box::new(self),
-            then_expr: Box::new(then_expr),
-            else_expr: Box::new(else_expr),
-        }
+        IntExpression::if_then_else(self, then_expr, else_expr)
     }
 }
 
 impl Expression {
     /// Expression equals another
     pub fn equals(self, other: Expression) -> Formula {
-        Formula::Comparison {
+        Formula::Ref(Rc::new(FormulaInner::Comparison {
             left: self,
             op: CompareOp::Equals,
             right: other,
-        }
+        }))
     }
 
     /// Expression does not equal another (convenience method)
@@ -409,43 +469,43 @@ impl Expression {
 
     /// Expression is subset of another
     pub fn in_set(self, other: Expression) -> Formula {
-        Formula::Comparison {
+        Formula::Ref(Rc::new(FormulaInner::Comparison {
             left: self,
             op: CompareOp::Subset,
             right: other,
-        }
+        }))
     }
 
     /// Expression has at least one element
     pub fn some(self) -> Formula {
-        Formula::Multiplicity {
+        Formula::Ref(Rc::new(FormulaInner::Multiplicity {
             mult: Multiplicity::Some,
             expr: self,
-        }
+        }))
     }
 
     /// Expression has exactly one element
     pub fn one(self) -> Formula {
-        Formula::Multiplicity {
+        Formula::Ref(Rc::new(FormulaInner::Multiplicity {
             mult: Multiplicity::One,
             expr: self,
-        }
+        }))
     }
 
     /// Expression has at most one element
     pub fn lone(self) -> Formula {
-        Formula::Multiplicity {
+        Formula::Ref(Rc::new(FormulaInner::Multiplicity {
             mult: Multiplicity::Lone,
             expr: self,
-        }
+        }))
     }
 
     /// Expression has no elements
     pub fn no(self) -> Formula {
-        Formula::Multiplicity {
+        Formula::Ref(Rc::new(FormulaInner::Multiplicity {
             mult: Multiplicity::No,
             expr: self,
-        }
+        }))
     }
 }
 
@@ -454,10 +514,7 @@ impl Formula {
     /// Following Java: Formula.comprehension(Decls)
     /// Returns {declarations | self}
     pub fn comprehension(self, declarations: Decls) -> Expression {
-        Expression::Comprehension {
-            declarations,
-            formula: Box::new(self),
-        }
+        Expression::comprehension(declarations, self)
     }
 }
 
@@ -578,9 +635,9 @@ mod tests {
 
     #[test]
     fn constant_formulas() {
-        assert!(matches!(Formula::TRUE, Formula::Constant(true)));
-        assert!(matches!(Formula::FALSE, Formula::Constant(false)));
-        assert!(matches!(Formula::constant(true), Formula::Constant(true)));
+        assert!(matches!(&*Formula::TRUE.inner(), FormulaInner::Constant(true)));
+        assert!(matches!(&*Formula::FALSE.inner(), FormulaInner::Constant(false)));
+        assert!(matches!(&*Formula::constant(true).inner(), FormulaInner::Constant(true)));
     }
 
     #[test]
@@ -589,22 +646,22 @@ mod tests {
         let f2 = Formula::FALSE;
 
         let and = f1.clone().and(f2.clone());
-        assert!(matches!(and, Formula::Binary { op: BinaryFormulaOp::And, .. }));
+        assert!(matches!(&*and.inner(), FormulaInner::Binary { op: BinaryFormulaOp::And, .. }));
 
         let or = f1.clone().or(f2.clone());
-        assert!(matches!(or, Formula::Binary { op: BinaryFormulaOp::Or, .. }));
+        assert!(matches!(&*or.inner(), FormulaInner::Binary { op: BinaryFormulaOp::Or, .. }));
 
         let iff = f1.clone().iff(f2.clone());
-        assert!(matches!(iff, Formula::Binary { op: BinaryFormulaOp::Iff, .. }));
+        assert!(matches!(&*iff.inner(), FormulaInner::Binary { op: BinaryFormulaOp::Iff, .. }));
 
         let implies = f1.implies(f2);
-        assert!(matches!(implies, Formula::Binary { op: BinaryFormulaOp::Implies, .. }));
+        assert!(matches!(&*implies.inner(), FormulaInner::Binary { op: BinaryFormulaOp::Implies, .. }));
     }
 
     #[test]
     fn negation() {
         let not = Formula::TRUE.not();
-        assert!(matches!(not, Formula::Not(_)));
+        assert!(matches!(&*not.inner(), FormulaInner::Not(_)));
     }
 
     #[test]
@@ -614,14 +671,14 @@ mod tests {
         let f3 = Formula::TRUE;
 
         let and = Formula::and_all(vec![f1.clone(), f2.clone(), f3.clone()]);
-        assert!(matches!(and, Formula::Nary { op: BinaryFormulaOp::And, .. }));
+        assert!(matches!(&*and.inner(), FormulaInner::Nary { op: BinaryFormulaOp::And, .. }));
 
         let or = Formula::or_all(vec![f1, f2, f3]);
-        assert!(matches!(or, Formula::Nary { op: BinaryFormulaOp::Or, .. }));
+        assert!(matches!(&*or.inner(), FormulaInner::Nary { op: BinaryFormulaOp::Or, .. }));
 
         // Empty cases
-        assert!(matches!(Formula::and_all(vec![]), Formula::Constant(true)));
-        assert!(matches!(Formula::or_all(vec![]), Formula::Constant(false)));
+        assert!(matches!(&*Formula::and_all(vec![]).inner(), FormulaInner::Constant(true)));
+        assert!(matches!(&*Formula::or_all(vec![]).inner(), FormulaInner::Constant(false)));
     }
 
     #[test]
@@ -630,10 +687,10 @@ mod tests {
         let r2 = Relation::unary("B");
 
         let eq = Expression::from(r1.clone()).equals(Expression::from(r2.clone()));
-        assert!(matches!(eq, Formula::Comparison { op: CompareOp::Equals, .. }));
+        assert!(matches!(&*eq.inner(), FormulaInner::Comparison { op: CompareOp::Equals, .. }));
 
         let subset = Expression::from(r1).in_set(Expression::from(r2));
-        assert!(matches!(subset, Formula::Comparison { op: CompareOp::Subset, .. }));
+        assert!(matches!(&*subset.inner(), FormulaInner::Comparison { op: CompareOp::Subset, .. }));
     }
 
     #[test]
@@ -641,16 +698,16 @@ mod tests {
         let r = Relation::unary("Person");
 
         let some = Expression::from(r.clone()).some();
-        assert!(matches!(some, Formula::Multiplicity { mult: Multiplicity::Some, .. }));
+        assert!(matches!(&*some.inner(), FormulaInner::Multiplicity { mult: Multiplicity::Some, .. }));
 
         let one = Expression::from(r.clone()).one();
-        assert!(matches!(one, Formula::Multiplicity { mult: Multiplicity::One, .. }));
+        assert!(matches!(&*one.inner(), FormulaInner::Multiplicity { mult: Multiplicity::One, .. }));
 
         let lone = Expression::from(r.clone()).lone();
-        assert!(matches!(lone, Formula::Multiplicity { mult: Multiplicity::Lone, .. }));
+        assert!(matches!(&*lone.inner(), FormulaInner::Multiplicity { mult: Multiplicity::Lone, .. }));
 
         let no = Expression::from(r).no();
-        assert!(matches!(no, Formula::Multiplicity { mult: Multiplicity::No, .. }));
+        assert!(matches!(&*no.inner(), FormulaInner::Multiplicity { mult: Multiplicity::No, .. }));
     }
 
     #[test]
@@ -676,10 +733,10 @@ mod tests {
 
         let body = Expression::from(x.clone()).in_set(Expression::from(&person));
         let forall = Formula::forall(decls.clone(), body.clone());
-        assert!(matches!(forall, Formula::Quantified { quantifier: Quantifier::All, .. }));
+        assert!(matches!(&*forall.inner(), FormulaInner::Quantified { quantifier: Quantifier::All, .. }));
 
         let exists = Formula::exists(decls, body);
-        assert!(matches!(exists, Formula::Quantified { quantifier: Quantifier::Some, .. }));
+        assert!(matches!(&*exists.inner(), FormulaInner::Quantified { quantifier: Quantifier::Some, .. }));
     }
 
     #[test]
@@ -694,6 +751,6 @@ mod tests {
         let body = Expression::from(p).in_set(Expression::from(&person));
         let formula = Formula::forall(decls, body);
 
-        assert!(matches!(formula, Formula::Quantified { .. }));
+        assert!(matches!(&*formula.inner(), FormulaInner::Quantified { .. }));
     }
 }

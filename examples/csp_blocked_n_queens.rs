@@ -56,14 +56,14 @@ impl BlockedNQueens {
         let mut rules = Vec::new();
 
         // x and y are functions from queens to numbers
-        rules.push(Formula::RelationPredicate(
+        rules.push(Formula::relation_predicate(
             kodkod_rs::ast::RelationPredicate::Function {
                 relation: self.x.clone(),
                 domain: Expression::from(self.queen.clone()),
                 range: Expression::from(self.num.clone()),
             }
         ));
-        rules.push(Formula::RelationPredicate(
+        rules.push(Formula::relation_predicate(
             kodkod_rs::ast::RelationPredicate::Function {
                 relation: self.y.clone(),
                 domain: Expression::from(self.queen.clone()),

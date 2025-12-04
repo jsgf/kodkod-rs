@@ -65,11 +65,11 @@ impl NUM378 {
 
         let sum_one = self.sum(x_expr.clone(), y_expr.clone()).one();
 
-        let decls = Decls::from(Decl::one_of(x, Expression::UNIV))
-            .and(Decl::one_of(y, Expression::UNIV));
+        let decls = Decls::from(Decl::one_of(x, Expression::univ()))
+            .and(Decl::one_of(y, Expression::univ()));
 
         self.succ.clone()
-            .function(Expression::UNIV, Expression::UNIV)
+            .function(Expression::univ(), Expression::univ())
             .and(Formula::forall(decls, sum_one))
     }
 
@@ -80,9 +80,9 @@ impl NUM378 {
     }
 
     fn build_decls(vars: &[Variable]) -> Decls {
-        let mut decls = Decls::from(Decl::one_of(vars[0].clone(), Expression::UNIV));
+        let mut decls = Decls::from(Decl::one_of(vars[0].clone(), Expression::univ()));
         for var in &vars[1..] {
-            decls = decls.and(Decl::one_of(var.clone(), Expression::UNIV));
+            decls = decls.and(Decl::one_of(var.clone(), Expression::univ()));
         }
         decls
     }
