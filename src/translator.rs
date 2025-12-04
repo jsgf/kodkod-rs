@@ -14,6 +14,55 @@ use crate::bool::{BoolValue, BooleanConstant, BooleanMatrix, Dimensions, Int, Op
 use crate::instance::{Bounds, Instance};
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
+use std::rc::Rc;
+
+/// Pointer-identity key for caching AST node translations.
+/// Uses Rc pointer comparison like Java's IdentityHashMap.
+/// Holds the Rc to ensure the pointer remains valid while in the cache.
+/// Following Java: FOL2BoolCache uses IdentityHashMap<Node, Record>
+struct RcKey<T>(Rc<T>);
+
+impl<T> Clone for RcKey<T> {
+    fn clone(&self) -> Self {
+        RcKey(Rc::clone(&self.0))
+    }
+}
+
+impl<T> PartialEq for RcKey<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl<T> Eq for RcKey<T> {}
+
+impl<T> std::hash::Hash for RcKey<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        Rc::as_ptr(&self.0).hash(state)
+    }
+}
+
+impl RcKey<ExpressionInner> {
+    /// Create cache key from Expression if it's Rc-wrapped
+    fn from_expr(expr: &Expression) -> Option<Self> {
+        match expr {
+            Expression::Ref(rc) => Some(RcKey(Rc::clone(rc))),
+            // Constants are handled separately
+            _ => None,
+        }
+    }
+}
+
+impl RcKey<FormulaInner> {
+    /// Create cache key from Formula if it's Rc-wrapped
+    fn from_formula(formula: &Formula) -> Option<Self> {
+        match formula {
+            Formula::Ref(rc) => Some(RcKey(Rc::clone(rc))),
+            // Constants are handled separately
+            _ => None,
+        }
+    }
+}
 
 /// Result of translating a formula to a boolean circuit
 ///
@@ -212,6 +261,11 @@ struct FOL2BoolTranslator<'a> {
     // Phase 1 leaf caching: cache relation and constant interpretations
     relation_cache: RefCell<FxHashMap<Relation, BooleanMatrix<'a>>>,
     constant_cache: RefCell<FxHashMap<ConstantExpr, BooleanMatrix<'a>>>,
+    // Phase 2 expression caching: cache compound expression translations by pointer identity
+    // Following Java: FOL2BoolCache with IdentityHashMap<Node, Record>
+    // Uses RcKey to hold the Rc and ensure pointer validity
+    expr_cache: RefCell<FxHashMap<RcKey<ExpressionInner>, BooleanMatrix<'a>>>,
+    formula_cache: RefCell<FxHashMap<RcKey<FormulaInner>, BoolValue<'a>>>,
 }
 
 impl<'a> FOL2BoolTranslator<'a> {
@@ -225,6 +279,8 @@ impl<'a> FOL2BoolTranslator<'a> {
             env: RefCell::new(env),
             relation_cache: RefCell::new(FxHashMap::default()),
             constant_cache: RefCell::new(FxHashMap::default()),
+            expr_cache: RefCell::new(FxHashMap::default()),
+            formula_cache: RefCell::new(FxHashMap::default()),
         }
     }
 
@@ -338,6 +394,34 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Expression translation
     /// Following Java: FOL2BoolTranslator.visit(Expression)
     fn translate_expression(&self, expr: &Expression) -> BooleanMatrix<'a> {
+        // Check pointer-identity cache first for Rc-wrapped expressions
+        // Following Java: FOL2BoolCache.lookup() with IdentityHashMap
+        // Only use cache when environment is empty (not inside a quantifier)
+        // to avoid incorrect caching of expressions with free variables.
+        let env_empty = self.env.borrow().is_empty();
+        if env_empty {
+            if let Some(key) = RcKey::from_expr(expr) {
+                if let Some(cached) = self.expr_cache.borrow().get(&key) {
+                    return cached.clone();
+                }
+            }
+        }
+
+        let result = self.translate_expression_inner(expr);
+
+        // Cache the result for Rc-wrapped expressions when not inside a quantifier
+        // Full Java behavior would also track variable bindings for nodes inside quantifiers.
+        if env_empty {
+            if let Some(key) = RcKey::from_expr(expr) {
+                self.expr_cache.borrow_mut().insert(key, result.clone());
+            }
+        }
+
+        result
+    }
+
+    /// Inner expression translation (no caching)
+    fn translate_expression_inner(&self, expr: &Expression) -> BooleanMatrix<'a> {
         match &*expr.inner() {
             ExpressionInner::Relation(rel) => {
                 // Check cache first

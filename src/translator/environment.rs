@@ -21,6 +21,12 @@ impl<'arena> Environment<'arena> {
         }
     }
 
+    /// Returns true if the environment has no variable bindings
+    /// (i.e., we're not inside any quantifiers)
+    pub fn is_empty(&self) -> bool {
+        self.bindings.is_empty()
+    }
+
     /// Pushes a new binding (for entering quantifier scope)
     /// Following Java: Environment.extend(Variable, T)
     pub fn extend(&mut self, var: Variable, value: BooleanMatrix<'arena>) {
