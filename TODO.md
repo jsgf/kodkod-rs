@@ -88,6 +88,24 @@
 - ✅ Core preprocessing (Skolemization, NNF, optimizations) complete
 - ✅ 251 tests passing
 - 🔄 Performance parity with Java implementation on all TPTP examples (need to port more TPTP examples)
+
+### Investigations
+
+- **CNF size difference**: Transpose4x4UnaryL comparison (INVESTIGATED)
+  - **Findings**:
+    - Java: 10533 vars, 36835 clauses (translation 86ms, solving 1796ms)
+    - Rust: 18132 vars, 41792 clauses (translation 13s, solving 1.4s)
+    - Rust generates 1.72x more CNF variables than Java
+  - **Root cause**: Missing expression caching in Rust translator
+    - Java has FOL2BoolCache that caches all expression/formula translations based on AST node identity
+    - Rust only caches relation and constant interpretations
+    - Each uncached IntToExprCast generates 16 equality comparisons with all integer atoms
+    - With ~224 int_expr calls, this multiplies translation work significantly
+  - **Fix**: Implement FOL2BoolCache-style caching in Rust (~200 LOC)
+    - Track shared nodes in AST during traversal
+    - Cache translations by node identity + free variable bindings
+    - Would reduce CNF size and translation time significantly
+  - **Note**: The original "1537 vars" was from running WITHOUT integer bounds, which produces incorrect translation (IntConstant.toExpression becomes empty set). Integer bounds MUST be set for synthesis examples.
 - **Implement proof/unsat core extraction system**
   - Required for: ListDebug.java example
   - Scope: ~1000+ LOC across multiple modules

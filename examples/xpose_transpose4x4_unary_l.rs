@@ -29,11 +29,6 @@ use kodkod_rs::ast::{Expression, Formula, IntExpression, Relation};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-/// Creates Expression for integer constant i
-fn int_expr(i: i32) -> Expression {
-    IntExpression::constant(i).to_expression()
-}
-
 /// Transpose4x4UnaryL synthesis problem
 struct Transpose4x4UnaryL {
     mx1: [Relation; 4],
@@ -43,6 +38,8 @@ struct Transpose4x4UnaryL {
     mi: [[Relation; 4]; 4],
     si: [[Relation; 4]; 4],
     succ: Relation,
+    /// Cached integer expressions (matches Java's static final Expression[] ints)
+    ints: [Expression; 16],
 }
 
 impl Transpose4x4UnaryL {
@@ -64,7 +61,13 @@ impl Transpose4x4UnaryL {
             mi,
             si,
             succ: Relation::binary("succ"),
+            ints: std::array::from_fn(|i| IntExpression::constant(i as i32).to_expression()),
         }
+    }
+
+    /// Returns cached Expression for integer constant i
+    fn int_expr(&self, i: i32) -> Expression {
+        self.ints[i as usize].clone()
     }
 
     /// Representation invariants which ensure that every relation
@@ -102,10 +105,10 @@ impl Transpose4x4UnaryL {
     /// Returns 0->xmm1[imm8[0]] + 1->xmm1[imm8[1]] + 2->xmm2[imm8[2]] + 3->xmm2[imm8[3]]
     fn shufps(&self, xmm1: Expression, xmm2: Expression, imm8: &[Relation; 4]) -> Expression {
         Expression::union_all(vec![
-            int_expr(0).product(self.get(xmm1.clone(), Expression::from(imm8[0].clone()))),
-            int_expr(1).product(self.get(xmm1, Expression::from(imm8[1].clone()))),
-            int_expr(2).product(self.get(xmm2.clone(), Expression::from(imm8[2].clone()))),
-            int_expr(3).product(self.get(xmm2, Expression::from(imm8[3].clone()))),
+            self.int_expr(0).product(self.get(xmm1.clone(), Expression::from(imm8[0].clone()))),
+            self.int_expr(1).product(self.get(xmm1, Expression::from(imm8[1].clone()))),
+            self.int_expr(2).product(self.get(xmm2.clone(), Expression::from(imm8[2].clone()))),
+            self.int_expr(3).product(self.get(xmm2, Expression::from(imm8[3].clone()))),
         ])
     }
 
@@ -113,10 +116,10 @@ impl Transpose4x4UnaryL {
     /// Returns 0->m[pos] + 1->m[pos+1] + 2->m[pos+2] + 3->m[pos+3]
     fn rd4(&self, m: Expression, pos: Expression) -> Expression {
         Expression::union_all(vec![
-            int_expr(0).product(self.get(m.clone(), pos.clone())),
-            int_expr(1).product(self.get(m.clone(), self.add(pos.clone(), 1))),
-            int_expr(2).product(self.get(m.clone(), self.add(pos.clone(), 2))),
-            int_expr(3).product(self.get(m, self.add(pos, 3))),
+            self.int_expr(0).product(self.get(m.clone(), pos.clone())),
+            self.int_expr(1).product(self.get(m.clone(), self.add(pos.clone(), 1))),
+            self.int_expr(2).product(self.get(m.clone(), self.add(pos.clone(), 2))),
+            self.int_expr(3).product(self.get(m, self.add(pos, 3))),
         ])
     }
 
@@ -124,17 +127,17 @@ impl Transpose4x4UnaryL {
     /// Returns dst ++ (pos->src[0] + (pos+1)->src[1] + (pos+2)->src[2] + (pos+3)->src[3])
     fn wr4(&self, dst: Expression, src: Expression, pos: i32) -> Expression {
         dst.override_with(Expression::union_all(vec![
-            int_expr(pos).product(self.get(src.clone(), int_expr(0))),
-            int_expr(pos + 1).product(self.get(src.clone(), int_expr(1))),
-            int_expr(pos + 2).product(self.get(src.clone(), int_expr(2))),
-            int_expr(pos + 3).product(self.get(src, int_expr(3))),
+            self.int_expr(pos).product(self.get(src.clone(), self.int_expr(0))),
+            self.int_expr(pos + 1).product(self.get(src.clone(), self.int_expr(1))),
+            self.int_expr(pos + 2).product(self.get(src.clone(), self.int_expr(2))),
+            self.int_expr(pos + 3).product(self.get(src, self.int_expr(3))),
         ]))
     }
 
     /// Returns an expression that represents the transpose of m using shufps.
     fn transpose_shufps(&self, m: Expression) -> Expression {
-        let s = Expression::univ().product(int_expr(0)); // s = new int[16];
-        let t = Expression::univ().product(int_expr(0)); // t = new int[16];
+        let s = Expression::UNIV.product(self.int_expr(0)); // s = new int[16];
+        let t = Expression::UNIV.product(self.int_expr(0)); // t = new int[16];
 
         let s0 = self.wr4(
             s.clone(),
@@ -221,6 +224,14 @@ impl Transpose4x4UnaryL {
         let factory = universe.factory();
         let mut bounds = Bounds::new(universe);
 
+        // Tell the solver to interpret integer objects as their corresponding integer values
+        // (matches Java: for (int i = 0; i < 16; i++) b.boundExactly(i, f.setOf(i));)
+        for i in 0..16 {
+            let istr = i.to_string();
+            let tuple_set = factory.tuple_set(&[&[istr.as_str()]]).unwrap();
+            bounds.bound_exactly_int(i, tuple_set).unwrap();
+        }
+
         // s3: { 0, 1, 2, 3 }
         let s3 = factory.tuple_set(&[&["0"], &["1"], &["2"], &["3"]]).unwrap();
         // s12: { 0, ..., 12 }
@@ -260,11 +271,11 @@ impl Transpose4x4UnaryL {
 
     /// Converts an integer array to a binary relation expression.
     /// Returns 0->val[0] + 1->val[1] + ... + (val.length-1)->val[val.length-1]
-    fn to_expr(val: &[i32]) -> Expression {
+    fn to_expr(&self, val: &[i32]) -> Expression {
         let exprs: Vec<Expression> = val
             .iter()
             .enumerate()
-            .map(|(i, &v)| int_expr(i as i32).product(int_expr(v)))
+            .map(|(i, &v)| self.int_expr(i as i32).product(self.int_expr(v)))
             .collect();
         Expression::union_all(exprs)
     }
@@ -274,7 +285,7 @@ impl Transpose4x4UnaryL {
         let expected = transpose(m);
         let formula = self
             .invariants()
-            .and(Self::to_expr(&expected).equals(self.transpose_shufps(Self::to_expr(m))));
+            .and(self.to_expr(&expected).equals(self.transpose_shufps(self.to_expr(m))));
 
         let mut options = Options::default();
         options.bool_options.bitwidth = 5;
