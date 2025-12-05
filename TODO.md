@@ -202,7 +202,7 @@ NOTES:
 - [ ] SudokuDatabase.java
 - N/A SudokuParser.java (Utility class)
 
-#### tptp/ (23 total, 9 complete + 1 base module)
+#### tptp/ (23 total, 10 complete + 1 base module)
 - [x] ALG195.java
 - [x] ALG195_1.java
 - [x] ALG197.java
@@ -214,7 +214,7 @@ NOTES:
 - [x] GEO158.java
 - [ ] GEO159.java
 - [ ] GRA013_026.java
-- [ ] LAT258.java
+- [x] LAT258.java
 - [ ] MED001.java
 - [ ] MED007.java
 - [ ] MED009.java
@@ -253,12 +253,12 @@ NOTES:
 - [ ] ExamplesTest.java (tests that examples run)
 
 ### Summary
-- Examples: 43/62 relevant complete (69%) - excluding utility classes (ListEncoding, ListViz, Graph, SudokuParser, Quasigroups7 base module)
+- Examples: 44/62 relevant complete (71%) - excluding utility classes (ListEncoding, ListViz, Graph, SudokuParser, Quasigroups7 base module)
   - Alloy: 19/19 complete ✅
   - BMC: 3/4 (ListCheck, ListRepair, ListSynth; List remaining)
   - CSP: 8/9 (BlockedNQueens2, GraphColoring2, HamiltonianCycle2 remaining)
   - Sudoku: 1/2 (SudokuDatabase remaining)
-  - TPTP: 9/23 (NUM374, NUM378, ALG195, ALG195_1, ALG197, ALG212, GEO091, GEO158; 14 examples remaining)
+  - TPTP: 10/23 (NUM374, NUM378, ALG195, ALG195_1, ALG197, ALG212, GEO091, GEO158, LAT258; 13 examples remaining)
   - Xpose: 3/3 complete ✅
 - Unit Tests: 2/13 complete (15%)
 - Features completed:
