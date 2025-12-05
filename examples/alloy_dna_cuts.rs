@@ -242,10 +242,54 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
 
 #[test]
 fn test_dna_cuts() {
+    // Use a configuration where all bases are used (n=4, one per link)
     let model = DNACuts::new(2);
+
+    // Create bounds with deterministic base assignment that uses all bases
+    let n = 4;
+    let mut atoms = vec!["A", "T", "G", "C"];
+    let link_names: Vec<String> = (0..n).map(|i| format!("Link{}", i)).collect();
+    for name in &link_names {
+        atoms.push(name.as_str());
+    }
+
+    let universe = kodkod_rs::instance::Universe::new(&atoms).unwrap();
+    let factory = universe.factory();
+    let mut bounds = kodkod_rs::instance::Bounds::new(universe);
+
+    let bases = factory.range(factory.tuple(&["A"]).unwrap(), factory.tuple(&["C"]).unwrap()).unwrap();
+    let links = factory.range(factory.tuple(&["Link0"]).unwrap(), factory.tuple(&["Link3"]).unwrap()).unwrap();
+
+    bounds.bound_exactly(&model.base, bases).unwrap();
+    bounds.bound_exactly(&model.link, links.clone()).unwrap();
+    bounds.bound(&model.cut_link, factory.none(1), links.clone()).unwrap();
+    bounds.bound(&model.join_link, factory.none(1), links).unwrap();
+
+    // Assign each link a DIFFERENT base to ensure all bases are used
+    let mut base_sequence = factory.none(2);
+    let base_atoms = ["A", "T", "G", "C"];
+    for i in 0..n {
+        base_sequence.add(factory.tuple(&[&format!("Link{}", i), base_atoms[i]]).unwrap()).unwrap();
+    }
+    bounds.bound_exactly(&model.base_rel, base_sequence).unwrap();
+
+    // Partner relation
+    let mut partners = factory.none(2);
+    partners.add(factory.tuple(&["A", "T"]).unwrap()).unwrap();
+    partners.add(factory.tuple(&["T", "A"]).unwrap()).unwrap();
+    partners.add(factory.tuple(&["G", "C"]).unwrap()).unwrap();
+    partners.add(factory.tuple(&["C", "G"]).unwrap()).unwrap();
+    bounds.bound_exactly(&model.partner, partners).unwrap();
+
+    // Link ordering
+    let mut link_ord = factory.none(2);
+    for i in 1..n {
+        link_ord.add(factory.tuple(&[&format!("Link{}", i - 1), &format!("Link{}", i)]).unwrap()).unwrap();
+    }
+    bounds.bound_exactly(&model.next, link_ord).unwrap();
+
     let formula = model.show();
-    let bounds = model.bounds(4).expect("Failed to create bounds");
-    let solver = Solver::new(Options::default());
+    let solver = kodkod_rs::solver::Solver::new(kodkod_rs::solver::Options::default());
     let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
-    assert!(solution.is_sat(), "DNACuts should be SAT");
+    assert!(solution.is_sat(), "DNACuts should be SAT with all bases used");
 }

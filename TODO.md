@@ -202,16 +202,16 @@ NOTES:
 - [ ] SudokuDatabase.java
 - N/A SudokuParser.java (Utility class)
 
-#### tptp/ (23 total, 6 complete + 1 base module)
+#### tptp/ (23 total, 9 complete + 1 base module)
 - [x] ALG195.java
 - [x] ALG195_1.java
 - [x] ALG197.java
-- [ ] ALG212.java
+- [x] ALG212.java
 - [ ] COM008.java
-- [ ] GEO091.java
+- [x] GEO091.java
 - [ ] GEO092.java
 - [ ] GEO115.java
-- [ ] GEO158.java
+- [x] GEO158.java
 - [ ] GEO159.java
 - [ ] GRA013_026.java
 - [ ] LAT258.java
@@ -229,8 +229,8 @@ NOTES:
 
 #### xpose/ (3 total)
 - [x] Transpose4x4.java
-- [ ] Transpose4x4UnaryL.java
-- [ ] Transpose4x4UnaryLR.java
+- [x] Transpose4x4UnaryL.java
+- [x] Transpose4x4UnaryLR.java
 
 ### Tests to Port
 
@@ -253,13 +253,13 @@ NOTES:
 - [ ] ExamplesTest.java (tests that examples run)
 
 ### Summary
-- Examples: 37/62 relevant complete (60%) - excluding utility classes (ListEncoding, ListViz, Graph, SudokuParser, Quasigroups7 base module)
+- Examples: 43/62 relevant complete (69%) - excluding utility classes (ListEncoding, ListViz, Graph, SudokuParser, Quasigroups7 base module)
   - Alloy: 19/19 complete ✅
   - BMC: 3/4 (ListCheck, ListRepair, ListSynth; List remaining)
   - CSP: 8/9 (BlockedNQueens2, GraphColoring2, HamiltonianCycle2 remaining)
   - Sudoku: 1/2 (SudokuDatabase remaining)
-  - TPTP: 5/23 (NUM374, NUM378, ALG195, ALG195_1, ALG197; 18 theorem-proving examples remaining)
-  - Xpose: 1/3 (Transpose4x4UnaryL, Transpose4x4UnaryLR remaining)
+  - TPTP: 9/23 (NUM374, NUM378, ALG195, ALG195_1, ALG197, ALG212, GEO091, GEO158; 14 examples remaining)
+  - Xpose: 3/3 complete ✅
 - Unit Tests: 2/13 complete (15%)
 - Features completed:
   - ✅ Skolemization - Eliminate existential quantifiers (src/simplify/skolemizer.rs)
