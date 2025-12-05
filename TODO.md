@@ -91,22 +91,28 @@
 
 ### Investigations
 
-- **CNF size difference**: Transpose4x4UnaryL comparison (INVESTIGATED & PARTIALLY FIXED)
-  - **Findings**:
-    - Java: 10533 vars, 36835 clauses (translation 86ms, solving 1796ms)
-    - Rust (before caching): 18132 vars, 41792 clauses (translation 13s, solving 1.4s)
-    - Rust (after full cache): 18132 vars, 41792 clauses (translation 20ms, solving 0.7-2.6s)
-  - **Root cause**: Missing expression caching in Rust translator
-  - **Fix implemented**: Full FOL2BoolCache parity with Java (src/translator/cache.rs ~500 LOC)
-    - SharingDetector: Finds nodes that appear multiple times in AST
-    - FreeVariableCollector: Tracks free variables for each node
-    - NoVarRecord/MultiVarRecord: Cache with variable binding support
-    - TranslationCache: Full cache with lookup keyed by node + variable bindings
-    - Translation speedup: 13s → 20ms (650x faster)
-  - **Remaining gap**: Rust still generates 1.72x more CNF variables than Java
-    - NOT due to caching (full Java-parity cache now implemented)
-    - Must be due to different BooleanFactory optimizations or Tseitin encoding
-    - Future investigation: Compare BooleanFactory.and_multi/or_multi behavior
+- **CNF size difference**: Transpose4x4UnaryL comparison (INVESTIGATED)
+  - **Current state**:
+    - Java: 10533 vars, 36835 clauses (translation 109ms, solving 1026ms)
+    - Rust: 18132 vars, 41792 clauses (translation 20ms, solving ~400ms)
+    - Rust generates 1.72x more CNF variables but translates 5x faster
+  - **Investigated optimizations**:
+    - ✅ Full FOL2BoolCache parity with Java (src/translator/cache.rs ~500 LOC)
+    - ✅ Subsumption detection (JoJ): `(a & b) & (a & b & c) = (a & b & c)`
+    - ✅ Absorption law: `p AND (p OR q) = p` and `p OR (p AND q) = p`
+    - These don't reduce CNF size for Transpose4x4UnaryL workload
+  - **Root cause**: Java's BooleanFactory uses a fundamentally different architecture:
+    - Java uses type-dispatched Assembler pattern with 15 specialized handlers
+    - Each operator-pair combination (AND-AND, AND-OR, AND-NOT, etc.) has custom logic
+    - Java applies optimizations during BINARY gate assembly, not multi-input
+    - Java's cache uses semantic equivalence (flattened inputs), not structural keys
+    - Java's depth-limited `flatten()` and `contains()` methods enable deep comparisons
+  - **What would be needed for parity**:
+    - Rewrite BooleanFactory to use Assembler dispatch pattern
+    - Implement `contains(op, label, depth)` for depth-limited input search
+    - Implement lazy `flatten(op, set, depth)` for semantic cache lookup
+    - This would be a significant architectural change (~500+ LOC rewrite)
+  - **Performance note**: Despite more CNF variables, Rust solving is often faster
   - **Note**: Integer bounds MUST be set for synthesis examples using IntConstant.toExpression()
 - **Implement proof/unsat core extraction system**
   - Required for: ListDebug.java example

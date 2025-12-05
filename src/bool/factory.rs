@@ -4,7 +4,7 @@
 //! Uses interior mutability (Cell/RefCell) to avoid &mut self everywhere.
 
 use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind, MatrixArena};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::mem;
@@ -129,6 +129,59 @@ impl BooleanFactory {
             return inputs.into_iter().next().unwrap();
         }
 
+        // Apply subsumption law (JoJ) BEFORE flattening: (a & b) & (a & b & c) = (a & b & c)
+        // If one AND gate's inputs are a subset of another's, keep the superset
+        // This must happen before flattening or the gates will be expanded
+        if inputs.len() > 1 {
+            // Collect flattened labels for all AND gates (without modifying inputs)
+            let flattened: Vec<Option<FxHashSet<i32>>> = inputs
+                .iter()
+                .map(|input| self.get_flattened_labels(input, true))
+                .collect();
+
+            let mut subsume_remove = Vec::new();
+            for i in 0..inputs.len() {
+                if subsume_remove.contains(&i) {
+                    continue;
+                }
+                if let Some(ref set_i) = flattened[i] {
+                    for j in (i + 1)..inputs.len() {
+                        if subsume_remove.contains(&j) {
+                            continue;
+                        }
+                        if let Some(ref set_j) = flattened[j] {
+                            // For AND: if set_i ⊂ set_j, remove i (keep j, the superset)
+                            // For AND: if set_j ⊂ set_i, remove j (keep i, the superset)
+                            if set_i.len() < set_j.len() && set_i.iter().all(|x| set_j.contains(x)) {
+                                subsume_remove.push(i);
+                                break; // i is removed, no need to check more
+                            } else if set_j.len() < set_i.len() && set_j.iter().all(|x| set_i.contains(x)) {
+                                subsume_remove.push(j);
+                            } else if set_i.len() == set_j.len() && set_i == set_j {
+                                // Same flattened inputs - remove one (keep earlier, remove later)
+                                subsume_remove.push(j);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort and deduplicate removal indices
+            subsume_remove.sort_unstable();
+            subsume_remove.dedup();
+            // Remove in reverse order
+            for &i in subsume_remove.iter().rev() {
+                inputs.remove(i);
+            }
+
+            if inputs.is_empty() {
+                return self.constant(true);
+            }
+            if inputs.len() == 1 {
+                return inputs.into_iter().next().unwrap();
+            }
+        }
+
         // Flatten nested AND gates into a single multi-input AND
         let mut flattened = Vec::new();
         for input in inputs {
@@ -251,6 +304,59 @@ impl BooleanFactory {
         }
         if inputs.len() == 1 {
             return inputs.into_iter().next().unwrap();
+        }
+
+        // Apply subsumption law (JoJ) BEFORE flattening: (a | b) | (a | b | c) = (a | b | c)
+        // If one OR gate's inputs are a subset of another's, keep the superset
+        // This must happen before flattening or the gates will be expanded
+        if inputs.len() > 1 {
+            // Collect flattened labels for all OR gates (without modifying inputs)
+            let flattened: Vec<Option<FxHashSet<i32>>> = inputs
+                .iter()
+                .map(|input| self.get_flattened_labels(input, false))
+                .collect();
+
+            let mut subsume_remove = Vec::new();
+            for i in 0..inputs.len() {
+                if subsume_remove.contains(&i) {
+                    continue;
+                }
+                if let Some(ref set_i) = flattened[i] {
+                    for j in (i + 1)..inputs.len() {
+                        if subsume_remove.contains(&j) {
+                            continue;
+                        }
+                        if let Some(ref set_j) = flattened[j] {
+                            // For OR: if set_i ⊂ set_j, remove i (keep j, the superset)
+                            // For OR: if set_j ⊂ set_i, remove j (keep i, the superset)
+                            if set_i.len() < set_j.len() && set_i.iter().all(|x| set_j.contains(x)) {
+                                subsume_remove.push(i);
+                                break; // i is removed, no need to check more
+                            } else if set_j.len() < set_i.len() && set_j.iter().all(|x| set_i.contains(x)) {
+                                subsume_remove.push(j);
+                            } else if set_i.len() == set_j.len() && set_i == set_j {
+                                // Same flattened inputs - remove one (keep earlier, remove later)
+                                subsume_remove.push(j);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort and deduplicate removal indices
+            subsume_remove.sort_unstable();
+            subsume_remove.dedup();
+            // Remove in reverse order
+            for &i in subsume_remove.iter().rev() {
+                inputs.remove(i);
+            }
+
+            if inputs.is_empty() {
+                return self.constant(false);
+            }
+            if inputs.len() == 1 {
+                return inputs.into_iter().next().unwrap();
+            }
         }
 
         // Flatten nested OR gates into a single multi-input OR
@@ -534,6 +640,77 @@ impl BooleanFactory {
         let label = self.next_label.get();
         self.next_label.set(label + 1);
         label as i32
+    }
+
+    /// Flattens a gate's inputs by recursively extracting same-op children.
+    /// Returns the set of leaf input labels (not including same-op child gates).
+    /// This is used for subsumption checking.
+    ///
+    /// For example, flattening AND gate `(a & b) & c` where `(a & b)` is also an AND gate
+    /// returns `{a, b, c}`.
+    ///
+    /// # Arguments
+    /// * `value` - The value to flatten
+    /// * `is_and` - If true, we're flattening AND gates; if false, flattening OR gates
+    fn flatten_gate_inputs<'arena>(&'arena self, value: &BoolValue<'arena>, is_and: bool) -> FxHashSet<i32> {
+        let mut result = FxHashSet::default();
+        match value {
+            BoolValue::Formula(f) => {
+                match f.kind() {
+                    FormulaKind::And(handle) if is_and => {
+                        // Recursively flatten AND children when we're in AND mode
+                        let inputs = self.arena.resolve_handle(*handle);
+                        for input in inputs {
+                            result.extend(self.flatten_gate_inputs(input, true));
+                        }
+                    }
+                    FormulaKind::Or(handle) if !is_and => {
+                        // Recursively flatten OR children when we're in OR mode
+                        let inputs = self.arena.resolve_handle(*handle);
+                        for input in inputs {
+                            result.extend(self.flatten_gate_inputs(input, false));
+                        }
+                    }
+                    _ => {
+                        // Any other value (variable, constant, wrong-op gate) - just use its label
+                        result.insert(value.label());
+                    }
+                }
+            }
+            _ => {
+                result.insert(value.label());
+            }
+        }
+        result
+    }
+
+    /// Get the flattened labels of inputs if this is a same-op gate.
+    /// Returns None if the value is not a formula or not the expected op.
+    fn get_flattened_labels<'arena>(&'arena self, value: &BoolValue<'arena>, is_and: bool) -> Option<FxHashSet<i32>> {
+        match value {
+            BoolValue::Formula(f) => {
+                match f.kind() {
+                    FormulaKind::And(handle) if is_and => {
+                        let inputs = self.arena.resolve_handle(*handle);
+                        let mut result = FxHashSet::default();
+                        for input in inputs {
+                            result.extend(self.flatten_gate_inputs(input, true));
+                        }
+                        Some(result)
+                    }
+                    FormulaKind::Or(handle) if !is_and => {
+                        let inputs = self.arena.resolve_handle(*handle);
+                        let mut result = FxHashSet::default();
+                        for input in inputs {
+                            result.extend(self.flatten_gate_inputs(input, false));
+                        }
+                        Some(result)
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
     }
 }
 
