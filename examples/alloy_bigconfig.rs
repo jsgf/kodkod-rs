@@ -328,3 +328,13 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     Ok(())
 }
 
+
+#[test]
+fn test_bigconfig() {
+    let model = Bigconfig::new(4); // closure_approx = 4
+    let bounds = model.bounds(2, 2, 4).expect("Failed to create bounds");
+    let solver = Solver::new(Options::default());
+    let formula = model.show();
+    let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
+    assert!(solution.is_sat(), "Bigconfig show should be SAT");
+}

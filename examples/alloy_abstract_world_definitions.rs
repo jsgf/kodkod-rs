@@ -1,6 +1,6 @@
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
-use kodkod_rs::solver::Solver;
+use kodkod_rs::solver::{Options, Solver};
 
 /// KK encoding of mondex/a.als together with mondex/common.als.
 struct AbstractWorldDefinitions {
@@ -614,3 +614,14 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     Ok(())
 }
 
+
+#[test]
+fn test_abstract_world_ab_op_total() {
+    let model = AbstractWorldDefinitions::new();
+    let bounds = model.bounds(3).expect("Failed to create bounds");
+    let solver = Solver::new(Options::default());
+    let formula = model.check_ab_op_total();
+    let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
+    // UNSAT means the assertion holds
+    assert!(!solution.is_sat(), "AbOp_total should be UNSAT (assertion holds)");
+}

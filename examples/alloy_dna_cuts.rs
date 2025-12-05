@@ -239,3 +239,13 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     Ok(())
 }
 
+
+#[test]
+fn test_dna_cuts() {
+    let model = DNACuts::new(2);
+    let formula = model.show();
+    let bounds = model.bounds(4).expect("Failed to create bounds");
+    let solver = Solver::new(Options::default());
+    let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
+    assert!(solution.is_sat(), "DNACuts should be SAT");
+}

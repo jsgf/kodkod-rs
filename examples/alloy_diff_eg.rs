@@ -244,3 +244,13 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     Ok(())
 }
 
+#[test]
+fn test_diff_eg() {
+    let model = DiffEg::new();
+    let solver = Solver::new(Options::default());
+    let formula = model.decls().and(model.run_pol());
+    let bounds = model.bounds(3).expect("Failed to create bounds");
+    let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
+    assert!(solution.is_sat(), "DiffEg should be SAT");
+}
+

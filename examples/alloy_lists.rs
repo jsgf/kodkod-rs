@@ -315,3 +315,24 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     Ok(())
 }
 
+
+#[test]
+fn test_lists_show() {
+    let model = Lists::new();
+    let bounds = model.bounds(3).expect("Failed to create bounds");
+    let solver = Solver::new(Options::default());
+    let formula = model.run_show();
+    let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
+    assert!(solution.is_sat(), "Lists show should be SAT");
+}
+
+#[test]
+fn test_lists_check_empties() {
+    let model = Lists::new();
+    let bounds = model.bounds(3).expect("Failed to create bounds");
+    let solver = Solver::new(Options::default());
+    let formula = model.check_empties();
+    let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
+    // UNSAT means the assertion holds (no counterexample)
+    assert!(!solution.is_sat(), "Lists check_empties should be UNSAT (assertion holds)");
+}
