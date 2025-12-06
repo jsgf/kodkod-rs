@@ -661,7 +661,7 @@ impl<'a> TranslationCache<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{Expression, Formula, Relation};
+    use crate::ast::{Expression, Relation};
 
     #[test]
     fn test_sharing_detector_no_sharing() {

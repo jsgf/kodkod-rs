@@ -25,7 +25,6 @@
 //! Following Java: kodkod.examples.csp.MagicSeries
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
-use kodkod_rs::engine::Evaluator;
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solution, Solver};
 

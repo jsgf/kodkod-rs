@@ -20,6 +20,8 @@
  * THE SOFTWARE.
  */
 
+#![allow(dead_code)]
+
 // Bounded verification demo.
 //
 // Following Java: kodkod.examples.bmc.ListCheck

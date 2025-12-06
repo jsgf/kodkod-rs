@@ -8,6 +8,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Variable};
 use kodkod_rs::solver::{Options, Solver};
 
 #[path = "tptp_med001.rs"]
+#[allow(dead_code)]
 mod tptp_med001;
 pub use tptp_med001::MED001;
 
@@ -47,7 +48,7 @@ impl MED009 {
             .and(Expression::from(x0.clone()).in_set(bcapacityne.union(bcapacityex)));
 
         let f1_exists = Formula::exists(
-            Decls::from(Decl::one_of(x0, Expression::univ())),
+            Decls::from(Decl::one_of(x0, Expression::UNIV)),
             f1
         );
 

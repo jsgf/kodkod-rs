@@ -24,7 +24,7 @@
 //!
 //! Following Java: kodkod.test.unit.EvaluatorTest (when ported)
 
-use kodkod_rs::ast::{Expression, Formula, IntExpression, Relation};
+use kodkod_rs::ast::{Expression, Formula, Relation};
 use kodkod_rs::engine::Evaluator;
 use kodkod_rs::instance::{atom_as_str, Instance, Universe};
 

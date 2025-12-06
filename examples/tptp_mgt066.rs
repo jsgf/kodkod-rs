@@ -29,7 +29,7 @@ impl MGT066 {
     /// leq = lt + iden
     pub fn definition_smaller_or_equal(&self) -> Formula {
         Expression::from(self.leq.clone()).equals(
-            Expression::from(self.lt.clone()).union(Expression::iden())
+            Expression::from(self.lt.clone()).union(Expression::IDEN)
         )
     }
 
@@ -37,7 +37,7 @@ impl MGT066 {
     /// geq = gt + iden
     pub fn definition_greater_or_equal(&self) -> Formula {
         Expression::from(self.geq.clone()).equals(
-            Expression::from(self.gt.clone()).union(Expression::iden())
+            Expression::from(self.gt.clone()).union(Expression::IDEN)
         )
     }
 
@@ -80,8 +80,8 @@ impl MGT066 {
             ));
 
         Formula::forall(
-            Decls::from(Decl::one_of(x, Expression::univ()))
-                .and(Decl::one_of(y, Expression::univ())),
+            Decls::from(Decl::one_of(x, Expression::UNIV))
+                .and(Decl::one_of(y, Expression::UNIV)),
             f
         )
     }

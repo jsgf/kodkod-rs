@@ -294,20 +294,6 @@ pub enum FormulaInner {
 }
 
 impl Formula {
-    /// Constant TRUE formula
-    #[inline]
-    #[deprecated(note = "Use Formula::TRUE constant instead")]
-    pub fn r#true() -> Formula {
-        Formula::TRUE
-    }
-
-    /// Constant FALSE formula
-    #[inline]
-    #[deprecated(note = "Use Formula::FALSE constant instead")]
-    pub fn r#false() -> Formula {
-        Formula::FALSE
-    }
-
     /// Returns a constant formula with the given value
     pub fn constant(value: bool) -> Formula {
         if value { Formula::TRUE } else { Formula::FALSE }

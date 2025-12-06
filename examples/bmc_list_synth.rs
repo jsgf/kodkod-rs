@@ -24,7 +24,7 @@
 //!
 //! Following Java: kodkod.examples.bmc.ListSynth
 
-use kodkod_rs::ast::{Expression, Formula, Relation, Variable, Decls, Decl};
+use kodkod_rs::ast::{Expression, Formula, Relation};
 use kodkod_rs::solver::{Solution, Solver, Options};
 use kodkod_rs::instance::{Bounds, Universe};
 

@@ -9,6 +9,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::Bounds;
 use kodkod_rs::solver::{Options, Solver};
 
+#[allow(dead_code)]
 mod tptp_geo158;
 pub use tptp_geo158::GEO158;
 

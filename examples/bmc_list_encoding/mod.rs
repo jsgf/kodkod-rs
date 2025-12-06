@@ -20,6 +20,8 @@
  * THE SOFTWARE.
  */
 
+#![allow(dead_code)]
+
 // Encoding skeleton for bounded model checking of list operations.
 // Some parts will change depending on whether we are performing
 // verification, repair or synthesis.

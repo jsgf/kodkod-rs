@@ -23,6 +23,7 @@
 // A KK encoding of ALG195+1.p from http://www.cs.miami.edu/~tptp/
 // Following Java: kodkod.examples.tptp.ALG195
 
+#[allow(dead_code)]
 mod tptp_quasigroups7;
 
 use kodkod_rs::ast::{Expression, Formula, Relation};

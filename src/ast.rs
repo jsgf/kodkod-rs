@@ -320,31 +320,6 @@ pub enum ConstantExpr {
 }
 
 impl Expression {
-    /// Universal relation constant
-    #[inline]
-    #[deprecated(note = "Use Expression::UNIV constant instead")]
-    pub fn univ() -> Expression {
-        Expression::UNIV
-    }
-    /// Identity relation constant
-    #[inline]
-    #[deprecated(note = "Use Expression::IDEN constant instead")]
-    pub fn iden() -> Expression {
-        Expression::IDEN
-    }
-    /// Empty relation constant
-    #[inline]
-    #[deprecated(note = "Use Expression::NONE constant instead")]
-    pub fn none() -> Expression {
-        Expression::NONE
-    }
-    /// Integer relation constant
-    #[inline]
-    #[deprecated(note = "Use Expression::INTS constant instead")]
-    pub fn ints() -> Expression {
-        Expression::INTS
-    }
-
     /// Returns a reference to the inner expression
     pub fn inner(&self) -> Cow<'_, ExpressionInner> {
         match self {

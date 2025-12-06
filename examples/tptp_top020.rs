@@ -87,27 +87,27 @@ impl TOP020 {
         let a = Variable::unary("A");
         let b = Variable::unary("B");
 
-        let f0 = self.coerce.clone().function(Expression::univ(), Expression::univ());
-        let f1 = self.diagonal.clone().function(Expression::univ(), Expression::univ());
+        let f0 = self.coerce.clone().function(Expression::UNIV, Expression::UNIV);
+        let f1 = self.diagonal.clone().function(Expression::UNIV, Expression::UNIV);
 
         let f2 = self.the_product_top_space_of(Expression::from(a.clone()), Expression::from(b.clone())).one();
         let f2 = Formula::forall(
-            Decls::from(Decl::one_of(a.clone(), Expression::univ()))
-                .and(Decl::one_of(b.clone(), Expression::univ())),
+            Decls::from(Decl::one_of(a.clone(), Expression::UNIV))
+                .and(Decl::one_of(b.clone(), Expression::UNIV)),
             f2
         );
 
         let f3 = self.the_product_of(Expression::from(a.clone()), Expression::from(b.clone())).one();
         let f3 = Formula::forall(
-            Decls::from(Decl::one_of(a.clone(), Expression::univ()))
-                .and(Decl::one_of(b.clone(), Expression::univ())),
+            Decls::from(Decl::one_of(a.clone(), Expression::UNIV))
+                .and(Decl::one_of(b.clone(), Expression::UNIV)),
             f3
         );
 
         let f4 = self.the_ordered_pair(Expression::from(a.clone()), Expression::from(b.clone())).one();
         let f4 = Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f4
         );
 
@@ -133,15 +133,15 @@ impl TOP020 {
             .some();
 
         let f2 = Formula::forall(
-            Decls::from(Decl::one_of(y, Expression::univ())),
+            Decls::from(Decl::one_of(y, Expression::UNIV)),
             f0.implies(f1)
         );
 
         let result = f2.implies(self.closed_in(Expression::from(a.clone()), Expression::from(x.clone())));
 
         Formula::forall(
-            Decls::from(Decl::one_of(x, Expression::univ()))
-                .and(Decl::one_of(a, Expression::univ())),
+            Decls::from(Decl::one_of(x, Expression::UNIV))
+                .and(Decl::one_of(a, Expression::UNIV)),
             result
         )
     }
@@ -192,10 +192,10 @@ impl TOP020 {
         );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(x, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ()))
-                .and(Decl::one_of(y, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(x, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV))
+                .and(Decl::one_of(y, Expression::UNIV)),
             f0.implies(f1)
         )
     }
@@ -222,9 +222,9 @@ impl TOP020 {
         let f1 = ordered.intersection(e0.product(e1).product(Expression::from(x.clone()))).some();
 
         Formula::forall(
-            Decls::from(Decl::one_of(s, Expression::univ()))
-                .and(Decl::one_of(t, Expression::univ()))
-                .and(Decl::one_of(x, Expression::univ())),
+            Decls::from(Decl::one_of(s, Expression::UNIV))
+                .and(Decl::one_of(t, Expression::UNIV))
+                .and(Decl::one_of(x, Expression::UNIV)),
             f0.implies(f1)
         )
     }
@@ -248,9 +248,9 @@ impl TOP020 {
         let f1 = ordered.intersection(e0.product(e1).product(Expression::from(x.clone()))).some();
 
         Formula::forall(
-            Decls::from(Decl::one_of(x, Expression::univ()))
-                .and(Decl::one_of(s, Expression::univ()))
-                .and(Decl::one_of(t, Expression::univ())),
+            Decls::from(Decl::one_of(x, Expression::UNIV))
+                .and(Decl::one_of(s, Expression::UNIV))
+                .and(Decl::one_of(t, Expression::UNIV)),
             f0.iff(f1)
         )
     }
@@ -270,8 +270,8 @@ impl TOP020 {
             );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -289,10 +289,10 @@ impl TOP020 {
             .and(Expression::from(b.clone()).equals(Expression::from(d.clone())));
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ()))
-                .and(Decl::one_of(c, Expression::univ()))
-                .and(Decl::one_of(d, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV))
+                .and(Decl::one_of(c, Expression::UNIV))
+                .and(Decl::one_of(d, Expression::UNIV)),
             f0.implies(f1)
         )
     }
@@ -312,12 +312,12 @@ impl TOP020 {
 
         let a_set = member.join(self.coerce_to_class(Expression::from(s.clone())));
         let f1 = ordered.intersection(
-            a_set.clone().product(a_set).intersection(Expression::iden()).product(Expression::from(x.clone()))
+            a_set.clone().product(a_set).intersection(Expression::IDEN).product(Expression::from(x.clone()))
         ).some();
 
         Formula::forall(
-            Decls::from(Decl::one_of(x, Expression::univ()))
-                .and(Decl::one_of(s, Expression::univ())),
+            Decls::from(Decl::one_of(x, Expression::UNIV))
+                .and(Decl::one_of(s, Expression::UNIV)),
             f0.iff(f1)
         )
     }

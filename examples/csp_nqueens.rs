@@ -28,7 +28,6 @@
 //! Following Java: kodkod.examples.csp.NQueens
 
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, IntExpression, Relation, Variable};
-use kodkod_rs::engine::Evaluator;
 use kodkod_rs::instance::{Bounds, Instance, Universe};
 use kodkod_rs::solver::{Options, Solution, Solver};
 
@@ -400,7 +399,7 @@ impl NQueens for LogQueens {
 
         // Build board
         let mut board = vec![vec![false; self.n]; self.n];
-        for (queen, (col_sum, row_sum)) in &queen_positions {
+        for (_queen, (col_sum, row_sum)) in &queen_positions {
             if *col_sum >= 0 && *row_sum >= 0 {
                 let col = *col_sum as usize;
                 let row = *row_sum as usize;
@@ -561,7 +560,7 @@ impl NQueens for IntQueens {
                     let col_atom = x_tuple.atom(1).unwrap();
                     let queen_str = atom_as_str(queen_atom).unwrap();
                     let col_str = atom_as_str(col_atom).unwrap();
-                    let queen_idx: usize = queen_str.parse().unwrap();
+                    let _queen_idx: usize = queen_str.parse().unwrap();
                     let col: usize = col_str.parse().unwrap();
 
                     // Find corresponding row

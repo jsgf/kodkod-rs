@@ -60,14 +60,14 @@ impl SET948 {
     }
 
     pub fn decls(&self) -> Formula {
-        let f0 = self.union.clone().function(Expression::univ(), Expression::univ());
+        let f0 = self.union.clone().function(Expression::UNIV, Expression::UNIV);
         let a = Variable::unary("A");
         let b = Variable::unary("B");
         let f1 = self.set_intersection2(Expression::from(a.clone()), Expression::from(b.clone())).one();
         let f2 = self.set_union2(Expression::from(a.clone()), Expression::from(b.clone())).one();
         f0.and(Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f1.and(f2)
         ))
     }
@@ -78,8 +78,8 @@ impl SET948 {
         let f = self.in_set_of(Expression::from(a.clone()), Expression::from(b.clone()))
             .implies(self.in_set_of(Expression::from(b.clone()), Expression::from(a.clone())).not());
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -90,8 +90,8 @@ impl SET948 {
         let f = self.set_union2(Expression::from(a.clone()), Expression::from(b.clone()))
             .equals(self.set_union2(Expression::from(b.clone()), Expression::from(a.clone())));
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -105,8 +105,8 @@ impl SET948 {
                     .and(self.subset_of(Expression::from(b.clone()), Expression::from(a.clone())))
             );
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -128,9 +128,9 @@ impl SET948 {
             );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ()))
-                .and(Decl::one_of(c, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV))
+                .and(Decl::one_of(c, Expression::UNIV)),
             f
         )
     }
@@ -147,8 +147,8 @@ impl SET948 {
             );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -170,9 +170,9 @@ impl SET948 {
             );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ()))
-                .and(Decl::one_of(c, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV))
+                .and(Decl::one_of(c, Expression::UNIV)),
             f
         )
     }
@@ -190,8 +190,8 @@ impl SET948 {
             );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -204,8 +204,8 @@ impl SET948 {
                 self.is_empty(self.set_union2(Expression::from(a.clone()), Expression::from(b.clone()))).not()
             );
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -218,8 +218,8 @@ impl SET948 {
                 self.is_empty(self.set_union2(Expression::from(b.clone()), Expression::from(a.clone()))).not()
             );
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -228,14 +228,14 @@ impl SET948 {
         let a = Variable::unary("A");
         let f = self.set_union2(Expression::from(a.clone()), Expression::from(a.clone()))
             .equals(Expression::from(a.clone()));
-        Formula::forall(Decls::from(Decl::one_of(a, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(a, Expression::UNIV)), f)
     }
 
     pub fn idempotence_k3_xboole_0(&self) -> Formula {
         let a = Variable::unary("A");
         let f = self.set_intersection2(Expression::from(a.clone()), Expression::from(a.clone()))
             .equals(Expression::from(a.clone()));
-        Formula::forall(Decls::from(Decl::one_of(a, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(a, Expression::UNIV)), f)
     }
 
     pub fn rc1_xboole_0(&self) -> Formula {
@@ -243,13 +243,13 @@ impl SET948 {
     }
 
     pub fn rc2_xboole_0(&self) -> Formula {
-        Expression::univ().difference(Expression::from(self.empty.clone())).some()
+        Expression::UNIV.difference(Expression::from(self.empty.clone())).some()
     }
 
     pub fn reflexivity_r1_tarski(&self) -> Formula {
         let a = Variable::unary("A");
         let f = self.subset_of(Expression::from(a.clone()), Expression::from(a.clone()));
-        Formula::forall(Decls::from(Decl::one_of(a, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(a, Expression::UNIV)), f)
     }
 
     pub fn symmetry_r1_xboole_0(&self) -> Formula {
@@ -258,8 +258,8 @@ impl SET948 {
         let f = self.disjoint_of(Expression::from(a.clone()), Expression::from(b.clone()))
             .implies(self.disjoint_of(Expression::from(b.clone()), Expression::from(a.clone())));
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -280,8 +280,8 @@ impl SET948 {
             );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -299,8 +299,8 @@ impl SET948 {
         );
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f
         )
     }
@@ -342,8 +342,8 @@ impl SET948 {
         );
 
         let f0_forall = Formula::forall(
-            Decls::from(Decl::one_of(c, Expression::univ()))
-                .and(Decl::one_of(d, Expression::univ())),
+            Decls::from(Decl::one_of(c, Expression::UNIV))
+                .and(Decl::one_of(d, Expression::UNIV)),
             f0
         );
 
@@ -354,8 +354,8 @@ impl SET948 {
             ));
 
         Formula::forall(
-            Decls::from(Decl::one_of(a, Expression::univ()))
-                .and(Decl::one_of(b, Expression::univ())),
+            Decls::from(Decl::one_of(a, Expression::UNIV))
+                .and(Decl::one_of(b, Expression::UNIV)),
             f0_forall.implies(f1)
         )
     }

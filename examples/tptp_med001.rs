@@ -65,7 +65,7 @@ impl MED001 {
 
     /// Returns the irreflexivity_gt axiom.
     pub fn irreflexivity_gt(&self) -> Formula {
-        Expression::from(self.gt.clone()).intersection(Expression::iden()).no()
+        Expression::from(self.gt.clone()).intersection(Expression::IDEN).no()
     }
 
     /// Returns the transitivity_gt axiom.
@@ -81,7 +81,7 @@ impl MED001 {
         let bex = Expression::from(self.bcapacityex.clone());
         let bsn = Expression::from(self.bcapacitysn.clone());
 
-        Expression::univ().in_set(bne.clone().union(bex.clone()).union(bsn.clone()))
+        Expression::UNIV.in_set(bne.clone().union(bex.clone()).union(bsn.clone()))
             .and(bne.clone().intersection(bex.clone()).no())
             .and(bne.clone().intersection(bsn.clone()).no())
             .and(bex.intersection(bsn).no())
@@ -93,7 +93,7 @@ impl MED001 {
         let hypo = Expression::from(self.conditionhypo.clone());
         let normo = Expression::from(self.conditionnormo.clone());
 
-        Expression::univ().in_set(hyper.clone().union(hypo.clone()).union(normo.clone()))
+        Expression::UNIV.in_set(hyper.clone().union(hypo.clone()).union(normo.clone()))
             .and(hyper.clone().intersection(hypo.clone()).no())
             .and(hyper.clone().intersection(normo.clone()).no())
             .and(normo.intersection(hypo).no())
@@ -102,7 +102,7 @@ impl MED001 {
     /// Returns the insulin_effect axiom.
     pub fn insulin_effect(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f = x1.clone().in_set(Expression::from(self.drugi.clone()))
             .implies(x1.in_set(
@@ -110,47 +110,47 @@ impl MED001 {
                     .intersection(Expression::from(self.uptakepg.clone()))
             ));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the liver_glucose axiom.
     pub fn liver_glucose(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f = x1.clone().in_set(Expression::from(self.uptakelg.clone()))
             .implies(x1.in_set(Expression::from(self.releaselg.clone())).not());
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the sulfonylurea_effect axiom.
     pub fn sulfonylurea_effect(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f = x1.clone().in_set(Expression::from(self.drugi.clone()))
             .and(Expression::from(x0.clone()).in_set(Expression::from(self.bcapacityex.clone())).not())
             .implies(x1.in_set(Expression::from(self.bsecretioni.clone())));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the biguanide_effect axiom.
     pub fn biguanide_effect(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f = x1.clone().in_set(Expression::from(self.drugbg.clone()))
             .implies(x1.in_set(Expression::from(self.releaselg.clone())).not());
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the sn_cure_1 axiom.
     pub fn sn_cure_1(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.bsecretioni.clone()))
             .and(Expression::from(x0.clone()).in_set(Expression::from(self.bcapacitysn.clone())))
@@ -160,13 +160,13 @@ impl MED001 {
 
         let f = f0.implies(x1.in_set(Expression::from(self.conditionnormo.clone())));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the sn_cure_2 axiom.
     pub fn sn_cure_2(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.releaselg.clone())).not()
             .and(Expression::from(x0.clone()).in_set(Expression::from(self.bcapacitysn.clone())))
@@ -176,13 +176,13 @@ impl MED001 {
 
         let f = f0.implies(x1.in_set(Expression::from(self.conditionnormo.clone())));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the ne_cure axiom.
     pub fn ne_cure(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.releaselg.clone())).not()
             .or(x1.clone().in_set(Expression::from(self.uptakepg.clone())))
@@ -193,13 +193,13 @@ impl MED001 {
 
         let f = f0.implies(x1.in_set(Expression::from(self.conditionnormo.clone())));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the ex_cure axiom.
     pub fn ex_cure(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.uptakelg.clone()))
             .and(x1.clone().in_set(Expression::from(self.uptakepg.clone())))
@@ -212,7 +212,7 @@ impl MED001 {
                 .union(Expression::from(self.conditionhypo.clone()))
         ));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the axioms xorstep1 through xorstep7.
@@ -222,7 +222,7 @@ impl MED001 {
         let s2 = Expression::from(self.s2.clone());
         let s3 = Expression::from(self.s3.clone());
 
-        Expression::univ().in_set(s0.clone().union(s1.clone()).union(s2.clone()).union(s3.clone()))
+        Expression::UNIV.in_set(s0.clone().union(s1.clone()).union(s2.clone()).union(s3.clone()))
             .and(s0.clone().intersection(s1.clone()).no())
             .and(s0.clone().intersection(s2.clone()).no())
             .and(s0.clone().intersection(s3.clone()).no())
@@ -234,7 +234,7 @@ impl MED001 {
     /// Returns the normo axiom.
     pub fn normo(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.bsecretioni.clone()))
             .and(Expression::from(x0.clone()).in_set(Expression::from(self.bcapacitysn.clone())))
@@ -264,7 +264,7 @@ impl MED001 {
         let f = x1.in_set(Expression::from(self.conditionnormo.clone()))
             .implies(f0.or(f1).or(f2).or(f3));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the axioms step1 through step4.
@@ -278,7 +278,7 @@ impl MED001 {
         let drugi = Expression::from(self.drugi.clone());
 
         s1.clone().intersection(qilt27.clone()).in_set(drugsu.clone())
-            .and(s1.intersection(Expression::univ().difference(qilt27)).in_set(drugbg.clone()))
+            .and(s1.intersection(Expression::UNIV.difference(qilt27)).in_set(drugbg.clone()))
             .and(s2.in_set(drugbg.clone().intersection(drugsu.clone())))
             .and(s3.in_set(drugi.clone().intersection(drugsu.union(drugbg)).union(drugi)))
     }
@@ -299,7 +299,7 @@ impl MED001 {
     /// Returns the insulin_completion axiom.
     pub fn insulin_completion(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(
             Expression::from(self.uptakelg.clone())
@@ -307,24 +307,24 @@ impl MED001 {
         );
         let f = f0.implies(x1.in_set(Expression::from(self.drugi.clone())));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the uptake_completion axiom.
     pub fn uptake_completion(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.releaselg.clone())).not();
         let f = f0.implies(x1.in_set(Expression::from(self.uptakelg.clone())));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the su_completion axiom.
     pub fn su_completion(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.bsecretioni.clone()));
         let f = f0.implies(
@@ -332,24 +332,24 @@ impl MED001 {
                 .and(Expression::from(x0.clone()).in_set(Expression::from(self.bcapacityex.clone())).not())
         );
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the bg_completion axiom.
     pub fn bg_completion(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = x1.clone().in_set(Expression::from(self.releaselg.clone())).not();
         let f = f0.implies(x1.in_set(Expression::from(self.drugbg.clone())));
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the trans_ax1 axiom.
     pub fn trans_ax1(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = Expression::from(x0.clone()).in_set(Expression::from(self.s0.clone()))
             .and(x1.clone().in_set(Expression::from(self.conditionnormo.clone())).not());
@@ -359,13 +359,13 @@ impl MED001 {
 
         let f = f0.implies(f1);
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the trans_ax2 axiom.
     pub fn trans_ax2(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = Expression::from(x0.clone()).in_set(Expression::from(self.s1.clone()))
             .and(x1.clone().in_set(Expression::from(self.conditionnormo.clone())).not());
@@ -380,13 +380,13 @@ impl MED001 {
 
         let f = f0.implies(f1);
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the trans_ax3 axiom.
     pub fn trans_ax3(&self) -> Formula {
         let x0 = Variable::unary("X0");
-        let x1 = Expression::univ().difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
+        let x1 = Expression::UNIV.difference(Expression::from(x0.clone()).join(Expression::from(self.gt.clone())));
 
         let f0 = Expression::from(x0.clone()).in_set(Expression::from(self.s2.clone()))
             .and(x1.clone().in_set(Expression::from(self.conditionnormo.clone())).not());
@@ -398,7 +398,7 @@ impl MED001 {
 
         let f = f0.implies(f1);
 
-        Formula::forall(Decls::from(Decl::one_of(x0, Expression::univ())), f)
+        Formula::forall(Decls::from(Decl::one_of(x0, Expression::UNIV)), f)
     }
 
     /// Returns the conjunction of all axioms.

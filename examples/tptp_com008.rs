@@ -79,7 +79,7 @@ impl COM008 {
 
         eqdom.clone()
             .product(eqdom)
-            .intersection(Expression::iden())
+            .intersection(Expression::IDEN)
             .in_set(Expression::from(self.equalish.clone()))
     }
 

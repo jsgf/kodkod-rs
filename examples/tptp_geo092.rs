@@ -8,6 +8,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Variable};
 use kodkod_rs::solver::{Options, Solver};
 
 #[path = "tptp_geo158.rs"]
+#[allow(dead_code)]
 mod tptp_geo158;
 pub use tptp_geo158::GEO158;
 

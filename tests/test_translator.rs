@@ -271,7 +271,7 @@ fn test_comparison_reflexive_closure() {
     // *r22 in r21 + iden - should be satisfiable
     let r21 = Expression::from(test.r2[1].clone());
     let r22 = Expression::from(test.r2[2].clone());
-    let f = r22.reflexive_closure().in_set(r21.union(Expression::iden()));
+    let f = r22.reflexive_closure().in_set(r21.union(Expression::IDEN));
     assert!(test.is_satisfiable(&f));
 }
 

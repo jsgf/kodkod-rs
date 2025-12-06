@@ -1,6 +1,6 @@
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
-use kodkod_rs::solver::{Options, Solver};
+use kodkod_rs::solver::Solver;
 
 /// KK encoding of mondex/a.als together with mondex/common.als.
 struct AbstractWorldDefinitions {
