@@ -247,6 +247,28 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Main entry point: translate a formula to a boolean value
     /// Following Java: FOL2BoolTranslator visitor methods
     fn translate_formula(&self, formula: &Formula) -> BoolValue<'a> {
+        // Check translation cache (handles both shared nodes and free variables)
+        // Following Java: FOL2BoolCache.lookup()
+        {
+            let env = self.env.borrow();
+            if let Some(cached) = self.cache.borrow().lookup_formula(formula, &env) {
+                return cached;
+            }
+        }
+
+        let result = self.translate_formula_inner(formula);
+
+        // Cache the result
+        {
+            let env = self.env.borrow();
+            self.cache.borrow_mut().cache_formula(formula, result.clone(), &env);
+        }
+
+        result
+    }
+
+    /// Inner formula translation (no caching)
+    fn translate_formula_inner(&self, formula: &Formula) -> BoolValue<'a> {
         match &*formula.inner() {
             FormulaInner::Constant(b) => {
                 self.interpreter.factory().constant(*b)
