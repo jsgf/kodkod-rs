@@ -202,30 +202,30 @@ NOTES:
 - [ ] SudokuDatabase.java
 - N/A SudokuParser.java (Utility class)
 
-#### tptp/ (23 total, 10 complete + 1 base module)
+#### tptp/ (23 total, 23 complete + 1 base module) ✅
 - [x] ALG195.java
 - [x] ALG195_1.java
 - [x] ALG197.java
 - [x] ALG212.java
-- [ ] COM008.java
+- [x] COM008.java
 - [x] GEO091.java
-- [ ] GEO092.java
-- [ ] GEO115.java
+- [x] GEO092.java
+- [x] GEO115.java
 - [x] GEO158.java
-- [ ] GEO159.java
-- [ ] GRA013_026.java
+- [x] GEO159.java
+- [x] GRA013_026.java
 - [x] LAT258.java
-- [ ] MED001.java
-- [ ] MED007.java
-- [ ] MED009.java
-- [ ] MGT066.java
+- [x] MED001.java
+- [x] MED007.java
+- [x] MED009.java
+- [x] MGT066.java
 - [x] NUM374.java
 - [x] NUM378.java
 - [x] Quasigroups7.java (base module for ALG195, ALG197)
-- [ ] SET943.java
-- [ ] SET948.java
-- [ ] SET967.java
-- [ ] TOP020.java
+- [x] SET943.java
+- [x] SET948.java
+- [x] SET967.java
+- [x] TOP020.java
 
 #### xpose/ (3 total)
 - [x] Transpose4x4.java
@@ -253,12 +253,12 @@ NOTES:
 - [ ] ExamplesTest.java (tests that examples run)
 
 ### Summary
-- Examples: 44/62 relevant complete (71%) - excluding utility classes (ListEncoding, ListViz, Graph, SudokuParser, Quasigroups7 base module)
+- Examples: 57/62 relevant complete (92%) - excluding utility classes (ListEncoding, ListViz, Graph, SudokuParser, Quasigroups7 base module)
   - Alloy: 19/19 complete ✅
   - BMC: 3/4 (ListCheck, ListRepair, ListSynth; List remaining)
   - CSP: 8/9 (BlockedNQueens2, GraphColoring2, HamiltonianCycle2 remaining)
   - Sudoku: 1/2 (SudokuDatabase remaining)
-  - TPTP: 10/23 (NUM374, NUM378, ALG195, ALG195_1, ALG197, ALG212, GEO091, GEO158, LAT258; 13 examples remaining)
+  - TPTP: 23/23 complete ✅
   - Xpose: 3/3 complete ✅
 - Unit Tests: 2/13 complete (15%)
 - Features completed:
