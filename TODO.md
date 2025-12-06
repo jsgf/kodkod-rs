@@ -235,19 +235,19 @@ NOTES:
 ### Tests to Port
 
 #### Unit Tests
-- [ ] BooleanCircuitTest.java
+- [x] BooleanCircuitTest.java (covered by 20 tests in src/bool/factory.rs)
 - [x] BooleanMatrixTest.java (partial)
-- [ ] EnumerationTest.java
-- [ ] EvaluatorTest.java
-- [ ] IncrementalSolverTest.java
+- [ ] EnumerationTest.java (BLOCKED: requires solveAll/incremental solver)
+- [x] EvaluatorTest.java (22 tests in tests/test_evaluator.rs)
+- [ ] IncrementalSolverTest.java (BLOCKED: requires incremental solver)
 - [x] IntTest.java
-- [ ] ReductionAndProofTest.java
-- [ ] RegressionTests.java
-- [ ] SkolemizationTest.java
+- [ ] ReductionAndProofTest.java (BLOCKED: requires proof extraction)
+- [x] RegressionTests.java (5 tests ported, proof-related tests skipped)
+- [x] SkolemizationTest.java (7 tests in tests/test_skolemization.rs)
 - [ ] SparseSequenceTest.java
-- [ ] SymmetryBreakingTest.java
-- [ ] TranslatorTest.java
-- [ ] UCoreTest.java
+- [ ] SymmetryBreakingTest.java (may need implementation)
+- [x] TranslatorTest.java (26 tests in tests/test_translator.rs)
+- [ ] UCoreTest.java (BLOCKED: requires unsat core extraction)
 
 #### System Tests
 - [ ] ExamplesTest.java (tests that examples run)
@@ -260,7 +260,8 @@ NOTES:
   - Sudoku: 1/2 (SudokuDatabase remaining)
   - TPTP: 23/23 complete ✅
   - Xpose: 3/3 complete ✅
-- Unit Tests: 2/13 complete (15%)
+- Unit Tests: 7/13 complete (54%)
+  - 303 total tests passing
 - Features completed:
   - ✅ Skolemization - Eliminate existential quantifiers (src/simplify/skolemizer.rs)
   - ✅ Formula Flattening - NNF conversion, De Morgan's laws (src/simplify/flattener.rs)
