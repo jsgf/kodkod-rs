@@ -43,7 +43,11 @@
       "Bash(cargo check:*)",
       "Bash(timeout 15 cargo run:*)",
       "Bash(timeout 30 cargo check:*)",
-      "Bash(timeout 60 cargo check:*)"
+      "Bash(timeout 60 cargo check:*)",
+      "Bash(timeout 180 cargo build --release --examples)",
+      "Bash(for ex in alloy_pigeonhole alloy_handshake csp_nqueens tptp_num374)",
+      "Bash(timeout 5 cargo run:*)",
+      "Bash(cargo build:*)"
     ],
     "deny": [],
     "ask": []
