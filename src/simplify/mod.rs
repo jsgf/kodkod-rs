@@ -143,7 +143,7 @@ impl<'a> FormulaSimplifier<'a> {
             And => {
                 // Remove TRUE, detect FALSE
                 formulas.retain(|f| !is_true(f));
-                if formulas.iter().any(|f| is_false(f)) {
+                if formulas.iter().any(&is_false) {
                     return Formula::FALSE;
                 }
                 if formulas.is_empty() {
@@ -157,7 +157,7 @@ impl<'a> FormulaSimplifier<'a> {
             Or => {
                 // Remove FALSE, detect TRUE
                 formulas.retain(|f| !is_false(f));
-                if formulas.iter().any(|f| is_true(f)) {
+                if formulas.iter().any(is_true) {
                     return Formula::TRUE;
                 }
                 if formulas.is_empty() {
@@ -177,12 +177,12 @@ impl<'a> FormulaSimplifier<'a> {
         match &*body.inner() {
             FormulaInner::Constant(true) => {
                 // forall x | TRUE = TRUE, exists x | TRUE = TRUE
-                return Formula::TRUE;
+                Formula::TRUE
             }
             FormulaInner::Constant(false) => {
                 match quantifier {
-                    Quantifier::All => return Formula::TRUE, // forall x | FALSE = TRUE (vacuous)
-                    Quantifier::Some => return Formula::FALSE, // exists x | FALSE = FALSE
+                    Quantifier::All => Formula::TRUE, // forall x | FALSE = TRUE (vacuous)
+                    Quantifier::Some => Formula::FALSE, // exists x | FALSE = FALSE
                 }
             }
             _ => {

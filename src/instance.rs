@@ -77,8 +77,7 @@ impl<T: Any + Debug + Eq + Hash> Atom for T {
         // Upcast to Any for downcasting
         let other_any: &dyn Any = other;
         other_any
-            .downcast_ref::<T>()
-            .map_or(false, |other_t| self == other_t)
+            .downcast_ref::<T>() == Some(self)
     }
 
     fn atom_hash(&self) -> u64 {
@@ -514,12 +513,11 @@ impl TupleFactory {
             let mut found_idx = None;
             for (idx, universe_atom) in self.universe.inner.atoms.iter().enumerate() {
                 // Try to downcast to String to compare with str
-                if let Some(s) = atom_as_string(&**universe_atom) {
-                    if s == atom_str {
+                if let Some(s) = atom_as_string(&**universe_atom)
+                    && s == atom_str {
                         found_idx = Some(AtomIndex::new(idx));
                         break;
                     }
-                }
             }
             let idx = found_idx.ok_or_else(|| {
                 KodkodError::InvalidArgument(format!("Atom {} not in universe", atom_str))

@@ -240,7 +240,7 @@ impl Solver {
 
         if is_sat {
             // Extract solution from SAT model
-            let instance = self.extract_instance(sat_solver, &interpreter, &final_bounds)?;
+            let instance = self.extract_instance(sat_solver, interpreter, &final_bounds)?;
             Ok(Solution::Sat { instance, stats })
         } else {
             Ok(Solution::Unsat { stats })
@@ -302,8 +302,8 @@ fn extract_instance_from_solver(
         }
 
         // Check variables for uncertain tuples
-        if let Some(var_range) = interpreter.variable_ranges().get(relation) {
-            if let (Some(lower), Some(upper)) = (
+        if let Some(var_range) = interpreter.variable_ranges().get(relation)
+            && let (Some(lower), Some(upper)) = (
                 interpreter.lower_bounds().get(relation),
                 interpreter.upper_bounds().get(relation),
             ) {
@@ -323,7 +323,6 @@ fn extract_instance_from_solver(
                     }
                 }
             }
-        }
 
         instance.add(relation.clone(), tuple_set)?;
     }
@@ -357,21 +356,13 @@ pub struct SolutionIterator {
 
 /// Data extracted from LeafInterpreter needed for solution extraction
 /// This is cloned from the interpreter so we can drop the TranslationResult
+#[derive(Default)]
 struct SolutionExtractorData {
     var_ranges: FxHashMap<Relation, Range<u32>>,
     lower_bounds: FxHashMap<Relation, TupleSet>,
     upper_bounds: FxHashMap<Relation, TupleSet>,
 }
 
-impl Default for SolutionExtractorData {
-    fn default() -> Self {
-        Self {
-            var_ranges: FxHashMap::default(),
-            lower_bounds: FxHashMap::default(),
-            upper_bounds: FxHashMap::default(),
-        }
-    }
-}
 
 impl SolutionExtractorData {
     fn from_interpreter(interpreter: &LeafInterpreter) -> Self {
@@ -611,8 +602,8 @@ fn extract_instance_with_extractor(
         }
 
         // Check variables for uncertain tuples
-        if let Some(var_range) = extractor.var_ranges.get(relation) {
-            if let (Some(lower), Some(upper)) = (
+        if let Some(var_range) = extractor.var_ranges.get(relation)
+            && let (Some(lower), Some(upper)) = (
                 extractor.lower_bounds.get(relation),
                 extractor.upper_bounds.get(relation),
             ) {
@@ -632,7 +623,6 @@ fn extract_instance_with_extractor(
                     }
                 }
             }
-        }
 
         instance.add(relation.clone(), tuple_set)?;
     }

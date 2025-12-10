@@ -772,16 +772,16 @@ impl<'arena> BooleanMatrix<'arena> {
         }
 
         let values: Vec<BoolValue<'arena>> = self.cells.values().cloned().collect();
-        let result = factory.or_multi(values);
-        result
+        
+        factory.or_multi(values)
     }
 
     /// Multiplicity: none (all entries are FALSE)
     /// Following Java: BooleanMatrix.none()
     pub fn none(&self, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
         let some_val = self.some(factory);
-        let result = factory.not(some_val);
-        result
+        
+        factory.not(some_val)
     }
 
     /// Multiplicity: one (exactly one entry is TRUE)

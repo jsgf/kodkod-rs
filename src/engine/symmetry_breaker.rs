@@ -207,20 +207,18 @@ impl SymmetryBreaker {
 
         // Break TotalOrdering predicates first
         for pred in &sorted_preds {
-            if let RelationPredicate::TotalOrdering { .. } = pred {
-                if let Some(replacement) = self.break_total_order((*pred).clone(), aggressive) {
+            if let RelationPredicate::TotalOrdering { .. } = pred
+                && let Some(replacement) = self.break_total_order((*pred).clone(), aggressive) {
                     broken.insert((*pred).clone(), replacement);
                 }
-            }
         }
 
         // Then break Acyclic predicates
         for pred in &sorted_preds {
-            if let RelationPredicate::Acyclic { .. } = pred {
-                if let Some(replacement) = self.break_acyclic((*pred).clone(), aggressive) {
+            if let RelationPredicate::Acyclic { .. } = pred
+                && let Some(replacement) = self.break_acyclic((*pred).clone(), aggressive) {
                     broken.insert((*pred).clone(), replacement);
                 }
-            }
         }
 
         broken
@@ -234,9 +232,7 @@ impl SymmetryBreaker {
             let domain = self.bounds.upper_bound(&ordered)?.index_view();
 
             // Check if ordered is symmetric and first/last bounds contain min/max
-            if self.symmetric_column_partitions(&ordered).is_none() {
-                return None;
-            }
+            self.symmetric_column_partitions(&ordered)?;
 
             let first_upper = self.bounds.upper_bound(&first)?.index_view();
             let last_upper = self.bounds.upper_bound(&last)?.index_view();
@@ -397,9 +393,7 @@ impl SymmetryBreaker {
                 }
             }
 
-            if col_parts[i].is_none() {
-                return None;
-            }
+            col_parts[i].as_ref()?;
 
             min /= usize;
         }

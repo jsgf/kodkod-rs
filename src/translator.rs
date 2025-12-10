@@ -435,15 +435,15 @@ impl<'a> FOL2BoolTranslator<'a> {
                 };
                 let factory = self.interpreter.factory();
 
-                let result = match op {
+                
+                match op {
                     BinaryOp::Union => left_matrix.union(&right_matrix, factory),
                     BinaryOp::Intersection => left_matrix.intersection(&right_matrix, factory),
                     BinaryOp::Difference => left_matrix.difference(&right_matrix, factory),
                     BinaryOp::Override => left_matrix.override_with(&right_matrix, factory),
                     BinaryOp::Join => left_matrix.join(&right_matrix, factory),
                     BinaryOp::Product => left_matrix.product(&right_matrix, factory),
-                };
-                result
+                }
             }
 
             ExpressionInner::Unary { op, expr } => {
@@ -649,7 +649,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
 
             // Update environment
-            *self.env.borrow_mut().lookup_mut(&var).unwrap() = ground_value.clone();
+            *self.env.borrow_mut().lookup_mut(var).unwrap() = ground_value.clone();
 
             // Recurse with updated constraints
             let factory = self.interpreter.factory();
@@ -719,7 +719,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             }
 
             ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
-            *self.env.borrow_mut().lookup_mut(&var).unwrap() = ground_value.clone();
+            *self.env.borrow_mut().lookup_mut(var).unwrap() = ground_value.clone();
 
             // forall: ¬entry.value() ∨ declConstraints
             let factory = self.interpreter.factory();
@@ -782,7 +782,7 @@ impl<'a> FOL2BoolTranslator<'a> {
             ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
 
             // Update environment
-            *self.env.borrow_mut().lookup_mut(&var).unwrap() = ground_value.clone();
+            *self.env.borrow_mut().lookup_mut(var).unwrap() = ground_value.clone();
 
             // Recurse with updated constraints and partial index
             let new_constraints = factory.and(value.clone(), decl_constraints.clone());
@@ -800,7 +800,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Integer expression translation
     /// Following Java: FOL2BoolTranslator integer expression handling
     fn translate_int_expr(&self, expr: &IntExpression) -> Int<'a> {
-        match &*expr.inner() {
+        match expr.inner() {
             IntExpressionInner::Constant(c) => {
                 let factory = self.interpreter.factory();
                 let one_bit = BoolValue::Constant(BooleanConstant::TRUE);

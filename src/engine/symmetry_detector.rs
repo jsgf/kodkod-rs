@@ -139,8 +139,8 @@ impl SymmetryDetector {
             let part = &self.parts[i];
 
             // Check if this partition intersects with first column
-            if let Some(&min_atom) = part.iter().next() {
-                if first_col.contains(&min_atom) {
+            if let Some(&min_atom) = part.iter().next()
+                && first_col.contains(&min_atom) {
                     // Remove this partition and split it
                     let part = self.parts.remove(i);
                     range2domain.clear();
@@ -158,7 +158,7 @@ impl SymmetryDetector {
 
                         range2domain
                             .entry(atom_range)
-                            .or_insert_with(IntSet::new)
+                            .or_default()
                             .insert(atom);
                     }
 
@@ -184,7 +184,6 @@ impl SymmetryDetector {
                     }
                     continue;
                 }
-            }
             i += 1;
         }
 

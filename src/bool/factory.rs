@@ -87,7 +87,7 @@ impl BooleanFactory {
     #[inline]
     fn cache_get<'arena>(&'arena self, key: &CacheKey) -> Option<BooleanFormula<'arena>> {
         self.cache.borrow().get(key).map(|f| {
-            unsafe { mem::transmute::<BooleanFormula<'static>, BooleanFormula<'arena>>(f.clone()) }
+            unsafe { mem::transmute::<BooleanFormula<'static>, BooleanFormula<'arena>>(*f) }
         })
     }
 
@@ -221,14 +221,13 @@ impl BooleanFactory {
                 return self.constant(false);
             }
             // For NOT gates, also check if we've seen the inner formula
-            if let BoolValue::Formula(f) = input {
-                if let FormulaKind::Not(h) = f.kind() {
+            if let BoolValue::Formula(f) = input
+                && let FormulaKind::Not(h) = f.kind() {
                     let inner_label = self.arena.resolve_handle(*h).label();
                     if seen_labels.contains(&inner_label) {
                         return self.constant(false);
                     }
                 }
-            }
             seen_labels.insert(label);
         }
 
@@ -246,8 +245,8 @@ impl BooleanFactory {
         let input_labels: HashSet<i32> = inputs.iter().map(|v| v.label()).collect();
         let mut to_remove = Vec::new();
         for (i, input) in inputs.iter().enumerate() {
-            if let BoolValue::Formula(f) = input {
-                if let FormulaKind::Or(or_inputs_handle) = f.kind() {
+            if let BoolValue::Formula(f) = input
+                && let FormulaKind::Or(or_inputs_handle) = f.kind() {
                     let or_inputs = self.arena.resolve_handle(*or_inputs_handle);
                     // Check if any other input appears in this OR
                     // Now O(m) where m = or_inputs.len(), not O(n)
@@ -258,7 +257,6 @@ impl BooleanFactory {
                         to_remove.push(i);
                     }
                 }
-            }
         }
 
         // Remove in reverse order to maintain indices
@@ -283,7 +281,7 @@ impl BooleanFactory {
             let label = self.allocate_label();
             let handle = self.arena.alloc_slice_handle(&inputs);
             let formula = BooleanFormula::new(label, FormulaKind::And(handle));
-            self.cache_insert(key, formula.clone());
+            self.cache_insert(key, formula);
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
@@ -398,14 +396,13 @@ impl BooleanFactory {
                 return self.constant(true);
             }
             // For NOT gates, also check if we've seen the inner formula
-            if let BoolValue::Formula(f) = input {
-                if let FormulaKind::Not(h) = f.kind() {
+            if let BoolValue::Formula(f) = input
+                && let FormulaKind::Not(h) = f.kind() {
                     let inner_label = self.arena.resolve_handle(*h).label();
                     if seen_labels.contains(&inner_label) {
                         return self.constant(true);
                     }
                 }
-            }
             seen_labels.insert(label);
         }
 
@@ -423,8 +420,8 @@ impl BooleanFactory {
         let input_labels: HashSet<i32> = inputs.iter().map(|v| v.label()).collect();
         let mut to_remove = Vec::new();
         for (i, input) in inputs.iter().enumerate() {
-            if let BoolValue::Formula(f) = input {
-                if let FormulaKind::And(and_inputs_handle) = f.kind() {
+            if let BoolValue::Formula(f) = input
+                && let FormulaKind::And(and_inputs_handle) = f.kind() {
                     let and_inputs = self.arena.resolve_handle(*and_inputs_handle);
                     // Check if any other input appears in this AND
                     // Now O(m) where m = and_inputs.len(), not O(n)
@@ -435,7 +432,6 @@ impl BooleanFactory {
                         to_remove.push(i);
                     }
                 }
-            }
         }
 
         // Remove in reverse order to maintain indices
@@ -460,7 +456,7 @@ impl BooleanFactory {
             let label = self.allocate_label();
             let handle = self.arena.alloc_slice_handle(&inputs);
             let formula = BooleanFormula::new(label, FormulaKind::Or(handle));
-            self.cache_insert(key, formula.clone());
+            self.cache_insert(key, formula);
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
@@ -494,7 +490,7 @@ impl BooleanFactory {
             let label = self.allocate_label();
             let handle = self.arena.alloc_handle(input.clone());
             let formula = BooleanFormula::new(label, FormulaKind::Not(handle));
-            self.cache_insert(key, formula.clone());
+            self.cache_insert(key, formula);
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
@@ -560,7 +556,7 @@ impl BooleanFactory {
                     else_val: else_handle,
                 },
             );
-            self.cache_insert(key, formula.clone());
+            self.cache_insert(key, formula);
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();

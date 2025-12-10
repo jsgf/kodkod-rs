@@ -24,7 +24,7 @@ impl CNF {
     pub fn add_clause(&mut self, clause: Vec<i32>) {
         // Update max variable
         for &lit in &clause {
-            let var = lit.abs() as u32;
+            let var = lit.unsigned_abs();
             if var > self.num_variables {
                 self.num_variables = var;
             }
@@ -87,13 +87,13 @@ impl<'a> CNFTranslator<'a> {
 
     /// Translates a boolean value and returns its label
     fn translate_value(&mut self, value: &BoolValue) -> i32 {
-        let label = match value {
+        
+
+        match value {
             BoolValue::Constant(c) => c.label(),
             BoolValue::Variable(v) => v.label(),
             BoolValue::Formula(f) => self.translate_formula(f),
-        };
-
-        label
+        }
     }
 
     /// Translates a boolean formula using Tseitin transformation

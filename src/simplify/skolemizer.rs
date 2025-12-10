@@ -64,7 +64,10 @@ impl<'a> Skolemizer<'a> {
         // variables, but we haven't implemented that check yet.
         // TODO: Implement proper caching that considers free variables
 
-        let result = match &*formula.inner() {
+        
+
+        // Caching disabled - see note at top of function
+        match &*formula.inner() {
             FormulaInner::Constant(_) => formula.clone(),
 
             FormulaInner::Not(inner) => {
@@ -183,10 +186,7 @@ impl<'a> Skolemizer<'a> {
 
             // RelationPredicate only contains Relations, no variables to replace
             FormulaInner::RelationPredicate(_) => formula.clone(),
-        };
-
-        // Caching disabled - see note at top of function
-        result
+        }
     }
 
     /// Visits a declaration, replacing any variables in its expression according to
@@ -555,7 +555,7 @@ impl<'a> Skolemizer<'a> {
     fn replace_in_int_expression(&mut self, expr: &crate::ast::IntExpression) -> crate::ast::IntExpression {
         use crate::ast::{IntExpression, IntExpressionInner};
 
-        match &*expr.inner() {
+        match expr.inner() {
             IntExpressionInner::Cardinality(inner_expr) => {
                 // Replace variables in the expression
                 let replaced = self.replace_in_expression(inner_expr);

@@ -142,6 +142,17 @@
   - Examples seem to have a lot of them. Ultrathink a detailed analysis to see if these are really necessary, or if the API can be changed to minimize the need for them
   - One thing to consider is that the code using an arena allocator with Handles does not need this, since Handle is Copy and anything wrapping Handle could also be Copy
   - Also does everything that takes something by value actually need to? Could it take a reference. (But it *should not* take a reference then immediately clone it.)
+- Revisit arena allocator implementation
+  - Current implementation uses unsafe code for lifetime management (9 unsafe blocks)
+  - Two options to consider:
+    1. **Expand arena usage**: Use Handle more widely in public API for Copy semantics (cleaner API, fewer .clone() calls)
+    2. **Revert to Rc**: Simpler implementation at cost of more .clone() in user code
+  - Benchmark performance difference to determine if arena complexity is justified
+  - Arena benefits: Handle is Copy (clean API, no refcount overhead), potentially faster allocation
+  - Rc benefits: simpler code, no unsafe, easier to reason about lifetimes
+  - Current arena locations: BoolValue, BooleanFormula, BooleanMatrix in src/bool/*
+  - Could expand to: AST types (Expression, Formula, etc.) for consistent Copy semantics
+  - Files to consider: src/bool/arena.rs, src/bool/factory.rs, src/bool.rs, src/translator.rs
 
 NOTES:
 1. *NOTHING* can be considered completed or done unless at least `cargo check` of all targets passes

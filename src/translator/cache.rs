@@ -87,11 +87,10 @@ impl SharingDetector {
     }
 
     fn visit_formula(&mut self, formula: &Formula) {
-        if let Some(id) = NodeId::from_formula(formula) {
-            if self.visit_node(id) {
+        if let Some(id) = NodeId::from_formula(formula)
+            && self.visit_node(id) {
                 return; // Already visited
             }
-        }
 
         match &*formula.inner() {
             FormulaInner::Constant(_) => {}
@@ -146,11 +145,10 @@ impl SharingDetector {
     }
 
     fn visit_expression(&mut self, expr: &Expression) {
-        if let Some(id) = NodeId::from_expr(expr) {
-            if self.visit_node(id) {
+        if let Some(id) = NodeId::from_expr(expr)
+            && self.visit_node(id) {
                 return; // Already visited
             }
-        }
 
         match &*expr.inner() {
             ExpressionInner::Relation(_) | ExpressionInner::Variable(_) | ExpressionInner::Constant(_) => {}
@@ -184,11 +182,10 @@ impl SharingDetector {
     }
 
     fn visit_int_expr(&mut self, expr: &IntExpression) {
-        if let Some(id) = NodeId::from_int_expr(expr) {
-            if self.visit_node(id) {
+        if let Some(id) = NodeId::from_int_expr(expr)
+            && self.visit_node(id) {
                 return; // Already visited
             }
-        }
 
         match expr.inner() {
             IntExpressionInner::Constant(_) => {}
@@ -277,11 +274,10 @@ impl FreeVariableCollector {
         let id = NodeId::from_formula(formula);
 
         // Check if already computed
-        if let Some(id) = id {
-            if let Some(cached) = self.free_vars.get(&id) {
+        if let Some(id) = id
+            && let Some(cached) = self.free_vars.get(&id) {
                 return cached.clone();
             }
-        }
 
         let free_vars = match &*formula.inner() {
             FormulaInner::Constant(_) => FxHashSet::default(),
@@ -342,11 +338,10 @@ impl FreeVariableCollector {
         let id = NodeId::from_expr(expr);
 
         // Check if already computed
-        if let Some(id) = id {
-            if let Some(cached) = self.free_vars.get(&id) {
+        if let Some(id) = id
+            && let Some(cached) = self.free_vars.get(&id) {
                 return cached.clone();
             }
-        }
 
         let free_vars = match &*expr.inner() {
             ExpressionInner::Relation(_) | ExpressionInner::Constant(_) => FxHashSet::default(),
@@ -393,11 +388,10 @@ impl FreeVariableCollector {
         let id = NodeId::from_int_expr(expr);
 
         // Check if already computed
-        if let Some(id) = id {
-            if let Some(cached) = self.free_vars.get(&id) {
+        if let Some(id) = id
+            && let Some(cached) = self.free_vars.get(&id) {
                 return cached.clone();
             }
-        }
 
         let free_vars = match expr.inner() {
             IntExpressionInner::Constant(_) => FxHashSet::default(),
@@ -540,11 +534,10 @@ impl<T: Clone> MultiVarRecord<T> {
     /// Set cached translation with current bindings
     fn set<'a>(&mut self, translation: T, env: &super::Environment<'a>) {
         for (i, var) in self.variables.iter().enumerate() {
-            if let Some(matrix) = env.lookup(var) {
-                if let Some((idx, _)) = matrix.iter_indexed().next() {
+            if let Some(matrix) = env.lookup(var)
+                && let Some((idx, _)) = matrix.iter_indexed().next() {
                     self.bindings[i] = idx;
                 }
-            }
         }
         self.translation = Some(translation);
     }
@@ -635,11 +628,10 @@ impl<'a> TranslationCache<'a> {
 
     /// Cache expression translation
     pub fn cache_expr(&mut self, expr: &Expression, translation: BooleanMatrix<'a>, env: &super::Environment<'a>) {
-        if let Some(id) = NodeId::from_expr(expr) {
-            if let Some(record) = self.expr_cache.get_mut(&id) {
+        if let Some(id) = NodeId::from_expr(expr)
+            && let Some(record) = self.expr_cache.get_mut(&id) {
                 record.set(translation, env);
             }
-        }
     }
 
     /// Look up cached formula translation
@@ -650,11 +642,10 @@ impl<'a> TranslationCache<'a> {
 
     /// Cache formula translation
     pub fn cache_formula(&mut self, formula: &Formula, translation: BoolValue<'a>, env: &super::Environment<'a>) {
-        if let Some(id) = NodeId::from_formula(formula) {
-            if let Some(record) = self.formula_cache.get_mut(&id) {
+        if let Some(id) = NodeId::from_formula(formula)
+            && let Some(record) = self.formula_cache.get_mut(&id) {
                 record.set(translation, env);
             }
-        }
     }
 }
 

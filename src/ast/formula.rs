@@ -104,7 +104,7 @@ impl RelationPredicate {
                     );
 
                 // all e: ordered - last | one e.relation
-                let e = Variable::unary(&format!("e{}", relation.name()));
+                let e = Variable::unary(format!("e{}", relation.name()));
                 let f3 = Formula::forall(
                     Decls::from(Decl::one_of(
                         e.clone(),
@@ -121,7 +121,7 @@ impl RelationPredicate {
                 let domain_to_range = domain.clone().product(range.clone());
                 let f0 = Expression::from(relation.clone()).in_set(domain_to_range);
 
-                let x = Variable::unary(&format!("x{}", relation.name()));
+                let x = Variable::unary(format!("x{}", relation.name()));
                 let f1 = Formula::forall(
                     Decls::from(Decl::one_of(x.clone(), domain.clone())),
                     Expression::from(x).join(Expression::from(relation.clone())).one(),
