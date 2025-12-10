@@ -237,17 +237,17 @@ NOTES:
 #### Unit Tests
 - [x] BooleanCircuitTest.java (covered by 20 tests in src/bool/factory.rs)
 - [x] BooleanMatrixTest.java (partial)
-- [ ] EnumerationTest.java (BLOCKED: requires solveAll/incremental solver)
+- [x] EnumerationTest.java (3 tests ported to tests/test_enumeration.rs) ✅
 - [x] EvaluatorTest.java (22 tests in tests/test_evaluator.rs)
-- [ ] IncrementalSolverTest.java (BLOCKED: requires incremental solver)
+- [ ] IncrementalSolverTest.java (BLOCKED: requires IncrementalSolver class ~500 LOC)
 - [x] IntTest.java
-- [ ] ReductionAndProofTest.java (BLOCKED: requires proof extraction)
+- [ ] ReductionAndProofTest.java (BLOCKED: requires proof extraction ~1000+ LOC)
 - [x] RegressionTests.java (5 tests ported, proof-related tests skipped)
 - [x] SkolemizationTest.java (7 tests in tests/test_skolemization.rs)
-- [ ] SparseSequenceTest.java
-- [ ] SymmetryBreakingTest.java (may need implementation)
+- [ ] SparseSequenceTest.java (internal data structures - may not be needed)
+- [ ] SymmetryBreakingTest.java (may need additional implementation)
 - [x] TranslatorTest.java (26 tests in tests/test_translator.rs)
-- [ ] UCoreTest.java (BLOCKED: requires unsat core extraction)
+- [ ] UCoreTest.java (BLOCKED: requires unsat core extraction ~1000+ LOC)
 
 #### System Tests
 - [ ] ExamplesTest.java (tests that examples run)
@@ -260,8 +260,8 @@ NOTES:
   - Sudoku: 1/2 (SudokuDatabase remaining)
   - TPTP: 23/23 complete ✅
   - Xpose: 3/3 complete ✅
-- Unit Tests: 7/13 complete (54%)
-  - 303 total tests passing
+- Unit Tests: 8/13 complete (62%)
+  - 313 integration/unit tests + 68 example tests = 381 total tests passing
 - Features completed:
   - ✅ Skolemization - Eliminate existential quantifiers (src/simplify/skolemizer.rs)
   - ✅ Formula Flattening - NNF conversion, De Morgan's laws (src/simplify/flattener.rs)
@@ -272,5 +272,9 @@ NOTES:
     - Java comparison: Tests cover more scenarios than Java (which only has 2 regression tests + BooleanFactory.ite tests)
   - ✅ Relation.acyclic() method for symmetry-breaking optimization
     - Matches Java API for creating acyclic predicates on relations
+  - ✅ Solution enumeration (solveAll) with SolutionIterator
+    - Returns iterator over all satisfying instances
+    - Adds blocking clauses to exclude previous solutions
+    - Distinguishes TRIVIALLY_SAT (lower bounds satisfy) from SAT (solver found)
 - Deferred (requires unimplemented features):
   - ListDebug (requires proof/unsat core extraction - ~1000+ LOC subsystem)
