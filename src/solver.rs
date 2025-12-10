@@ -523,7 +523,11 @@ impl Iterator for SolutionIterator {
     fn next(&mut self) -> Option<Self::Item> {
         // Handle trivial cases first
         if let Some(trivial) = self.trivial_solution.take() {
-            self.finished = true;
+            // If trivially UNSAT, we're done - no more solutions possible
+            // If trivially SAT, continue enumerating non-trivial solutions beyond lower bound
+            if matches!(trivial, Solution::TriviallyUnsat { .. }) {
+                self.finished = true;
+            }
             return Some(Ok(trivial));
         }
 
