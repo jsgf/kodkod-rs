@@ -272,7 +272,8 @@ NOTES:
   - TPTP: 23/23 complete ✅
   - Xpose: 3/3 complete ✅
 - Unit Tests: 9/13 complete (69%)
-  - 315 integration/unit tests + 68 example tests = 383 total tests passing
+  - 315 tests passing across 22 test suites
+  - Fixed: Solution enumeration for trivially satisfiable formulas
 - Features completed:
   - ✅ Skolemization - Eliminate existential quantifiers (src/simplify/skolemizer.rs)
   - ✅ Formula Flattening - NNF conversion, De Morgan's laws (src/simplify/flattener.rs)
