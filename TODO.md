@@ -245,7 +245,7 @@ NOTES:
 - [x] RegressionTests.java (5 tests ported, proof-related tests skipped)
 - [x] SkolemizationTest.java (7 tests in tests/test_skolemization.rs)
 - [ ] SparseSequenceTest.java (internal data structures - may not be needed)
-- [ ] SymmetryBreakingTest.java (may need additional implementation)
+- [x] SymmetryBreakingTest.java (2 tests in tests/test_symmetry_breaking.rs)
 - [x] TranslatorTest.java (26 tests in tests/test_translator.rs)
 - [ ] UCoreTest.java (BLOCKED: requires unsat core extraction ~1000+ LOC)
 
@@ -260,12 +260,17 @@ NOTES:
   - Sudoku: 1/2 (SudokuDatabase remaining)
   - TPTP: 23/23 complete ✅
   - Xpose: 3/3 complete ✅
-- Unit Tests: 8/13 complete (62%)
-  - 313 integration/unit tests + 68 example tests = 381 total tests passing
+- Unit Tests: 9/13 complete (69%)
+  - 315 integration/unit tests + 68 example tests = 383 total tests passing
 - Features completed:
   - ✅ Skolemization - Eliminate existential quantifiers (src/simplify/skolemizer.rs)
   - ✅ Formula Flattening - NNF conversion, De Morgan's laws (src/simplify/flattener.rs)
   - ✅ BooleanFactory optimizations - O(n²) → O(n) for gate operations
+  - ✅ Symmetry Breaking - Aggressive mode achieves Java parity on variable reduction
+    - TotalOrdering: 0 primary vars (Java: 0)
+    - Acyclic: 10 primary vars for 5x5 (Java: 10)
+    - Implementation: src/engine/symmetry_breaker.rs
+    - Tests: tests/test_symmetry_breaking.rs
   - ✅ IfExpression (Formula.then_else, BooleanFactory.ite, BooleanMatrix.choice)
     - Unit tests: BooleanFactory::ite (✓ existing from factory.rs), BooleanMatrix::choice (✓ 4 tests pass)
     - Integration tests: ✓ 8 tests pass (tests/test_if_then_else.rs)

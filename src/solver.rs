@@ -111,7 +111,7 @@ impl Solver {
             let predicates = extract_predicates(&skolemized_formula);
             if !predicates.is_empty() {
                 let mut breaker = crate::engine::SymmetryBreaker::new(final_bounds.clone());
-                let broken = breaker.break_matrix_symmetries(&predicates, false);
+                let broken = breaker.break_matrix_symmetries(&predicates, true);
                 if !broken.is_empty() {
                     // Update bounds with the modified bounds from the breaker
                     final_bounds = breaker.into_bounds();
@@ -143,6 +143,7 @@ impl Solver {
                     stats: Statistics {
                         translation_time: simplification_time,
                         solving_time: Duration::from_micros(0),
+                        primary_variables: 0,
                         num_variables: 0,
                         num_clauses: 0,
                     },
@@ -154,6 +155,7 @@ impl Solver {
                     stats: Statistics {
                         translation_time: simplification_time,
                         solving_time: Duration::from_micros(0),
+                        primary_variables: 0,
                         num_variables: 0,
                         num_clauses: 0,
                     },
@@ -186,6 +188,7 @@ impl Solver {
                 let stats = Statistics {
                     translation_time: translation_time + solving_time,
                     solving_time: Duration::from_micros(0),
+                    primary_variables: translation_result.interpreter().num_primary_variables(),
                     num_variables: 0,
                     num_clauses: 0,
                 };
@@ -198,6 +201,7 @@ impl Solver {
                 let stats = Statistics {
                     translation_time: translation_time + solving_time,
                     solving_time: Duration::from_micros(0),
+                    primary_variables: translation_result.interpreter().num_primary_variables(),
                     num_variables: 0,
                     num_clauses: 0,
                 };
@@ -229,6 +233,7 @@ impl Solver {
         let stats = Statistics {
             translation_time: translation_time + cnf_time,
             solving_time,
+            primary_variables: interpreter.num_primary_variables(),
             num_variables: cnf.num_variables,
             num_clauses: cnf.num_clauses() as u32,
         };
@@ -411,7 +416,7 @@ impl SolutionIterator {
             let predicates = extract_predicates(&skolemized_formula);
             if !predicates.is_empty() {
                 let mut breaker = crate::engine::SymmetryBreaker::new(final_bounds.clone());
-                let broken = breaker.break_matrix_symmetries(&predicates, false);
+                let broken = breaker.break_matrix_symmetries(&predicates, true);
                 if !broken.is_empty() {
                     final_bounds = breaker.into_bounds();
                     replace_predicates(&skolemized_formula, &broken)
@@ -449,6 +454,7 @@ impl SolutionIterator {
                         stats: Statistics {
                             translation_time: simplification_time,
                             solving_time: Duration::from_micros(0),
+                            primary_variables: 0,
                             num_variables: 0,
                             num_clauses: 0,
                         },
@@ -469,6 +475,7 @@ impl SolutionIterator {
                         stats: Statistics {
                             translation_time: simplification_time,
                             solving_time: Duration::from_micros(0),
+                            primary_variables: 0,
                             num_variables: 0,
                             num_clauses: 0,
                         },
@@ -545,6 +552,7 @@ impl Iterator for SolutionIterator {
         let stats = Statistics {
             translation_time: self.translation_time,
             solving_time,
+            primary_variables: self.num_primary_vars,
             num_variables: self.cnf_num_variables,
             num_clauses: self.cnf_num_clauses,
         };
@@ -720,6 +728,7 @@ impl Solution {
 pub struct Statistics {
     translation_time: Duration,
     solving_time: Duration,
+    primary_variables: u32,
     num_variables: u32,
     num_clauses: u32,
 }
@@ -743,6 +752,11 @@ impl Statistics {
     /// Returns number of variables
     pub fn num_variables(&self) -> u32 {
         self.num_variables
+    }
+
+    /// Returns number of primary variables (relation encoding)
+    pub fn primary_variables(&self) -> u32 {
+        self.primary_variables
     }
 
     /// Returns number of clauses
