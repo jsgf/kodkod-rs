@@ -92,6 +92,7 @@ impl<S: rustsat::solvers::Solve> SATSolver for RustSatAdapter<S> {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;

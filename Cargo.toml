@@ -18,13 +18,17 @@ rustc-hash = "2.0"
 indexmap = "2.0"
 # SAT solver for production builds
 rustsat = "0.7"
-rustsat-batsat = "0.7"
+rustsat-batsat = "0.7.5"
 # Arena allocation for translator
 bumpalo = "3.19"
 bumpalo-herd = "0.1"
 # Fast hashing for HashMaps
 ahash = "0.8"
 rand = "0.8"
+
+[patch.crates-io]
+rustsat = { git = "https://github.com/chrjabs/rustsat", rev = "b8d7978a011d8b5c0c409bcbce0366abf05f997d" }
+rustsat-batsat = { git = "https://github.com/chrjabs/rustsat", rev = "b8d7978a011d8b5c0c409bcbce0366abf05f997d" }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
