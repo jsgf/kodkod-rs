@@ -111,6 +111,13 @@ impl LeafInterpreter {
         &self.universe
     }
 
+    /// Returns the number of primary variables (relation encoding variables)
+    /// These are the variables that encode tuple membership in relations,
+    /// as opposed to auxiliary Tseitin variables for gate encoding.
+    pub fn num_primary_variables(&self) -> u32 {
+        self.factory.num_variables()
+    }
+
     /// Returns the variable ranges for all relations
     /// Used for solution extraction from SAT model
     pub fn variable_ranges(&self) -> &FxHashMap<Relation, Range<u32>> {
