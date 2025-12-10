@@ -332,13 +332,11 @@ fn run() {
         Solution::Unsat { .. } => {
             println!("UNSATISFIABLE - Product must be commutative");
         }
-        Solution::TriviallySat { .. } => { println!("TRIVIALLY TRUE"); }
-            Solution::TriviallyUnsat { .. } => {
-            if is_true {
-                println!("Trivially TRUE");
-            } else {
-                println!("Trivially FALSE");
-            }
+        Solution::TriviallySat { .. } => {
+            println!("TRIVIALLY TRUE");
+        }
+        Solution::TriviallyUnsat { .. } => {
+            println!("TRIVIALLY FALSE");
         }
     }
 
