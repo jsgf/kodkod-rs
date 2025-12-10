@@ -7,7 +7,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-struct CeilingsAndFloors {
+pub struct CeilingsAndFloors {
     platform: Relation,
     man: Relation,
     ceiling: Relation,
@@ -15,7 +15,7 @@ struct CeilingsAndFloors {
 }
 
 impl CeilingsAndFloors {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             platform: Relation::unary("Platform"),
             man: Relation::unary("Man"),
@@ -115,7 +115,7 @@ impl CeilingsAndFloors {
 
     /// Returns the belowToo'' constraint.
     /// declarations() &&  paulSimon() && noSharing() && !belowToo()
-    fn check_below_too_double_prime(&self) -> Formula {
+    pub fn check_below_too_double_prime(&self) -> Formula {
         Formula::and_all(vec![
             self.declarations(),
             self.paul_simon(),
@@ -126,7 +126,7 @@ impl CeilingsAndFloors {
 
     /// Returns the belowToo assertion.
     /// declarations() && paulSimon() && !belowToo()
-    fn check_below_too_assertion(&self) -> Formula {
+    pub fn check_below_too_assertion(&self) -> Formula {
         Formula::and_all(vec![
             self.declarations(),
             self.paul_simon(),
@@ -135,7 +135,7 @@ impl CeilingsAndFloors {
     }
 
     /// Creates bounds for the problem using the given number of platforms and men.
-    fn bounds(&self, platforms: usize, men: usize) -> Result<Bounds, kodkod_rs::error::KodkodError> {
+    pub fn bounds(&self, platforms: usize, men: usize) -> Result<Bounds, kodkod_rs::error::KodkodError> {
         let mut atoms = Vec::new();
         for i in 0..men {
             atoms.push(format!("Man{}", i));

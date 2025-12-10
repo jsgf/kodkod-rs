@@ -135,12 +135,12 @@ impl MagicSeries {
                 println!("UNSATISFIABLE");
                 println!("{:?}", sol.statistics());
             }
-            Solution::Trivial { is_true, .. } => {
-                if *is_true {
-                    println!("TRIVIALLY TRUE");
-                } else {
-                    println!("TRIVIALLY FALSE");
-                }
+            Solution::TriviallySat { .. } => {
+                println!("TRIVIALLY TRUE");
+                println!("{:?}", sol.statistics());
+            }
+            Solution::TriviallyUnsat { .. } => {
+                println!("TRIVIALLY FALSE");
                 println!("{:?}", sol.statistics());
             }
         }

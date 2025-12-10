@@ -7,7 +7,7 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable, Relat
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-struct Dijkstra {
+pub struct Dijkstra {
     // Main relations
     process: Relation,
     mutex: Relation,
@@ -27,7 +27,7 @@ struct Dijkstra {
 }
 
 impl Dijkstra {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             process: Relation::unary("Process"),
             mutex: Relation::unary("Mutex"),
@@ -224,6 +224,17 @@ impl Dijkstra {
         )
     }
 
+    /// Returns the showDijkstra predicate
+    /// declarations() && grabOrRelease() && deadlock() && waits.some()
+    pub fn show_dijkstra(&self) -> Formula {
+        Formula::and_all(vec![
+            self.declarations(),
+            self.grab_or_release(),
+            self.deadlock(),
+            Expression::from(self.waits.clone()).some()
+        ])
+    }
+
     /// pred GrabbedInOrder ( ) {
     ///   all pre: State - so/last() |
     ///     let post = so/next(pre) |
@@ -266,7 +277,7 @@ impl Dijkstra {
     }
 
     /// Returns bounds for the given scope
-    fn bounds(&self, states: usize, processes: usize, mutexes: usize) -> Result<Bounds, kodkod_rs::error::KodkodError> {
+    pub fn bounds(&self, states: usize, processes: usize, mutexes: usize) -> Result<Bounds, kodkod_rs::error::KodkodError> {
         let mut atoms = Vec::new();
         for i in 0..states {
             atoms.push(format!("State{}", i));

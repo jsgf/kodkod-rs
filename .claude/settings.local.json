@@ -30,7 +30,20 @@
       "Bash(__NEW_LINE__ echo \"\")",
       "Bash(for i in 1 2 3)",
       "Bash(timeout 300 cargo run:*)",
-      "Bash(timeout 120 cargo run:*)"
+      "Bash(timeout 120 cargo run:*)",
+      "Bash(find:*)",
+      "Bash(timeout 120 cargo build:*)",
+      "Bash(git stash:*)",
+      "Bash(do echo \"=== Run $i ===\")",
+      "Bash(javac:*)",
+      "Bash(timeout 60 java:*)",
+      "Bash(ant compile-examples:*)",
+      "Bash(xargs:*)",
+      "Bash(timeout 30 java:*)",
+      "Bash(cargo check:*)",
+      "Bash(timeout 15 cargo run:*)",
+      "Bash(timeout 30 cargo check:*)",
+      "Bash(timeout 60 cargo check:*)"
     ],
     "deny": [],
     "ask": []

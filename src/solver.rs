@@ -135,8 +135,11 @@ impl Solver {
         match &*optimized_formula.inner() {
             FormulaInner::Constant(true) => {
                 eprintln!("DEBUG: Formula simplified to TRUE");
-                return Ok(Solution::Trivial {
-                    is_true: true,
+                // Create an instance from lower bounds
+                let instance = Instance::new(final_bounds.universe().clone());
+                // TODO: populate with lower bounds
+                return Ok(Solution::TriviallySat {
+                    instance,
                     stats: Statistics {
                         translation_time: simplification_time,
                         solving_time: Duration::from_micros(0),
@@ -147,8 +150,7 @@ impl Solver {
             }
             FormulaInner::Constant(false) => {
                 eprintln!("DEBUG: Formula simplified to FALSE");
-                return Ok(Solution::Trivial {
-                    is_true: false,
+                return Ok(Solution::TriviallyUnsat {
                     stats: Statistics {
                         translation_time: simplification_time,
                         solving_time: Duration::from_micros(0),
@@ -175,12 +177,34 @@ impl Solver {
         let cnf_start = Instant::now();
         let bool_circuit = translation_result.value();
 
-        // DEBUG: Check if the circuit is trivially false
+        // Check if the circuit is constant (trivially sat/unsat)
         if let BoolValue::Constant(c) = bool_circuit {
             eprintln!("DEBUG: Boolean circuit is constant: {}", c.boolean_value());
-        } else {
-            eprintln!("DEBUG: Boolean circuit is not constant (has variables)");
+            if c.boolean_value() {
+                // Circuit is constant TRUE - lower bounds satisfy the formula
+                let solving_time = cnf_start.elapsed();
+                let stats = Statistics {
+                    translation_time: translation_time + solving_time,
+                    solving_time: Duration::from_micros(0),
+                    num_variables: 0,
+                    num_clauses: 0,
+                };
+                // Extract instance from lower bounds
+                let instance = extract_lower_bound_instance(&final_bounds)?;
+                return Ok(Solution::TriviallySat { instance, stats });
+            } else {
+                // Circuit is constant FALSE
+                let solving_time = cnf_start.elapsed();
+                let stats = Statistics {
+                    translation_time: translation_time + solving_time,
+                    solving_time: Duration::from_micros(0),
+                    num_variables: 0,
+                    num_clauses: 0,
+                };
+                return Ok(Solution::TriviallyUnsat { stats });
+            }
         }
+        eprintln!("DEBUG: Boolean circuit is not constant (has variables)");
 
         let interpreter = translation_result.interpreter();
         let cnf_translator = CNFTranslator::new(interpreter.arena());
@@ -406,6 +430,11 @@ impl SolutionIterator {
         // Check for trivial formulas
         match &*optimized_formula.inner() {
             FormulaInner::Constant(true) => {
+                // Extract instance from lower bounds
+                let instance = match extract_lower_bound_instance(&final_bounds) {
+                    Ok(inst) => inst,
+                    Err(_) => Instance::new(final_bounds.universe().clone()),
+                };
                 return Self {
                     sat_solver: None,
                     extractor: SolutionExtractorData::default(),
@@ -415,8 +444,8 @@ impl SolutionIterator {
                     cnf_num_variables: 0,
                     cnf_num_clauses: 0,
                     finished: false,
-                    trivial_solution: Some(Solution::Trivial {
-                        is_true: true,
+                    trivial_solution: Some(Solution::TriviallySat {
+                        instance,
                         stats: Statistics {
                             translation_time: simplification_time,
                             solving_time: Duration::from_micros(0),
@@ -436,8 +465,7 @@ impl SolutionIterator {
                     cnf_num_variables: 0,
                     cnf_num_clauses: 0,
                     finished: false,
-                    trivial_solution: Some(Solution::Trivial {
-                        is_true: false,
+                    trivial_solution: Some(Solution::TriviallyUnsat {
                         stats: Statistics {
                             translation_time: simplification_time,
                             solving_time: Duration::from_micros(0),
@@ -604,25 +632,49 @@ fn extract_instance_with_extractor(
     Ok(instance)
 }
 
+/// Extracts an Instance from lower bounds only
+/// Used when the formula is trivially satisfied by lower bounds
+fn extract_lower_bound_instance(bounds: &Bounds) -> Result<Instance> {
+    let mut instance = Instance::new(bounds.universe().clone());
+
+    for relation in bounds.relations() {
+        // Use lower bound as the tuple set for this relation
+        if let Some(lower) = bounds.lower_bound(relation) {
+            instance.add(relation.clone(), lower.clone())?;
+        } else {
+            // No lower bound means empty set
+            let empty = TupleSet::empty(bounds.universe().clone(), relation.arity());
+            instance.add(relation.clone(), empty)?;
+        }
+    }
+
+    Ok(instance)
+}
+
 /// Solution to a relational formula
 #[derive(Debug)]
 pub enum Solution {
-    /// Formula is satisfiable
+    /// Formula is satisfiable (found by SAT solver)
     Sat {
         /// Satisfying instance
         instance: Instance,
         /// Solving statistics
         stats: Statistics,
     },
-    /// Formula is unsatisfiable
+    /// Formula is trivially satisfiable (lower bounds satisfy it)
+    TriviallySat {
+        /// Satisfying instance (from lower bounds)
+        instance: Instance,
+        /// Solving statistics
+        stats: Statistics,
+    },
+    /// Formula is unsatisfiable (SAT solver found UNSAT)
     Unsat {
         /// Solving statistics
         stats: Statistics,
     },
-    /// Formula is trivially true/false
-    Trivial {
-        /// Whether formula is trivially true
-        is_true: bool,
+    /// Formula is trivially unsatisfiable (constant false)
+    TriviallyUnsat {
         /// Solving statistics
         stats: Statistics,
     },
@@ -631,27 +683,23 @@ pub enum Solution {
 impl Solution {
     /// Returns true if the formula is satisfiable
     pub fn is_sat(&self) -> bool {
-        match self {
-            Solution::Sat { .. } => true,
-            Solution::Trivial { is_true, .. } => *is_true,
-            Solution::Unsat { .. } => false,
-        }
+        matches!(self, Solution::Sat { .. } | Solution::TriviallySat { .. })
     }
 
     /// Returns true if the formula is unsatisfiable
     pub fn is_unsat(&self) -> bool {
-        !self.is_sat()
+        matches!(self, Solution::Unsat { .. } | Solution::TriviallyUnsat { .. })
     }
 
-    /// Returns true if the formula is trivial
+    /// Returns true if the solution is trivial (either trivially sat or trivially unsat)
     pub fn is_trivial(&self) -> bool {
-        matches!(self, Solution::Trivial { .. })
+        matches!(self, Solution::TriviallySat { .. } | Solution::TriviallyUnsat { .. })
     }
 
-    /// Returns the instance if the solution is SAT
+    /// Returns the instance if the solution is SAT (including trivially SAT)
     pub fn instance(&self) -> Option<&Instance> {
         match self {
-            Solution::Sat { instance, .. } => Some(instance),
+            Solution::Sat { instance, .. } | Solution::TriviallySat { instance, .. } => Some(instance),
             _ => None,
         }
     }
@@ -660,8 +708,9 @@ impl Solution {
     pub fn statistics(&self) -> &Statistics {
         match self {
             Solution::Sat { stats, .. } => stats,
+            Solution::TriviallySat { stats, .. } => stats,
             Solution::Unsat { stats } => stats,
-            Solution::Trivial { stats, .. } => stats,
+            Solution::TriviallyUnsat { stats } => stats,
         }
     }
 }

@@ -65,9 +65,8 @@ fn run() {
     eprintln!("Result: {:?}", match result {
         kodkod_rs::solver::Solution::Sat { .. } => "SAT",
         kodkod_rs::solver::Solution::Unsat { .. } => "UNSAT",
-        kodkod_rs::solver::Solution::Trivial { is_true, .. } => {
-            if is_true { "TRIVIALLY TRUE" } else { "TRIVIALLY FALSE" }
-        }
+        kodkod_rs::solver::Solution::TriviallySat { .. } => "TRIVIALLY TRUE",
+        kodkod_rs::solver::Solution::TriviallyUnsat { .. } => "TRIVIALLY FALSE",
     });
     eprintln!("Stats: {:?}", result.statistics());
 
@@ -83,9 +82,8 @@ fn run() {
     eprintln!("Result: {:?}", match result2 {
         kodkod_rs::solver::Solution::Sat { .. } => "SAT",
         kodkod_rs::solver::Solution::Unsat { .. } => "UNSAT",
-        kodkod_rs::solver::Solution::Trivial { is_true, .. } => {
-            if is_true { "TRIVIALLY TRUE" } else { "TRIVIALLY FALSE" }
-        }
+        kodkod_rs::solver::Solution::TriviallySat { .. } => "TRIVIALLY TRUE",
+        kodkod_rs::solver::Solution::TriviallyUnsat { .. } => "TRIVIALLY FALSE",
     });
     eprintln!("Stats: {:?}", result2.statistics());
 }

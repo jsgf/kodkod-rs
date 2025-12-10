@@ -370,7 +370,8 @@ impl ListSynth {
         let outcome = match &sol {
             Solution::Sat { .. } => "SATISFIABLE (synthesis found)",
             Solution::Unsat { .. } => "UNSATISFIABLE (no synthesis)",
-            Solution::Trivial { is_true, .. } => {
+            Solution::TriviallySat { .. } => { println!("TRIVIALLY TRUE"); }
+            Solution::TriviallyUnsat { .. } => {
                 if *is_true {
                     "TRIVIALLY TRUE"
                 } else {

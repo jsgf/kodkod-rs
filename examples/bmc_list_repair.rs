@@ -112,7 +112,8 @@ impl ListRepair {
         let outcome = match &sol {
             Solution::Sat { .. } => "SATISFIABLE (repair found)",
             Solution::Unsat { .. } => "UNSATISFIABLE (no repair)",
-            Solution::Trivial { is_true, .. } => {
+            Solution::TriviallySat { .. } => { println!("TRIVIALLY TRUE"); }
+            Solution::TriviallyUnsat { .. } => {
                 if *is_true {
                     "TRIVIALLY TRUE"
                 } else {
