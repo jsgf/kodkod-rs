@@ -172,7 +172,7 @@ impl Solver {
 
                 // Generate proof for trivially UNSAT formula
                 let proof = if self.options.log_translation {
-                    Some(Proof::trivial(formula.clone()))
+                    Some(Proof::trivial(formula.clone(), final_bounds.clone()))
                 } else {
                     None
                 };
@@ -235,7 +235,7 @@ impl Solver {
 
                 // Generate proof for trivially UNSAT formula
                 let proof = if self.options.log_translation {
-                    Some(Proof::trivial(optimized_formula.clone()))
+                    Some(Proof::trivial(optimized_formula.clone(), final_bounds.clone()))
                 } else {
                     None
                 };
@@ -532,7 +532,7 @@ impl SolutionIterator {
             FormulaInner::Constant(false) => {
                 // Generate proof for trivially UNSAT formula
                 let proof = if options.log_translation {
-                    Some(Proof::trivial(formula.clone()))
+                    Some(Proof::trivial(formula.clone(), final_bounds.clone()))
                 } else {
                     None
                 };

@@ -139,10 +139,12 @@ impl Proof {
 
     /// Creates a proof for a trivially UNSAT formula (constant FALSE)
     ///
-    /// The core contains the formula's conjuncts if it's an AND,
-    /// otherwise just the formula itself.
-    pub fn trivial(formula: Formula) -> Self {
+    /// The core contains the minimal subset of conjuncts that cause UNSAT.
+    /// Following Java: TrivialProof with minimize() logic
+    pub fn trivial(formula: Formula, bounds: Bounds) -> Self {
         use crate::ast::{BinaryFormulaOp, FormulaInner};
+        use crate::solver::Solver;
+        use crate::solver::Options as SolverOptions;
 
         // Extract conjuncts from the formula if it's an AND
         fn extract_conjuncts_from_formula(f: &Formula) -> Vec<Formula> {
@@ -169,13 +171,58 @@ impl Proof {
 
         let conjuncts = extract_conjuncts_from_formula(&formula);
 
+        // Minimize the core using deletion-based minimization with actual solving
+        // Repeatedly try to remove each conjunct
+        let mut minimal_core: Vec<Formula> = conjuncts.clone();
+        let mut changed = true;
+
+        while changed {
+            changed = false;
+            let mut i = 0;
+            while i < minimal_core.len() {
+                if minimal_core.len() == 1 {
+                    // Can't remove the last formula
+                    break;
+                }
+
+                // Try removing this formula
+                let without: Vec<Formula> = minimal_core.iter()
+                    .enumerate()
+                    .filter(|(idx, _)| *idx != i)
+                    .map(|(_, f)| f.clone())
+                    .collect();
+
+                let test_without = Formula::and_all(without.clone());
+
+                // Use actual solving to check if still UNSAT
+                // Create a fresh solver without logging to avoid circular dependency
+                let mut test_options = SolverOptions::default();
+                test_options.log_translation = false;
+                let test_solver = Solver::new(test_options);
+
+                match test_solver.solve(&test_without, &bounds) {
+                    Ok(solution) if solution.is_unsat() => {
+                        // Still UNSAT without this formula, remove it
+                        minimal_core.remove(i);
+                        changed = true;
+                        // Don't increment i since we removed an element
+                    }
+                    _ => {
+                        // SAT or error without this formula, keep it and move to next
+                        i += 1;
+                    }
+                }
+            }
+        }
+
         let mut log = TranslationLog::new();
-        log.set_roots(conjuncts.clone());
+        log.set_roots(minimal_core.clone());
+        log.set_bounds(bounds);
         log.record(formula.clone(), formula.clone(), -i32::MAX);
 
         let mut core = FxHashMap::default();
-        for conjunct in conjuncts {
-            core.insert(conjunct.clone(), conjunct);
+        for conjunct in &minimal_core {
+            core.insert(conjunct.clone(), conjunct.clone());
         }
 
         Self {
