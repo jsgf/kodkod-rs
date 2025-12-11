@@ -271,13 +271,13 @@ NOTES:
 - [x] EvaluatorTest.java (22 tests in tests/test_evaluator.rs)
 - [ ] IncrementalSolverTest.java (BLOCKED: requires IncrementalSolver class ~500 LOC)
 - [x] IntTest.java
-- [ ] ReductionAndProofTest.java (BLOCKED: requires proof extraction ~1000+ LOC)
+- [ ] ReductionAndProofTest.java (unblocked - needs adaptation for deletion-based minimization)
 - [x] RegressionTests.java (5 tests ported, proof-related tests skipped)
 - [x] SkolemizationTest.java (7 tests in tests/test_skolemization.rs)
 - [ ] SparseSequenceTest.java (internal data structures - may not be needed)
 - [x] SymmetryBreakingTest.java (2 tests in tests/test_symmetry_breaking.rs)
 - [x] TranslatorTest.java (26 tests in tests/test_translator.rs)
-- [ ] UCoreTest.java (BLOCKED: requires unsat core extraction ~1000+ LOC)
+- [ ] UCoreTest.java (unblocked - ready to port)
 
 #### System Tests
 - [ ] ExamplesTest.java (tests that examples run)
