@@ -67,6 +67,123 @@ These are valid implementation details that don't need immediate action:
 **src/instance.rs:**
 - TODO: Switch API - make `new()` take `Vec<Rc<dyn Atom>>`, add `from_str()` for backward compat
 
+### Missing Functionality (from AUDIT_RESPONSE.md)
+
+Based on third-party audit and codebase review, the following features are missing or incomplete. Prioritized by impact on correctness.
+
+#### 🔴 HIGH PRIORITY: Correctness Issues
+
+**1. Integer Multiplication/Division/Modulo** ⚠️ SILENT FAILURES
+- **Status**: Not implemented - silently returns first operand unchanged for non-constant operands
+- **Impact**: HIGH - produces incorrect results without warning
+- **Effort**: ~300-500 LOC based on Java TwosComplementInt.java
+- **Files to modify**:
+  - src/bool/int.rs: Add multiply(), divide(), modulo() methods
+  - src/translator.rs:865-889: Wire up translation
+  - tests/test_int_operations.rs: Add comprehensive tests
+- **Reference**: kodkod/src/kodkod/engine/bool/TwosComplementInt.java
+  - multiply(): ~50 lines (partial sum circuit)
+  - divide()/modulo(): ~100 lines (non-restoring division)
+- **Notes**:
+  - All current examples work because they use constants or avoid these ops
+  - Future examples may require this functionality
+
+**2. Dynamic Shifts** ⚠️ SILENT FAILURES
+- **Status**: Not implemented - only constant shift amounts supported
+- **Impact**: MEDIUM-HIGH - returns unchanged value for non-constant shifts
+- **Effort**: ~100-200 LOC
+- **Files to modify**:
+  - src/bool/int.rs: Implement variable-amount shifter circuits
+  - src/translator.rs:837-863: Remove constant-only restriction
+  - tests/test_int_operations.rs: Add dynamic shift tests
+- **Reference**: Java TwosComplementInt uses MUX-based barrel shifter
+- **Notes**: Less critical than multiply/divide but still produces wrong results
+
+**3. Sum over Declarations Translation** ⚠️ WRONG RESULTS
+- **Status**: Stubbed - returns constant 0
+- **Impact**: MEDIUM - produces incorrect results for aggregation
+- **Effort**: ~200-300 LOC
+- **Files to modify**:
+  - src/translator.rs:939-944: Implement proper iteration/accumulation
+  - Handle quantifier domain traversal
+  - Add tests for sum expressions
+- **Reference**: Java Translator.translate(SumExpression)
+- **Notes**: Count expressions work; sum is related but more complex
+
+#### 🟡 MEDIUM PRIORITY: API Completeness
+
+**4. ProjectExpression**
+- **Status**: Missing from AST
+- **Impact**: MEDIUM - some relational operations not expressible
+- **Effort**: ~150-250 LOC
+- **Files to modify**:
+  - src/ast.rs: Add ProjectExpression variant to ExpressionInner
+  - src/translator.rs: Implement projection translation
+  - tests/: Add projection tests
+- **Reference**: kodkod/src/kodkod/ast/ProjectExpression.java
+- **API**: `expression.project(IntExpression... columns)`
+- **Notes**: Used for column projection in relational algebra
+
+**5. Environment Tracking in Skolemizer**
+- **Status**: Partially implemented - basic skolemization works
+- **Impact**: LOW-MEDIUM - affects nested quantifiers with parameter crossing
+- **Effort**: ~100-200 LOC
+- **Files to modify**:
+  - src/simplify/skolemizer.rs:412: Implement Environment tracking
+  - Handle parameter crossing for nested quantifiers
+- **Reference**: Java Skolemizer with Environment class
+- **Notes**: Current implementation handles common cases (NUM378 works)
+
+#### 🟢 LOW PRIORITY: Optimizations & Polish
+
+**6. TupleSet BitSet Optimization**
+- **Status**: Uses Vec<Tuple> instead of BitSet
+- **Impact**: LOW - performance only, no correctness issue
+- **Effort**: ~300-500 LOC (significant refactor)
+- **Trade-offs**:
+  - Current: Better for sparse sets, simpler code
+  - BitSet: Better for dense sets in large universes, faster membership
+- **Decision**: May not be worth complexity
+- **Notes**: Provides index_view() for BitSet-like interface
+
+**7. TriviallySat Instance Population**
+- **Status**: Creates empty instance
+- **Impact**: VERY LOW - cosmetic issue only
+- **Effort**: ~50 LOC
+- **Files**: src/solver.rs:158
+- **Notes**: Should populate with lower bounds but doesn't affect correctness
+
+**8. Approximation with Environment**
+- **Status**: Returns empty vector
+- **Impact**: VERY LOW - edge cases only
+- **Effort**: ~100 LOC
+- **Files**: src/translator.rs (approximate_expression_with_env)
+- **Notes**: Affects upper bound computation in rare cases
+
+**9. Proof Generation in SolutionIterator**
+- **Status**: Not implemented
+- **Impact**: VERY LOW - main solve path works correctly
+- **Effort**: ~50 LOC
+- **Files**: src/solver.rs:668
+- **Notes**: Main Solver::solve() generates proofs; only iteration missing
+
+#### Implementation Priority Order
+
+1. **Integer multiply/divide/modulo** (correctness + API completeness)
+2. **Dynamic shifts** (correctness)
+3. **Sum over declarations** (correctness)
+4. **ProjectExpression** (API completeness)
+5. **Skolemizer environment** (edge cases)
+6. Everything else (polish/optimizations)
+
+#### Estimated Total Effort
+
+- High priority: ~600-1000 LOC + comprehensive tests
+- Medium priority: ~250-450 LOC + tests
+- Low priority: ~500-700 LOC (mostly optimizations)
+
+**Total**: ~1350-2150 LOC for full Java parity on functional features
+
 ---
 
 ## Completed Work
