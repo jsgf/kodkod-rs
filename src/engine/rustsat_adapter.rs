@@ -31,7 +31,7 @@ impl<S> RustSatAdapter<S> {
     }
 }
 
-impl<S: rustsat::solvers::Solve> SATSolver for RustSatAdapter<S> {
+impl<S: rustsat::solvers::SolveIncremental> SATSolver for RustSatAdapter<S> {
     fn add_variables(&mut self, num_vars: u32) {
         // RustSat auto-creates variables as needed when clauses are added
         // Just track the count for our interface
@@ -66,8 +66,47 @@ impl<S: rustsat::solvers::Solve> SATSolver for RustSatAdapter<S> {
     }
 
     fn solve(&mut self) -> bool {
-        use rustsat::solvers::SolverResult;
+        use rustsat::solvers::{Solve, SolverResult};
         matches!(self.solver.solve(), Ok(SolverResult::Sat))
+    }
+
+    fn solve_with_assumptions(&mut self, assumptions: &[i32]) -> bool {
+        use rustsat::solvers::{SolveIncremental, SolverResult};
+        use rustsat::types::{Lit, Var};
+
+        let assumps: Vec<Lit> = assumptions
+            .iter()
+            .map(|&lit| {
+                let abs_lit = lit.abs();
+                let var_idx = (abs_lit - 1) as u32;
+                let var = Var::new(var_idx);
+                if lit > 0 { var.pos_lit() } else { var.neg_lit() }
+            })
+            .collect();
+
+        matches!(self.solver.solve_assumps(&assumps), Ok(SolverResult::Sat))
+    }
+
+    fn unsat_core(&mut self) -> Vec<i32> {
+        use rustsat::solvers::SolveIncremental;
+
+        // Get the core from the solver
+        // Note: The core contains literals from the conflict clause,
+        // which are the NEGATIONS of the assumptions that caused UNSAT.
+        // We negate them back to match the original assumptions.
+        match self.solver.core() {
+            Ok(core_lits) => {
+                core_lits
+                    .iter()
+                    .map(|lit| {
+                        let var_idx = lit.var().idx32() as i32 + 1;
+                        // Negate to get back to original assumption
+                        if lit.is_pos() { -var_idx } else { var_idx }
+                    })
+                    .collect()
+            }
+            Err(_) => Vec::new(),
+        }
     }
 
     fn value_of(&self, var: u32) -> bool {

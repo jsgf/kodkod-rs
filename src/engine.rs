@@ -31,6 +31,21 @@ pub trait SATSolver {
     /// Returns true if satisfiable, false if unsatisfiable
     fn solve(&mut self) -> bool;
 
+    /// Solves the current formula with assumptions
+    ///
+    /// Returns true if satisfiable under the given assumptions, false if unsatisfiable.
+    /// When UNSAT, the core can be retrieved via unsat_core().
+    ///
+    /// # Arguments
+    /// * `assumptions` - Literals that must be true (1-indexed, negated by sign)
+    fn solve_with_assumptions(&mut self, assumptions: &[i32]) -> bool;
+
+    /// Gets the unsat core after an UNSAT solve with assumptions
+    ///
+    /// Returns the subset of assumptions that caused the UNSAT.
+    /// Only valid after solve_with_assumptions() returns false.
+    fn unsat_core(&mut self) -> Vec<i32>;
+
     /// Returns the assignment of a variable in the solution
     ///
     /// Only valid after solve() returns true.
