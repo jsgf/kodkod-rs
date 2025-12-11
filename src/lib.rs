@@ -69,6 +69,9 @@ pub mod solver;
 /// Formula simplification and preprocessing
 pub mod simplify;
 
+/// Proof and unsatisfiable core extraction
+pub mod proof;
+
 /// Utility collections and helper functions
 /// Integer collections, sparse sequences, and utilities
 pub mod util {

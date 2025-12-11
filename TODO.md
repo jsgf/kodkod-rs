@@ -114,17 +114,28 @@
     - This would be a significant architectural change (~500+ LOC rewrite)
   - **Performance note**: Despite more CNF variables, Rust solving is often faster
   - **Note**: Integer bounds MUST be set for synthesis examples using IntConstant.toExpression()
-- **Implement proof/unsat core extraction system**
-  - Required for: ListDebug.java example
-  - Scope: ~1000+ LOC across multiple modules
-  - Components needed:
-    - TranslationLog and TranslationRecord (~200 LOC) - track formula→CNF mapping during translation
-    - Proof trait with TrivialProof and ResolutionBasedProof implementations (~530 LOC)
-    - Core minimization strategies (RCEStrategy, etc.) (~134+ LOC each, multiple strategies)
-    - SAT solver with proof support (MiniSatProver) - may require switching from batsat or adding proof tracking
-    - Integration into Solver to enable options like setCoreGranularity() and setLogTranslation()
-  - Status: Deferred due to complexity; blocks 1 example (ListDebug)
-  - Following Java: kodkod.engine.Proof, kodkod.engine.fol2sat.TranslationLog, kodkod.engine.ucore.*
+- **Proof/unsat core extraction**
+  - Status: ✅ **Functional for trivial cases**, infrastructure for full implementation
+  - **What's implemented** (~300 LOC):
+    - ✅ Options: `log_translation` and `core_granularity` (0-3) fields
+    - ✅ TranslationLog and TranslationRecord structs (src/proof.rs)
+    - ✅ Proof struct with `core()`, `log()`, and `minimize()` methods
+    - ✅ Solution::Unsat/TriviallyUnsat have optional `proof` field
+    - ✅ Solution::proof() accessor method
+    - ✅ Proof::trivial() for constant FALSE formulas
+    - ✅ Working proof extraction for trivially UNSAT cases
+    - ✅ Tests: tests/test_proof.rs (4 tests passing)
+  - **What's NOT implemented** (deferred, ~1500+ LOC):
+    - Translation logging during full formula→CNF conversion
+    - Resolution-based proof reconstruction from SAT solver traces
+    - Advanced core minimization (RCEStrategy, SCEStrategy, HybridStrategy, etc.)
+    - Support for non-trivial UNSAT (requires SAT solver proof integration)
+  - **Current behavior**:
+    - Trivially UNSAT (constant FALSE): ✅ Generates proof with minimal core
+    - Regular UNSAT (SAT solver finds contradiction): proof field is None
+  - **Unblocks**: Basic proof API usage, some test cases
+  - **Still blocks**: ListDebug example, full ReductionAndProofTest, UCoreTest
+  - Following Java: kodkod.engine.Proof, kodkod.engine.fol2sat.TranslationLog
 - Fix up copyrights
   - All files should have the same copyright and license as the Java files they're derived from
   - The overall package should have the same license

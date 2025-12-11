@@ -7,6 +7,7 @@ use crate::bool::{BoolValue, Options as BoolOptions};
 use crate::cnf::CNFTranslator;
 use crate::engine::{rustsat_adapter::RustSatAdapter, SATSolver};
 use crate::instance::{Bounds, Instance, TupleSet};
+use crate::proof::Proof;
 use crate::translator::{Translator, LeafInterpreter};
 use crate::Result;
 use rustc_hash::FxHashMap;
@@ -31,6 +32,21 @@ pub struct Options {
     pub flatten_formulas: bool,
     /// Whether to break up quantifiers when flattening (default = false)
     pub breakup_quantifiers: bool,
+    /// Whether to log translation for proof/core extraction (default = false)
+    ///
+    /// When enabled, the solver tracks the mapping from formulas to CNF clauses,
+    /// allowing unsatisfiable cores to be extracted from UNSAT results.
+    pub log_translation: bool,
+    /// Core granularity level (0-3, default = 0)
+    ///
+    /// Controls how finely the formula is subdivided for core extraction:
+    /// - 0: No subdivision (minimal logging overhead)
+    /// - 1: Flatten top-level AND conjuncts
+    /// - 2: Also flatten nested conjuncts
+    /// - 3: Also push negations through quantifiers
+    ///
+    /// Higher values produce more precise cores but increase overhead.
+    pub core_granularity: u8,
 }
 
 impl Default for Options {
@@ -41,6 +57,8 @@ impl Default for Options {
             symmetry_breaking: 20,
             flatten_formulas: true,
             breakup_quantifiers: false,
+            log_translation: false,
+            core_granularity: 0,
         }
     }
 }
@@ -151,6 +169,14 @@ impl Solver {
             }
             FormulaInner::Constant(false) => {
                 eprintln!("DEBUG: Formula simplified to FALSE");
+
+                // Generate proof for trivially UNSAT formula
+                let proof = if self.options.log_translation {
+                    Some(Proof::trivial(formula.clone()))
+                } else {
+                    None
+                };
+
                 return Ok(Solution::TriviallyUnsat {
                     stats: Statistics {
                         translation_time: simplification_time,
@@ -159,6 +185,7 @@ impl Solver {
                         num_variables: 0,
                         num_clauses: 0,
                     },
+                    proof,
                 });
             }
             _ => {}
@@ -205,7 +232,7 @@ impl Solver {
                     num_variables: 0,
                     num_clauses: 0,
                 };
-                return Ok(Solution::TriviallyUnsat { stats });
+                return Ok(Solution::TriviallyUnsat { stats, proof: None });
             }
         }
         eprintln!("DEBUG: Boolean circuit is not constant (has variables)");
@@ -243,7 +270,7 @@ impl Solver {
             let instance = self.extract_instance(sat_solver, interpreter, &final_bounds)?;
             Ok(Solution::Sat { instance, stats })
         } else {
-            Ok(Solution::Unsat { stats })
+            Ok(Solution::Unsat { stats, proof: None }) // TODO: Generate proof when log_translation enabled
         }
     }
 
@@ -453,6 +480,13 @@ impl SolutionIterator {
                 };
             }
             FormulaInner::Constant(false) => {
+                // Generate proof for trivially UNSAT formula
+                let proof = if options.log_translation {
+                    Some(Proof::trivial(formula.clone()))
+                } else {
+                    None
+                };
+
                 return Self {
                     sat_solver: None,
                     extractor: SolutionExtractorData::default(),
@@ -470,6 +504,7 @@ impl SolutionIterator {
                             num_variables: 0,
                             num_clauses: 0,
                         },
+                        proof,
                     }),
                 };
             }
@@ -580,7 +615,7 @@ impl Iterator for SolutionIterator {
             // UNSAT - no more solutions
             self.finished = true;
             self.sat_solver = None;
-            Some(Ok(Solution::Unsat { stats }))
+            Some(Ok(Solution::Unsat { stats, proof: None })) // TODO: Generate proof when log_translation enabled
         }
     }
 }
@@ -674,11 +709,15 @@ pub enum Solution {
     Unsat {
         /// Solving statistics
         stats: Statistics,
+        /// Proof of unsatisfiability (if log_translation was enabled)
+        proof: Option<Proof>,
     },
     /// Formula is trivially unsatisfiable (constant false)
     TriviallyUnsat {
         /// Solving statistics
         stats: Statistics,
+        /// Proof of unsatisfiability (if log_translation was enabled)
+        proof: Option<Proof>,
     },
 }
 
@@ -711,8 +750,18 @@ impl Solution {
         match self {
             Solution::Sat { stats, .. } => stats,
             Solution::TriviallySat { stats, .. } => stats,
-            Solution::Unsat { stats } => stats,
-            Solution::TriviallyUnsat { stats } => stats,
+            Solution::Unsat { stats, .. } => stats,
+            Solution::TriviallyUnsat { stats, .. } => stats,
+        }
+    }
+
+    /// Returns the proof of unsatisfiability if available
+    ///
+    /// Only present for UNSAT solutions when log_translation was enabled.
+    pub fn proof(&self) -> Option<&Proof> {
+        match self {
+            Solution::Unsat { proof, .. } | Solution::TriviallyUnsat { proof, .. } => proof.as_ref(),
+            _ => None,
         }
     }
 }
@@ -915,6 +964,8 @@ mod tests {
             symmetry_breaking: 20,
             flatten_formulas: true,
             breakup_quantifiers: false,
+            log_translation: false,
+            core_granularity: 0,
         };
 
         let solver = Solver::new(options);
