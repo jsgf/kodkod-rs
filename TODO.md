@@ -9,11 +9,12 @@
   - Like examples, *DO NOT* move on if there's a bug or missing feature
     - If, after explicit permission, there's a reason to skip a test for now, leave the test in a *failing* or with a `#[should_panic]` annotation so the gap is obvious
   - This excludes tests which are only specific to Java, like the JNI interfaces to solvers, or custom data structures which Rust has by default
-- After all examples are ported, add #[test] functions to examples
-  - Examples should keep their main() functions (for standalone execution)
+- ✅ After all examples are ported, add #[test] functions to examples
+  - Examples keep their main() functions (for standalone execution)
   - Add #[test] functions that invoke main functionality and assert expected outcomes
   - This allows `cargo test` to validate all examples work correctly
-  - May require minor refactoring to expose testable functions
+  - **Status: COMPLETE** - 58/60 examples have tests (69 test functions total)
+  - Excluded: alloy_viktor.rs (too long-running), tptp_quasigroups7.rs (base module)
 - Implement missing optimizations
   - Revisit all should_panic tests and implement the features they require
   - **PERFORMANCE: Formula preprocessing for complex quantified formulas**

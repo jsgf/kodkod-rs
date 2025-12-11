@@ -4,9 +4,9 @@ use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
 use kodkod_rs::solver::{Options, Solver};
 
-fn main() {
+fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     // Create a simple universe
-    let universe = Universe::new(&["a", "b"]).unwrap();
+    let universe = Universe::new(&["a", "b"])?;
     let factory = universe.factory();
 
     // Create relations
@@ -14,8 +14,8 @@ fn main() {
     let r2 = Relation::binary("R2");
 
     let mut bounds = Bounds::new(universe);
-    bounds.bound_exactly(&r1, factory.all(1)).unwrap();
-    bounds.bound(&r2, factory.none(2), factory.all(2)).unwrap();
+    bounds.bound_exactly(&r1, factory.all(1))?;
+    bounds.bound(&r2, factory.none(2), factory.all(2))?;
 
     // Create nested quantifiers: forall u in R1: forall v in u.R2: ...
     let u_var = Variable::unary("u");
@@ -40,13 +40,23 @@ fn main() {
     );
 
     let solver = Solver::new(Options::default());
-    match solver.solve(&formula, &bounds) {
-        Ok(solution) => {
-            println!("Result: {}", if solution.is_sat() { "SAT" } else { "UNSAT" });
-        }
+    let solution = solver.solve(&formula, &bounds)?;
+    println!("Result: {}", if solution.is_sat() { "SAT" } else { "UNSAT" });
+
+    Ok(())
+}
+
+fn main() {
+    match run() {
+        Ok(()) => {}
         Err(e) => {
             eprintln!("Error: {:?}", e);
             std::process::exit(1);
         }
     }
+}
+
+#[test]
+fn test_nested_quantifiers_runs() {
+    run().unwrap();
 }
