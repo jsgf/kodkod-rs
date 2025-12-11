@@ -66,12 +66,12 @@ impl<S: rustsat::solvers::SolveIncremental> SATSolver for RustSatAdapter<S> {
     }
 
     fn solve(&mut self) -> bool {
-        use rustsat::solvers::{Solve, SolverResult};
+        use rustsat::solvers::SolverResult;
         matches!(self.solver.solve(), Ok(SolverResult::Sat))
     }
 
     fn solve_with_assumptions(&mut self, assumptions: &[i32]) -> bool {
-        use rustsat::solvers::{SolveIncremental, SolverResult};
+        use rustsat::solvers::SolverResult;
         use rustsat::types::{Lit, Var};
 
         let assumps: Vec<Lit> = assumptions
@@ -88,8 +88,6 @@ impl<S: rustsat::solvers::SolveIncremental> SATSolver for RustSatAdapter<S> {
     }
 
     fn unsat_core(&mut self) -> Vec<i32> {
-        use rustsat::solvers::SolveIncremental;
-
         // Get the core from the solver
         // Note: The core contains literals from the conflict clause,
         // which are the NEGATIONS of the assumptions that caused UNSAT.

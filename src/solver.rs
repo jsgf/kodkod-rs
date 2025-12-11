@@ -232,12 +232,28 @@ impl Solver {
                     num_variables: 0,
                     num_clauses: 0,
                 };
-                return Ok(Solution::TriviallyUnsat { stats, proof: None });
+
+                // Generate proof for trivially UNSAT formula
+                let proof = if self.options.log_translation {
+                    Some(Proof::trivial(optimized_formula.clone()))
+                } else {
+                    None
+                };
+
+                return Ok(Solution::TriviallyUnsat { stats, proof });
             }
         }
         eprintln!("DEBUG: Boolean circuit is not constant (has variables)");
 
         let interpreter = translation_result.interpreter();
+
+        // Extract formula conjuncts for proof tracking if enabled
+        let _formula_conjuncts = if self.options.log_translation {
+            extract_conjuncts(&optimized_formula)
+        } else {
+            Vec::new()
+        };
+
         let cnf_translator = CNFTranslator::new(interpreter.arena());
         let (_top_level_var, cnf) = cnf_translator.translate(bool_circuit);
         let cnf_time = cnf_start.elapsed();
@@ -253,8 +269,21 @@ impl Solver {
             sat_solver.add_clause(clause);
         }
 
-        // Solve
-        let is_sat = sat_solver.solve();
+        // Prepare for proof extraction if logging enabled
+        let formula_conjuncts = if self.options.log_translation {
+            extract_conjuncts(&optimized_formula)
+        } else {
+            Vec::new()
+        };
+
+        // Solve (with or without assumptions)
+        let is_sat = if !formula_conjuncts.is_empty() {
+            // When proof logging is enabled, we'll use assumptions to track conjuncts
+            // For now, just solve normally - we'll add assumption tracking in next iteration
+            sat_solver.solve()
+        } else {
+            sat_solver.solve()
+        };
         let solving_time = solving_start.elapsed();
 
         let stats = Statistics {
@@ -270,7 +299,28 @@ impl Solver {
             let instance = self.extract_instance(sat_solver, interpreter, &final_bounds)?;
             Ok(Solution::Sat { instance, stats })
         } else {
-            Ok(Solution::Unsat { stats, proof: None }) // TODO: Generate proof when log_translation enabled
+            // UNSAT - extract proof if logging enabled
+            let proof = if !formula_conjuncts.is_empty() {
+                // Create a proof with all conjuncts as the core
+                use crate::proof::TranslationLog;
+                use std::sync::Arc;
+
+                let mut log = TranslationLog::new();
+                log.set_roots(formula_conjuncts.clone());
+                log.set_bounds(final_bounds.clone());
+
+                // Minimize the core by checking if each conjunct is necessary
+                let minimal_core = minimize_core(&formula_conjuncts, &final_bounds, &self.options);
+
+                // Update the log with the minimal core
+                log.set_roots(minimal_core);
+
+                Some(Proof::new(Arc::new(log)))
+            } else {
+                None
+            };
+
+            Ok(Solution::Unsat { stats, proof })
         }
     }
 
@@ -806,6 +856,98 @@ impl Statistics {
     pub fn num_clauses(&self) -> u32 {
         self.num_clauses
     }
+}
+
+/// Minimizes an unsat core using brute-force deletion
+///
+/// For each formula in the core, try removing it and check if the remainder is still UNSAT.
+/// If removing a formula makes the remainder SAT, then that formula is necessary for UNSAT.
+/// This is O(n²) but produces a minimal core.
+///
+/// Following Java: Similar to RCEStrategy core reduction
+fn minimize_core(core: &[Formula], bounds: &Bounds, options: &Options) -> Vec<Formula> {
+    if core.is_empty() || core.len() == 1 {
+        // Empty or single-formula cores are already minimal
+        return core.to_vec();
+    }
+
+    let mut minimal_core = Vec::new();
+    let mut candidates: Vec<Formula> = core.to_vec();
+
+    // Try to remove each formula
+    for i in 0..candidates.len() {
+        let test_formula = candidates[i].clone();
+
+        // Build formula without this conjunct
+        let without: Vec<Formula> = candidates.iter()
+            .enumerate()
+            .filter(|(idx, _)| *idx != i)
+            .map(|(_, f)| f.clone())
+            .collect();
+
+        if without.is_empty() {
+            // If this is the last formula, it must be in the core
+            minimal_core.push(test_formula);
+            continue;
+        }
+
+        // Check if the formula without this conjunct is still UNSAT
+        let test_without = Formula::and_all(without.clone());
+
+        // Create a minimal solver to test (no logging to avoid recursion)
+        let mut test_options = options.clone();
+        test_options.log_translation = false;
+
+        let solver = Solver::new(test_options);
+        match solver.solve(&test_without, bounds) {
+            Ok(solution) => {
+                if solution.is_unsat() {
+                    // Still UNSAT without this formula, so it's not needed
+                    candidates.remove(i);
+                    // Restart the loop since we modified candidates
+                    return minimize_core(&candidates, bounds, options);
+                } else {
+                    // SAT without this formula, so this formula is necessary
+                    minimal_core.push(test_formula);
+                }
+            }
+            Err(_) => {
+                // Error solving - keep the formula to be safe
+                minimal_core.push(test_formula);
+            }
+        }
+    }
+
+    minimal_core
+}
+
+/// Extracts top-level conjuncts from a formula
+///
+/// Recursively flattens AND operations at the top level to get a vector of conjuncts.
+/// For proof extraction, we want to identify which conjuncts cause UNSAT.
+fn extract_conjuncts(formula: &Formula) -> Vec<Formula> {
+    let mut conjuncts = Vec::new();
+
+    fn collect(f: &Formula, acc: &mut Vec<Formula>) {
+        match &*f.inner() {
+            FormulaInner::Nary { op: BinaryFormulaOp::And, formulas } => {
+                for sub in formulas {
+                    collect(sub, acc);
+                }
+            }
+            FormulaInner::Binary { op: BinaryFormulaOp::And, left, right } => {
+                collect(left, acc);
+                collect(right, acc);
+            }
+            _ => {
+                // Not an AND - this is a leaf conjunct
+                acc.push(f.clone());
+            }
+        }
+    }
+
+    collect(formula, &mut conjuncts);
+    conjuncts
 }
 
 /// Extracts all RelationPredicates from a formula

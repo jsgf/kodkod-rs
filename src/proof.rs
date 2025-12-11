@@ -26,6 +26,7 @@
 //! Following Java: kodkod.engine.Proof, kodkod.engine.fol2sat.TranslationLog
 
 use crate::ast::Formula;
+use crate::instance::Bounds;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
@@ -54,6 +55,8 @@ pub struct TranslationLog {
     records: Vec<TranslationRecord>,
     /// Top-level formula roots (conjuncts)
     roots: Vec<Formula>,
+    /// Bounds used for this translation
+    bounds: Option<Bounds>,
 }
 
 impl TranslationLog {
@@ -62,6 +65,7 @@ impl TranslationLog {
         Self {
             records: Vec::new(),
             roots: Vec::new(),
+            bounds: None,
         }
     }
 
@@ -79,9 +83,19 @@ impl TranslationLog {
         self.roots = roots;
     }
 
+    /// Sets the bounds used for this translation
+    pub fn set_bounds(&mut self, bounds: Bounds) {
+        self.bounds = Some(bounds);
+    }
+
     /// Returns the formula roots
     pub fn roots(&self) -> &[Formula] {
         &self.roots
+    }
+
+    /// Returns the bounds if available
+    pub fn bounds(&self) -> Option<&Bounds> {
+        self.bounds.as_ref()
     }
 
     /// Returns an iterator over translation records
@@ -109,22 +123,60 @@ pub struct Proof {
 impl Proof {
     /// Creates a new proof from a translation log
     ///
-    /// For trivially UNSAT formulas (constant FALSE), creates a minimal core.
-    /// For non-trivial UNSAT, core extraction requires SAT solver proof traces.
+    /// For non-trivial UNSAT (from SAT solver), the core is extracted from the log.
     pub fn new(log: Arc<TranslationLog>) -> Self {
-        Self { log, core: None }
+        // Initialize core from the log's roots
+        let mut core = FxHashMap::default();
+        for root in log.roots() {
+            core.insert(root.clone(), root.clone());
+        }
+
+        Self {
+            log,
+            core: Some(core),
+        }
     }
 
     /// Creates a proof for a trivially UNSAT formula (constant FALSE)
     ///
-    /// The core contains the formula that simplified to FALSE.
+    /// The core contains the formula's conjuncts if it's an AND,
+    /// otherwise just the formula itself.
     pub fn trivial(formula: Formula) -> Self {
+        use crate::ast::{BinaryFormulaOp, FormulaInner};
+
+        // Extract conjuncts from the formula if it's an AND
+        fn extract_conjuncts_from_formula(f: &Formula) -> Vec<Formula> {
+            let mut result = Vec::new();
+            fn collect(formula: &Formula, acc: &mut Vec<Formula>) {
+                match &*formula.inner() {
+                    FormulaInner::Nary { op: BinaryFormulaOp::And, formulas } => {
+                        for sub in formulas {
+                            collect(sub, acc);
+                        }
+                    }
+                    FormulaInner::Binary { op: BinaryFormulaOp::And, left, right } => {
+                        collect(left, acc);
+                        collect(right, acc);
+                    }
+                    _ => {
+                        acc.push(formula.clone());
+                    }
+                }
+            }
+            collect(f, &mut result);
+            result
+        }
+
+        let conjuncts = extract_conjuncts_from_formula(&formula);
+
         let mut log = TranslationLog::new();
-        log.set_roots(vec![formula.clone()]);
+        log.set_roots(conjuncts.clone());
         log.record(formula.clone(), formula.clone(), -i32::MAX);
 
         let mut core = FxHashMap::default();
-        core.insert(formula.clone(), formula);
+        for conjunct in conjuncts {
+            core.insert(conjunct.clone(), conjunct);
+        }
 
         Self {
             log: Arc::new(log),

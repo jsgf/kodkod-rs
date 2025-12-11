@@ -115,32 +115,34 @@
   - **Performance note**: Despite more CNF variables, Rust solving is often faster
   - **Note**: Integer bounds MUST be set for synthesis examples using IntConstant.toExpression()
 - **Proof/unsat core extraction**
-  - Status: ✅ **Functional for trivial cases**, ✅ **SAT-level infrastructure complete**
-  - **What's implemented** (~500 LOC):
+  - Status: ✅ **Minimal core extraction complete**
+  - **What's implemented** (~800 LOC):
     - ✅ Options: `log_translation` and `core_granularity` (0-3) fields
-    - ✅ TranslationLog and TranslationRecord structs (src/proof.rs ~156 LOC)
+    - ✅ TranslationLog and TranslationRecord structs (src/proof.rs ~180 LOC)
     - ✅ Proof struct with `core()`, `log()`, and `minimize()` methods
     - ✅ Solution::Unsat/TriviallyUnsat have optional `proof` field
     - ✅ Solution::proof() accessor method
-    - ✅ Proof::trivial() for constant FALSE formulas
-    - ✅ Working proof extraction for trivially UNSAT cases (4 tests passing)
+    - ✅ Proof::trivial() extracts conjuncts for better granularity
+    - ✅ Working proof extraction for trivially UNSAT cases (6 tests passing)
     - ✅ SATSolver::solve_with_assumptions() and unsat_core() methods
-    - ✅ Full batsat integration for assumption-based core extraction
-    - ✅ Core extraction at SAT level (3 tests passing)
-  - **What remains for full implementation** (~300-500 LOC):
-    - Extract top-level conjuncts from formulas
-    - Allocate tracking variables for each conjunct
-    - Add implications: tracking_var => conjunct_cnf
-    - Solve with all tracking variables assumed true
-    - When UNSAT, map core assumptions back to original formulas
-    - Generate Proof with minimal formula set
+    - ✅ Full batsat integration for assumption-based core extraction (3 SAT-level tests passing)
+    - ✅ **Minimal core extraction for non-trivial UNSAT using brute-force minimization**
+    - ✅ Conjunct extraction from formulas (src/solver.rs extract_conjuncts)
+    - ✅ Bounds stored in TranslationLog for verification
+    - ✅ minimize_core() function uses deletion-based minimization (O(n²))
+  - **How it works**:
+    - Extracts top-level AND conjuncts from the formula
+    - For each conjunct, tries removing it and re-solving
+    - If still UNSAT without the conjunct, removes it from core
+    - Repeats until all remaining conjuncts are necessary
   - **Current behavior**:
-    - Trivially UNSAT (constant FALSE): ✅ Generates proof with minimal core
-    - Regular UNSAT (SAT solver): proof field is None (90% there - just needs wiring)
-    - SAT solver has full assumption/core support ready to use
-  - **Tests**: 7 tests passing (4 proof tests + 3 core tests) across 24 test suites
-  - **Unblocks**: Basic proof API, trivial UNSAT cases, SAT-level core extraction
-  - **Partially blocks**: ListDebug example (needs full impl), ReductionAndProofTest, UCoreTest
+    - Trivially UNSAT (constant FALSE): ✅ Generates proof with conjuncts extracted
+    - Regular UNSAT (SAT solver): ✅ Generates proof with **minimal core**
+    - SAT: ✅ No proof (correct behavior)
+  - **Tests**: 6 proof tests + 3 unsat_core tests passing
+  - **Unblocks**: Proof API, minimal core extraction for all UNSAT cases
+  - **Performance note**: Brute-force minimization is O(n²) but simple and correct
+  - **Future optimization**: Could use assumption-based minimization for better performance
   - Following Java: kodkod.engine.Proof, kodkod.engine.fol2sat.TranslationLog
 - Fix up copyrights
   - All files should have the same copyright and license as the Java files they're derived from

@@ -289,7 +289,7 @@ fn test_dna_cuts() {
     bounds.bound_exactly(&model.next, link_ord).unwrap();
 
     let formula = model.show();
-    let solver = kodkod_rs::solver::Solver::new(kodkod_rs::solver::Options::default());
+    let solver = Solver::new(Options::default());
     let solution = solver.solve(&formula, &bounds).expect("Failed to solve");
     assert!(solution.is_sat(), "DNACuts should be SAT with all bases used");
 }

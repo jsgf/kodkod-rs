@@ -1,6 +1,6 @@
 use kodkod_rs::ast::{Decl, Decls, Expression, Formula, Relation, Variable};
 use kodkod_rs::instance::{Bounds, Universe};
-use kodkod_rs::solver::Solver;
+use kodkod_rs::solver::{Options, Solver};
 
 /// KK encoding of mondex/a.als together with mondex/common.als.
 struct AbstractWorldDefinitions {
@@ -590,7 +590,7 @@ fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     }
 
     let model = AbstractWorldDefinitions::new();
-    let solver = Solver::new(kodkod_rs::solver::Options::default());
+    let solver = Solver::new(Options::default());
 
     let formula = match assertion.as_str() {
         "A241" => model.check_a241(),
