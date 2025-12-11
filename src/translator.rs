@@ -862,31 +862,9 @@ impl<'a> FOL2BoolTranslator<'a> {
                             left_int
                         }
                     }
-                    IntBinaryOp::Multiply => {
-                        // Multiplication not yet fully implemented in Int
-                        // For now, fallback to constant evaluation if possible
-                        if let (Some(lv), Some(rv)) = (left_int.value(), right_int.value()) {
-                            let product = lv.wrapping_mul(rv);
-                            let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
-                            Int::constant(product, factory.bitwidth(), one_bit)
-                        } else {
-                            left_int // Unsupported
-                        }
-                    }
-                    IntBinaryOp::Divide | IntBinaryOp::Modulo => {
-                        // Division/modulo not implemented
-                        if let (Some(lv), Some(rv)) = (left_int.value(), right_int.value()) {
-                            let result = match op {
-                                IntBinaryOp::Divide if rv != 0 => lv / rv,
-                                IntBinaryOp::Modulo if rv != 0 => lv % rv,
-                                _ => 0,
-                            };
-                            let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
-                            Int::constant(result, factory.bitwidth(), one_bit)
-                        } else {
-                            left_int
-                        }
-                    }
+                    IntBinaryOp::Multiply => left_int.multiply(&right_int, factory),
+                    IntBinaryOp::Divide => left_int.divide(&right_int, factory),
+                    IntBinaryOp::Modulo => left_int.modulo(&right_int, factory),
                 }
             }
 

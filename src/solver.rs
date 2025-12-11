@@ -343,15 +343,30 @@ impl Solver {
     /// trivial solutions are returned.
     ///
     /// # Example
-    /// ```ignore
+    /// ```rust
+    /// use kodkod_rs::ast::{Relation, Expression, Formula};
+    /// use kodkod_rs::instance::{Universe, Bounds};
+    /// use kodkod_rs::solver::{Solver, Options, Solution};
+    ///
+    /// let universe = Universe::new(&["A", "B"]).unwrap();
+    /// let r = Relation::unary("R");
+    /// let mut bounds = Bounds::new(universe);
+    /// let factory = bounds.universe().factory();
+    /// // R can be empty, {A}, or {B}
+    /// bounds.bound(&r, factory.none(1), factory.all(1)).unwrap();
+    ///
+    /// let formula = Expression::from(r).some();
     /// let solver = Solver::new(Options::default());
+    ///
+    /// let mut count = 0;
     /// for solution in solver.solve_all(&formula, &bounds) {
-    ///     match solution? {
-    ///         Solution::Sat { instance, .. } => println!("Found: {:?}", instance),
-    ///         Solution::Unsat { .. } => println!("No more solutions"),
+    ///     match solution.unwrap() {
+    ///         Solution::Sat { .. } => count += 1,
+    ///         Solution::Unsat { .. } => break,
     ///         _ => {}
     ///     }
     /// }
+    /// assert_eq!(count, 2); // {A} and {B}
     /// ```
     pub fn solve_all(&self, formula: &Formula, bounds: &Bounds) -> SolutionIterator {
         SolutionIterator::new(&self.options, formula, bounds)

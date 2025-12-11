@@ -342,6 +342,184 @@ impl<'arena> Int<'arena> {
 
         Int::new(vec![any_bit_set, sign_bit])
     }
+
+    /// Multiplies this integer by another using partial sum circuit
+    /// Following Java: TwosComplementInt.multiply()
+    /// Uses Booth's algorithm for signed multiplication
+    pub fn multiply(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
+        let width = (self.width() + other.width()).min(factory.bitwidth());
+        let mut mult_bits: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
+
+        // First partial sum: multiply bit(0) with all bits of other
+        let i_bit = self.bit(0);
+        for j in 0..width {
+            mult_bits.push(factory.and(i_bit.clone(), other.bit(j)));
+        }
+
+        let last = width - 1;
+
+        // Intermediate partial sums (for bits 1 to last-1)
+        for i in 1..last {
+            let mut carry = BoolValue::Constant(BooleanConstant::FALSE);
+            let i_bit = self.bit(i);
+            let jmax = width - i;
+
+            for j in 0..jmax {
+                let new_bit = factory.and(i_bit.clone(), other.bit(j));
+                let index = j + i;
+
+                // Add new_bit to mult_bits[index] with carry
+                let old_bit = mult_bits[index].clone();
+                mult_bits[index] = factory.sum(old_bit.clone(), new_bit.clone(), carry.clone());
+                carry = factory.carry(old_bit, new_bit, carry);
+            }
+        }
+
+        // Last partial sum is subtracted (sign bit handling for two's complement)
+        // See http://en.wikipedia.org/wiki/Multiplication_ALU
+        let last_bit = factory.and(self.bit(last), other.bit(0));
+        let negated_last = factory.not(last_bit);
+        let old_bit = mult_bits[last].clone();
+        mult_bits[last] = factory.sum(
+            old_bit.clone(),
+            negated_last.clone(),
+            BoolValue::Constant(BooleanConstant::TRUE)
+        );
+
+        Int::new(mult_bits)
+    }
+
+    /// Helper for division/modulo: extends this integer to the given width using sign extension
+    /// Following Java: TwosComplementInt.extend()
+    fn extend(&self, extwidth: usize) -> Vec<BoolValue<'arena>> {
+        let mut ext = Vec::with_capacity(extwidth);
+        let width = self.width();
+
+        // Copy existing bits
+        for i in 0..width {
+            ext.push(self.bits[i].clone());
+        }
+
+        // Sign-extend
+        let sign = self.bits[width - 1].clone();
+        for _ in width..extwidth {
+            ext.push(sign.clone());
+        }
+
+        ext
+    }
+
+    /// Performs non-restoring signed division
+    /// Following Java: TwosComplementInt.nonRestoringDivision()
+    /// Returns quotient if quotient=true, otherwise returns remainder
+    /// See: Behrooz Parhami, Computer Arithmetic: Algorithms and Hardware Designs,
+    /// Oxford University Press, 2000, pp. 218-221.
+    fn non_restoring_division(&self, d: &Int<'arena>, factory: &'arena BooleanFactory, quotient: bool) -> Vec<BoolValue<'arena>> {
+        let width = factory.bitwidth();
+        let extended = width * 2 + 1;
+
+        // Extend the dividend to bitwidth*2 + 1 and store in s
+        let mut s = self.extend(extended);
+        let mut q: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
+
+        // Detects if one of the intermediate remainders is zero
+        let mut svalues: Vec<BoolValue<'arena>> = Vec::with_capacity(width);
+
+        // The sign bit of the divisor
+        let d_msb = d.bit(width);
+
+        let mut sleft = 0; // Index containing LSB of s
+
+        for _i in 0..width {
+            // Collect OR of all s bits to detect zero
+            svalues.push(factory.or_multi(s.clone()));
+
+            let sright = (sleft + extended - 1) % extended; // Index containing MSB of s
+
+            // q[width-i-1] is 1 if sign(s_i) = sign(d)
+            let qbit = factory.iff(s[sright].clone(), d_msb.clone());
+            q.push(qbit.clone());
+
+            // Shift s to the left by 1 (simulated by setting sright to FALSE and sleft to sright)
+            s[sright] = BoolValue::Constant(BooleanConstant::FALSE);
+            sleft = sright;
+
+            // If sign(s_i) = sign(d), subtract (2^width)d from s_i;
+            // otherwise, add (2^width)d to s_i
+            let mut carry = qbit.clone();
+            for di in 0..=width {
+                let si = (sleft + width + di) % extended;
+                let dbit = factory.xor(qbit.clone(), d.bit(di));
+                let sbit = s[si].clone();
+                s[si] = factory.sum(sbit.clone(), dbit.clone(), carry.clone());
+                carry = factory.carry(sbit, dbit, carry);
+            }
+        }
+
+        // Reverse q since we built it backwards
+        q.reverse();
+
+        // Correction needed if one of the intermediate remainders is zero
+        // or s is non-zero and its sign differs from the sign of the dividend
+        let all_svalues_true = factory.and_multi(svalues);
+        let not_all_svalues = factory.not(all_svalues_true);
+
+        let s_nonzero = factory.or_multi(s[0..=width].to_vec());
+        let s_sign_differs = factory.xor(s[width].clone(), self.bit(width));
+        let sign_issue = factory.and(s_sign_differs, s_nonzero.clone());
+
+        let incorrect = factory.or(not_all_svalues, sign_issue);
+        let corrector = factory.iff(s[width].clone(), d.bit(width));
+
+        if quotient {
+            // Convert q to 2's complement: shift left by 1 and set LSB to TRUE
+            let mut q_result = vec![BoolValue::Constant(BooleanConstant::TRUE)];
+            q_result.extend_from_slice(&q[0..width-1]);
+
+            // Correct if incorrect: if corrector is true, increment q; otherwise decrement q
+            let sign = factory.and(incorrect.clone(), factory.not(corrector.clone()));
+            let mut carry = factory.and(incorrect, corrector);
+
+            for i in 0..width {
+                let qbit = q_result[i].clone();
+                q_result[i] = factory.sum(qbit.clone(), sign.clone(), carry.clone());
+                carry = factory.carry(qbit, sign.clone(), carry);
+            }
+
+            q_result
+        } else {
+            // Correct s if incorrect: if corrector is true, subtract (2^width)d;
+            // otherwise add (2^width)d
+            let mut carry = factory.and(incorrect.clone(), corrector.clone());
+
+            for i in 0..=width {
+                let dbit = factory.and(
+                    incorrect.clone(),
+                    factory.xor(corrector.clone(), d.bit(i))
+                );
+                let sbit = s[i].clone();
+                s[i] = factory.sum(sbit.clone(), dbit.clone(), carry.clone());
+                carry = factory.carry(sbit, dbit, carry);
+            }
+
+            // Return width low-order bits
+            s[0..width].to_vec()
+        }
+    }
+
+    /// Divides this integer by another
+    /// Following Java: TwosComplementInt.divide()
+    pub fn divide(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
+        let bits = self.non_restoring_division(other, factory, true);
+        Int::new(bits)
+    }
+
+    /// Computes the modulo (remainder) of this integer divided by another
+    /// Following Java: TwosComplementInt.modulo()
+    pub fn modulo(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
+        let bits = self.non_restoring_division(other, factory, false);
+        Int::new(bits)
+    }
 }
 
 #[cfg(test)]

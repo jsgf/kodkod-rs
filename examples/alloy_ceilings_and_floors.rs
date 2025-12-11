@@ -221,6 +221,8 @@ fn run() -> Result<(), kodkod_rs::error::KodkodError> {
     Ok(())
 }
 
+/// Main function for running as standalone example
+#[cfg(not(test))]
 fn main() -> Result<(), kodkod_rs::error::KodkodError> {
     run()
 }

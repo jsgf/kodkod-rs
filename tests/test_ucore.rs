@@ -16,6 +16,7 @@ trait UCoreExample {
     fn bounds(&self, scope: usize) -> Result<Bounds, kodkod_rs::error::KodkodError>;
 
     /// Returns bounds with no scope parameter (for fixed-scope examples)
+    #[allow(dead_code)] // Infrastructure for fixed-scope examples (NUM378, etc.) - to be used when ported
     fn bounds_fixed(&self) -> Result<Bounds, kodkod_rs::error::KodkodError> {
         self.bounds(0)
     }
@@ -117,6 +118,7 @@ fn test_trivial_proof_extractor(examples: &[Box<dyn UCoreExample>], max_scope: u
 }
 
 /// Tests proof extraction for fixed-scope examples
+#[allow(dead_code)] // Infrastructure for fixed-scope examples (NUM378) - to be used when ported
 fn test_trivial_proof_extractor_fixed(examples: &[Box<dyn UCoreExample>], core_granularity: u8) {
     let mut options = Options::default();
     options.log_translation = true;
@@ -164,6 +166,7 @@ fn test_proof_extractor(examples: &[Box<dyn UCoreExample>], max_scope: usize, co
 }
 
 /// Tests non-trivial proof extraction for fixed-scope examples
+#[allow(dead_code)] // Infrastructure for fixed-scope examples (NUM378) - to be used when ported
 fn test_proof_extractor_fixed(examples: &[Box<dyn UCoreExample>], core_granularity: u8) {
     let mut options = Options::default();
     options.log_translation = true;

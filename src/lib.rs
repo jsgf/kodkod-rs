@@ -9,13 +9,13 @@
 //!
 //! ## Example
 //!
-//! ```rust,ignore
-//! use kodkod_rs::ast::{Relation, Expression};
+//! ```rust
+//! use kodkod_rs::ast::{Relation, Expression, Formula};
 //! use kodkod_rs::instance::{Universe, Bounds};
-//! use kodkod_rs::engine::Solver;
+//! use kodkod_rs::solver::{Solver, Options};
 //!
 //! // Create universe
-//! let universe = Universe::new(&["A", "B", "C"]);
+//! let universe = Universe::new(&["A", "B", "C"]).unwrap();
 //!
 //! // Define relation
 //! let person = Relation::unary("Person");
@@ -25,18 +25,16 @@
 //! let factory = bounds.universe().factory();
 //! bounds.bound(&person,
 //!     factory.none(1),
-//!     factory.tuple_set(&[&["A"], &["B"]]));
+//!     factory.tuple_set(&[&["A"], &["B"]]).unwrap()).unwrap();
 //!
 //! // Create formula: some Person
 //! let formula = Expression::from(person).some();
 //!
 //! // Solve
 //! let solver = Solver::new(Options::default());
-//! let solution = solver.solve(&formula, &bounds)?;
+//! let solution = solver.solve(&formula, &bounds).unwrap();
 //!
-//! if solution.is_sat() {
-//!     println!("SAT");
-//! }
+//! assert!(solution.is_sat());
 //! ```
 
 #![warn(missing_docs)]

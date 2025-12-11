@@ -10,7 +10,8 @@ use super::SATSolver;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```rust
+/// use kodkod_rs::engine::rustsat_adapter::RustSatAdapter;
 /// use rustsat_batsat::BasicSolver;
 /// let solver = RustSatAdapter::new(BasicSolver::default());
 /// ```
