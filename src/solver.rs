@@ -303,7 +303,7 @@ impl Solver {
             let proof = if !formula_conjuncts.is_empty() {
                 // Create a proof with all conjuncts as the core
                 use crate::proof::TranslationLog;
-                use std::sync::Arc;
+                use std::rc::Rc;
 
                 let mut log = TranslationLog::new();
                 log.set_roots(formula_conjuncts.clone());
@@ -315,7 +315,7 @@ impl Solver {
                 // Update the log with the minimal core
                 log.set_roots(minimal_core);
 
-                Some(Proof::new(Arc::new(log)))
+                Some(Proof::new(Rc::new(log)))
             } else {
                 None
             };

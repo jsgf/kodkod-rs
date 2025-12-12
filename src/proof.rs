@@ -28,7 +28,7 @@
 use crate::ast::Formula;
 use crate::instance::Bounds;
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 
 /// Record of a single translation event
 ///
@@ -116,7 +116,7 @@ impl Default for TranslationLog {
 /// Following Java: kodkod.engine.Proof
 #[derive(Debug)]
 pub struct Proof {
-    log: Arc<TranslationLog>,
+    log: Rc<TranslationLog>,
     core: Option<FxHashMap<Formula, Formula>>,
 }
 
@@ -124,7 +124,7 @@ impl Proof {
     /// Creates a new proof from a translation log
     ///
     /// For non-trivial UNSAT (from SAT solver), the core is extracted from the log.
-    pub fn new(log: Arc<TranslationLog>) -> Self {
+    pub fn new(log: Rc<TranslationLog>) -> Self {
         // Initialize core from the log's roots
         let mut core = FxHashMap::default();
         for root in log.roots() {
@@ -226,7 +226,7 @@ impl Proof {
         }
 
         Self {
-            log: Arc::new(log),
+            log: Rc::new(log),
             core: Some(core),
         }
     }

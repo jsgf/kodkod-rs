@@ -16,7 +16,6 @@ pub use visitor::{ExpressionVisitor, FormulaVisitor};
 use std::borrow::Cow;
 use std::fmt;
 use std::rc::Rc;
-use std::sync::Arc;
 
 /// A relation - a named variable in relational logic
 ///
@@ -24,7 +23,7 @@ use std::sync::Arc;
 /// if and only if they are the same object (identity equality).
 #[derive(Clone)]
 pub struct Relation {
-    inner: Arc<RelationInner>,
+    inner: Rc<RelationInner>,
 }
 
 struct RelationInner {
@@ -40,7 +39,7 @@ impl Relation {
     pub fn nary(name: impl Into<String>, arity: usize) -> Self {
         assert!(arity >= 1, "arity must be at least 1, got {}", arity);
         Self {
-            inner: Arc::new(RelationInner {
+            inner: Rc::new(RelationInner {
                 name: name.into(),
                 arity,
             }),
@@ -89,10 +88,10 @@ impl Relation {
     }
 }
 
-// Identity equality - two relations are equal iff they're the same Arc
+// Identity equality - two relations are equal iff they're the same Rc
 impl PartialEq for Relation {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
+        Rc::ptr_eq(&self.inner, &other.inner)
     }
 }
 
@@ -100,7 +99,7 @@ impl Eq for Relation {}
 
 impl std::hash::Hash for Relation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.inner).hash(state);
+        Rc::as_ptr(&self.inner).hash(state);
     }
 }
 
@@ -121,7 +120,7 @@ impl fmt::Display for Relation {
 /// Variables have identity equality like relations.
 #[derive(Clone)]
 pub struct Variable {
-    inner: Arc<VariableInner>,
+    inner: Rc<VariableInner>,
 }
 
 struct VariableInner {
@@ -139,7 +138,7 @@ impl Variable {
     pub fn nary(name: impl Into<String>, arity: usize) -> Self {
         assert!(arity >= 1, "arity must be at least 1");
         Self {
-            inner: Arc::new(VariableInner {
+            inner: Rc::new(VariableInner {
                 name: name.into(),
                 arity,
             }),
@@ -165,7 +164,7 @@ impl Variable {
 
 impl PartialEq for Variable {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
+        Rc::ptr_eq(&self.inner, &other.inner)
     }
 }
 
@@ -173,7 +172,7 @@ impl Eq for Variable {}
 
 impl std::hash::Hash for Variable {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        Arc::as_ptr(&self.inner).hash(state);
+        Rc::as_ptr(&self.inner).hash(state);
     }
 }
 
