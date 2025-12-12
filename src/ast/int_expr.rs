@@ -175,6 +175,33 @@ impl IntExpression {
         }))
     }
 
+    /// Left shift
+    pub fn shl(self, other: IntExpression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
+            op: IntBinaryOp::Shl,
+            right: other,
+        }))
+    }
+
+    /// Arithmetic right shift (sign extension)
+    pub fn shr(self, other: IntExpression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
+            op: IntBinaryOp::Shr,
+            right: other,
+        }))
+    }
+
+    /// Logical right shift (zero extension)
+    pub fn sha(self, other: IntExpression) -> Self {
+        IntExpression(Rc::new(IntExpressionInner::Binary {
+            left: self,
+            op: IntBinaryOp::Sha,
+            right: other,
+        }))
+    }
+
     /// Generic binary operation
     pub fn binary(left: IntExpression, op: IntBinaryOp, right: IntExpression) -> Self {
         IntExpression(Rc::new(IntExpressionInner::Binary { left, op, right }))

@@ -229,3 +229,86 @@ fn test_multiply_commutative() {
     let solution = solver.solve(&formula, &bounds).unwrap();
     assert!(solution.is_sat(), "multiply should be commutative");
 }
+
+// ========== DYNAMIC SHIFT TESTS ==========
+
+#[test]
+fn test_dynamic_shift_left_through_solver() {
+    let mask = 0xFF; // 8-bit mask
+
+    // Test various dynamic left shifts
+    test_bin_op("shl", 5, 2, 5 << 2, mask, |a, b| a.shl(b));
+    test_bin_op("shl", 1, 3, 1 << 3, mask, |a, b| a.shl(b));
+    test_bin_op("shl", 7, 2, 7 << 2, mask, |a, b| a.shl(b));
+    test_bin_op("shl", 1, 0, 1 << 0, mask, |a, b| a.shl(b));
+    test_bin_op("shl", 42, 0, 42, mask, |a, b| a.shl(b)); // Shift by 0
+}
+
+#[test]
+fn test_dynamic_shift_right_logical_through_solver() {
+    let mask = 0xFF; // 8-bit mask
+
+    // Test logical right shifts (zero extension)
+    test_bin_op("sha", 20, 2, 20 >> 2, mask, |a, b| a.sha(b));
+    test_bin_op("sha", 64, 2, 64 >> 2, mask, |a, b| a.sha(b));
+    test_bin_op("sha", 127, 3, 127 >> 3, mask, |a, b| a.sha(b));
+    test_bin_op("sha", 42, 0, 42, mask, |a, b| a.sha(b)); // Shift by 0
+}
+
+#[test]
+fn test_dynamic_shift_right_arithmetic_through_solver() {
+    let mask = 0xFF; // 8-bit mask
+
+    // Test arithmetic right shifts (sign extension)
+    test_bin_op("shr", -8, 1, -8 >> 1, mask, |a, b| a.shr(b));
+    test_bin_op("shr", -16, 2, -16 >> 2, mask, |a, b| a.shr(b));
+    test_bin_op("shr", -64, 2, -64 >> 2, mask, |a, b| a.shr(b));
+    test_bin_op("shr", -128, 3, -128 >> 3, mask, |a, b| a.shr(b));
+}
+
+#[test]
+fn test_shift_mixed_signs() {
+    let mask = 0xFF; // 8-bit mask
+
+    // Positive value, various shifts
+    test_bin_op("shl", 15, 4, 15 << 4, mask, |a, b| a.shl(b));
+    test_bin_op("sha", 255, 4, (255i32 as u8 >> 4) as i32, mask, |a, b| a.sha(b));
+
+    // Negative value arithmetic shift
+    test_bin_op("shr", -1, 1, -1 >> 1, mask, |a, b| a.shr(b));
+}
+
+#[test]
+fn test_shift_overflow_through_solver() {
+    let (solver, bounds, _universe) = setup_solver(8);
+
+    // Test: shifting beyond bitwidth produces predictable results
+    let value = IntExpression::constant(42);
+    let large_shift = IntExpression::constant(8);
+
+    // 42 << 8 should give 0 (all bits shifted out)
+    let result = value.clone().shl(large_shift.clone());
+    let formula = result.eq(IntExpression::constant(0));
+
+    let solution = solver.solve(&formula, &bounds).unwrap();
+    assert!(solution.is_sat(), "shl by >= bitwidth should produce 0");
+}
+
+#[test]
+fn test_shift_equivalence_constant_vs_dynamic() {
+    let (solver, bounds, _universe) = setup_solver(8);
+
+    // Test: dynamic shift with constant operand should equal constant shift
+    let value = IntExpression::constant(12);
+
+    // 12 << 3 (constant shift amount)
+    let shift_const = IntExpression::constant(3);
+    let result_dynamic = value.clone().shl(shift_const);
+
+    // Expected result: 12 << 3 = 96
+    let formula = result_dynamic.eq(IntExpression::constant(96));
+
+    let solution = solver.solve(&formula, &bounds).unwrap();
+    assert!(solution.is_sat(), "dynamic shift should match expected constant result");
+}
+

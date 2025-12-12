@@ -826,40 +826,45 @@ impl<'a> FOL2BoolTranslator<'a> {
                     IntBinaryOp::Or => left_int.or(&right_int, factory),
                     IntBinaryOp::Xor => left_int.xor(&right_int, factory),
                     IntBinaryOp::Shl => {
-                        // Shift left by constant amount
+                        // Left shift - support both constant and dynamic shift amounts
                         if let IntExpressionInner::Constant(shift_amt) = right.inner() {
+                            // Optimize constant shifts
                             if *shift_amt >= 0 {
                                 left_int.shift_left(*shift_amt as usize)
                             } else {
                                 left_int // Invalid shift amount
                             }
                         } else {
-                            // Dynamic shift not yet supported
-                            left_int
+                            // Dynamic shift using barrel shifter
+                            left_int.shl(&right_int, factory)
                         }
                     }
                     IntBinaryOp::Shr => {
-                        // Arithmetic right shift by constant
+                        // Arithmetic right shift - support both constant and dynamic
                         if let IntExpressionInner::Constant(shift_amt) = right.inner() {
+                            // Optimize constant shifts
                             if *shift_amt >= 0 {
                                 left_int.shift_right_arithmetic(*shift_amt as usize)
                             } else {
                                 left_int
                             }
                         } else {
-                            left_int
+                            // Dynamic shift using barrel shifter
+                            left_int.sha(&right_int, factory)
                         }
                     }
                     IntBinaryOp::Sha => {
-                        // Logical right shift by constant
+                        // Logical right shift - support both constant and dynamic
                         if let IntExpressionInner::Constant(shift_amt) = right.inner() {
+                            // Optimize constant shifts
                             if *shift_amt >= 0 {
                                 left_int.shift_right(*shift_amt as usize)
                             } else {
                                 left_int
                             }
                         } else {
-                            left_int
+                            // Dynamic shift using barrel shifter
+                            left_int.shr(&right_int, factory)
                         }
                     }
                     IntBinaryOp::Multiply => left_int.multiply(&right_int, factory),

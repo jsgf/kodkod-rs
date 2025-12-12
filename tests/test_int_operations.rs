@@ -123,6 +123,165 @@ fn test_constant_shift_right_arithmetic() {
     assert_eq!(shifted.value(), Some(-4));
 }
 
+// ========== DYNAMIC SHIFT TESTS ==========
+
+#[test]
+fn test_dynamic_shift_left_simple() {
+    let factory = BooleanFactory::new(10, Options { bitwidth: 8, ..Default::default() });
+
+    // 5 << 2 = 20
+    let value = factory.integer(5);
+    let shift_amt = factory.integer(2);
+    let shifted = value.shl(&shift_amt, &factory);
+
+    assert!(shifted.is_constant());
+    assert_eq!(shifted.value(), Some(20));
+}
+
+#[test]
+fn test_dynamic_shift_left_various() {
+    let factory = BooleanFactory::new(10, Options { bitwidth: 8, ..Default::default() });
+
+    let test_cases = vec![
+        (1, 0, 1),    // 1 << 0 = 1
+        (1, 3, 8),    // 1 << 3 = 8
+        (7, 2, 28),   // 7 << 2 = 28
+        (15, 4, -16), // 15 << 4 = 240 = -16 in 8-bit signed
+        (3, 7, -128), // 3 << 7 = 384 = -128 in 8-bit signed (overflow)
+    ];
+
+    for (val, shift, expected) in test_cases {
+        let value = factory.integer(val);
+        let shift_amt = factory.integer(shift);
+        let shifted = value.shl(&shift_amt, &factory);
+
+        assert!(shifted.is_constant(), "shl({}, {}) should be constant", val, shift);
+        assert_eq!(
+            shifted.value(),
+            Some(expected),
+            "shl({}, {}) = {} expected, got {:?}",
+            val, shift, expected, shifted.value()
+        );
+    }
+}
+
+#[test]
+fn test_dynamic_shift_right_logical() {
+    let factory = BooleanFactory::new(10, Options { bitwidth: 8, ..Default::default() });
+
+    // 20 >> 2 = 5 (logical)
+    let value = factory.integer(20);
+    let shift_amt = factory.integer(2);
+    let shifted = value.shr(&shift_amt, &factory);
+
+    assert!(shifted.is_constant());
+    assert_eq!(shifted.value(), Some(5));
+}
+
+#[test]
+fn test_dynamic_shift_right_arithmetic() {
+    let factory = BooleanFactory::new(10, Options { bitwidth: 8, ..Default::default() });
+
+    // -8 >>> 1 = -4 (arithmetic, sign extends)
+    let value = factory.integer(-8);
+    let shift_amt = factory.integer(1);
+    let shifted = value.sha(&shift_amt, &factory);
+
+    assert!(shifted.is_constant());
+    assert_eq!(shifted.value(), Some(-4));
+
+    // -16 >>> 2 = -4
+    let value2 = factory.integer(-16);
+    let shift_amt2 = factory.integer(2);
+    let shifted2 = value2.sha(&shift_amt2, &factory);
+
+    assert!(shifted2.is_constant());
+    assert_eq!(shifted2.value(), Some(-4));
+}
+
+#[test]
+fn test_dynamic_shift_right_various() {
+    let factory = BooleanFactory::new(10, Options { bitwidth: 8, ..Default::default() });
+
+    let test_cases = vec![
+        // (value, shift, expected_logical, expected_arithmetic)
+        (64, 2, 16, 16),     // Positive: both give same result
+        (-64, 2, 48, -16),   // Negative: logical zero-fills, arithmetic sign-extends
+        (127, 3, 15, 15),    // Max positive
+        (-128, 3, 16, -16),  // Min negative
+        (255, 4, 15, -1),    // All bits set (= -1 in signed)
+    ];
+
+    for (val, shift, expected_shr, expected_sha) in test_cases {
+        let value = factory.integer(val);
+        let shift_amt = factory.integer(shift);
+
+        // Test logical right shift (shr)
+        let shifted_shr = value.shr(&shift_amt, &factory);
+        assert!(shifted_shr.is_constant(), "shr({}, {}) should be constant", val, shift);
+        assert_eq!(
+            shifted_shr.value(),
+            Some(expected_shr),
+            "shr({}, {}) = {} expected, got {:?}",
+            val, shift, expected_shr, shifted_shr.value()
+        );
+
+        // Test arithmetic right shift (sha)
+        let shifted_sha = value.sha(&shift_amt, &factory);
+        assert!(shifted_sha.is_constant(), "sha({}, {}) should be constant", val, shift);
+        assert_eq!(
+            shifted_sha.value(),
+            Some(expected_sha),
+            "sha({}, {}) = {} expected, got {:?}",
+            val, shift, expected_sha, shifted_sha.value()
+        );
+    }
+}
+
+#[test]
+fn test_dynamic_shift_zero_amount() {
+    let factory = BooleanFactory::new(10, Options { bitwidth: 8, ..Default::default() });
+
+    // Shifting by 0 should return the original value
+    let value = factory.integer(42);
+    let zero = factory.integer(0);
+
+    let shl_result = value.shl(&zero, &factory);
+    let shr_result = value.shr(&zero, &factory);
+    let sha_result = value.sha(&zero, &factory);
+
+    assert_eq!(shl_result.value(), Some(42));
+    assert_eq!(shr_result.value(), Some(42));
+    assert_eq!(sha_result.value(), Some(42));
+}
+
+#[test]
+fn test_dynamic_shift_large_amount() {
+    let factory = BooleanFactory::new(10, Options { bitwidth: 8, ..Default::default() });
+
+    // Shifting by >= bitwidth should result in 0 (shl, shr) or sign-extended (sha)
+    let positive = factory.integer(42);
+    let negative = factory.integer(-42);
+    let large_shift = factory.integer(8);
+
+    // Left shift by 8 (>= bitwidth) -> 0
+    let shl_pos = positive.shl(&large_shift, &factory);
+    assert_eq!(shl_pos.value(), Some(0));
+
+    // Logical right shift by 8 -> 0
+    let shr_pos = positive.shr(&large_shift, &factory);
+    assert_eq!(shr_pos.value(), Some(0));
+
+    // Arithmetic right shift by 8 of positive -> 0
+    let sha_pos = positive.sha(&large_shift, &factory);
+    assert_eq!(sha_pos.value(), Some(0));
+
+    // Arithmetic right shift by 8 of negative -> -1 (all sign bits)
+    let sha_neg = negative.sha(&large_shift, &factory);
+    assert_eq!(sha_neg.value(), Some(-1));
+}
+
+
 #[test]
 fn test_constant_negate() {
     let factory = BooleanFactory::new(10, Options::default());

@@ -295,6 +295,71 @@ impl<'arena> Int<'arena> {
         Int::new(bits)
     }
 
+    /// Left shift by variable amount using barrel shifter
+    /// Following Java: TwosComplementInt.shl()
+    /// Uses cascaded conditional shifts based on each bit of the shift amount
+    pub fn shl(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
+        let width = factory.bitwidth();
+        let mut shifted_bits = self.extend(width);
+
+        // Barrel shifter: for each bit i in the shift amount, conditionally shift by 2^i
+        for i in 0..width {
+            let shift = 1usize << i; // 2^i
+            let bit = other.bit(i);
+
+            // Apply conditional shift
+            for j in (0..width).rev() {
+                let new_val = if j < shift {
+                    BoolValue::Constant(BooleanConstant::FALSE)
+                } else {
+                    shifted_bits[j - shift].clone()
+                };
+                shifted_bits[j] = factory.ite(bit.clone(), new_val, shifted_bits[j].clone());
+            }
+        }
+
+        Int::new(shifted_bits)
+    }
+
+    /// Right shift by variable amount with given fill value
+    /// Helper for both logical (fill=FALSE) and arithmetic (fill=sign) shifts
+    /// Following Java: TwosComplementInt.shr(Int, BooleanValue)
+    fn shr_with_fill(&self, other: &Int<'arena>, factory: &'arena BooleanFactory, fill: BoolValue<'arena>) -> Int<'arena> {
+        let width = factory.bitwidth();
+        let mut shifted_bits = self.extend(width);
+
+        // Barrel shifter: for each bit i in the shift amount, conditionally shift by 2^i
+        for i in 0..width {
+            let shift = 1usize << i; // 2^i
+            let bit = other.bit(i);
+
+            // Apply conditional shift
+            for j in 0..width {
+                let new_val = if j + shift < width {
+                    shifted_bits[j + shift].clone()
+                } else {
+                    fill.clone()
+                };
+                shifted_bits[j] = factory.ite(bit.clone(), new_val, shifted_bits[j].clone());
+            }
+        }
+
+        Int::new(shifted_bits)
+    }
+
+    /// Logical right shift by variable amount (zero extension)
+    /// Following Java: TwosComplementInt.shr()
+    pub fn shr(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
+        self.shr_with_fill(other, factory, BoolValue::Constant(BooleanConstant::FALSE))
+    }
+
+    /// Arithmetic right shift by variable amount (sign extension)
+    /// Following Java: TwosComplementInt.sha()
+    pub fn sha(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
+        let sign_bit = self.bit(self.width() - 1);
+        self.shr_with_fill(other, factory, sign_bit)
+    }
+
     /// Absolute value
     pub fn abs(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
         // Following Java: choice(factory.not(sign_bit), negate())
