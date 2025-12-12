@@ -101,11 +101,6 @@ impl LeafInterpreter {
         &self.factory
     }
 
-    /// Returns a reference to the arena (from the factory)
-    pub fn arena(&self) -> &crate::bool::MatrixArena {
-        self.factory.arena()
-    }
-
     /// Returns a reference to the universe
     pub fn universe(&self) -> &Universe {
         &self.universe
@@ -138,7 +133,7 @@ impl LeafInterpreter {
 
     /// Interprets a relation as a BooleanMatrix
     /// Following Java: LeafInterpreter.interpret(Relation)
-    pub fn interpret_relation(&self, rel: &Relation) -> BooleanMatrix<'_> {
+    pub fn interpret_relation(&self, rel: &Relation) -> BooleanMatrix {
         let lower = self
             .lower_bounds
             .get(rel)
@@ -179,7 +174,7 @@ impl LeafInterpreter {
 
     /// Interprets a constant expression (UNIV, NONE, IDEN, INTS)
     /// Following Java: LeafInterpreter.interpret(ConstantExpression)
-    pub fn interpret_constant(&self, c: ConstantExpr) -> BooleanMatrix<'_> {
+    pub fn interpret_constant(&self, c: ConstantExpr) -> BooleanMatrix {
         let univ_size = self.universe.size();
 
         match c {

@@ -23,7 +23,7 @@ use std::cell::RefCell;
 /// that BoolValue must always be associated with its corresponding interpreter/arena.
 pub struct TranslationResult {
     interpreter: LeafInterpreter,
-    value: BoolValue<'static>,
+    value: BoolValue,
 }
 
 impl TranslationResult {
@@ -34,7 +34,7 @@ impl TranslationResult {
 
     /// Returns a reference to the boolean circuit value
     /// The lifetime is tied to the result, ensuring the value cannot be separated from the interpreter
-    pub fn value(&self) -> &BoolValue<'_> {
+    pub fn value(&self) -> &BoolValue {
         &self.value
     }
 }
@@ -45,7 +45,7 @@ impl TranslationResult {
 /// that BooleanMatrix must always be associated with its corresponding interpreter/arena.
 pub struct ApproximationResult {
     interpreter: LeafInterpreter,
-    matrix: BooleanMatrix<'static>,
+    matrix: BooleanMatrix,
 }
 
 impl ApproximationResult {
@@ -56,7 +56,7 @@ impl ApproximationResult {
 
     /// Returns a reference to the boolean matrix
     /// The lifetime is tied to the result, ensuring the matrix cannot be separated from the interpreter
-    pub fn matrix(&self) -> &BooleanMatrix<'_> {
+    pub fn matrix(&self) -> &BooleanMatrix {
         &self.matrix
     }
 }
@@ -102,7 +102,7 @@ impl Translator {
         // which is owned by the interpreter in the result. We transmute to 'static since the
         // data will outlive any intermediate borrows.
         let value_static = unsafe {
-            std::mem::transmute::<BoolValue, BoolValue<'static>>(value)
+            std::mem::transmute::<BoolValue, BoolValue>(value)
         };
 
         TranslationResult {
@@ -128,7 +128,7 @@ impl Translator {
         expr: &Expression,
         bounds: &Bounds,
         options: &Options,
-        env: Option<&BooleanMatrix<'_>>,
+        env: Option<&BooleanMatrix>,
     ) -> Vec<usize> {
         let interpreter = LeafInterpreter::from_bounds(bounds, options);
         let translator = FOL2BoolTranslator::new(&interpreter);
@@ -158,7 +158,7 @@ impl Translator {
 
         // SAFETY: Same as evaluate() - matrix contains no direct borrows, only handles to arena data
         let matrix_static = unsafe {
-            std::mem::transmute::<BooleanMatrix, BooleanMatrix<'static>>(matrix)
+            std::mem::transmute::<BooleanMatrix, BooleanMatrix>(matrix)
         };
 
         ApproximationResult {
@@ -214,13 +214,13 @@ impl Translator {
 /// Following Java: FOL2BoolTranslator
 struct FOL2BoolTranslator<'a> {
     interpreter: &'a LeafInterpreter,
-    env: RefCell<Environment<'a>>,
+    env: RefCell<Environment>,
     // Leaf caching: cache relation and constant interpretations
-    relation_cache: RefCell<FxHashMap<Relation, BooleanMatrix<'a>>>,
-    constant_cache: RefCell<FxHashMap<ConstantExpr, BooleanMatrix<'a>>>,
+    relation_cache: RefCell<FxHashMap<Relation, BooleanMatrix>>,
+    constant_cache: RefCell<FxHashMap<ConstantExpr, BooleanMatrix>>,
     // Full translation cache with free variable tracking
     // Following Java: FOL2BoolCache with NoVarRecord/MultiVarRecord
-    cache: RefCell<TranslationCache<'a>>,
+    cache: RefCell<TranslationCache>,
 }
 
 impl<'a> FOL2BoolTranslator<'a> {
@@ -234,7 +234,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         }
     }
 
-    fn with_cache(interpreter: &'a LeafInterpreter, cache: TranslationCache<'a>) -> Self {
+    fn with_cache(interpreter: &'a LeafInterpreter, cache: TranslationCache) -> Self {
         Self {
             interpreter,
             env: RefCell::new(Environment::empty()),
@@ -246,7 +246,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Main entry point: translate a formula to a boolean value
     /// Following Java: FOL2BoolTranslator visitor methods
-    fn translate_formula(&self, formula: &Formula) -> BoolValue<'a> {
+    fn translate_formula(&self, formula: &Formula) -> BoolValue {
         // Check translation cache (handles both shared nodes and free variables)
         // Following Java: FOL2BoolCache.lookup()
         {
@@ -268,7 +268,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     }
 
     /// Inner formula translation (no caching)
-    fn translate_formula_inner(&self, formula: &Formula) -> BoolValue<'a> {
+    fn translate_formula_inner(&self, formula: &Formula) -> BoolValue {
         match &*formula.inner() {
             FormulaInner::Constant(b) => {
                 self.interpreter.factory().constant(*b)
@@ -375,7 +375,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Expression translation
     /// Following Java: FOL2BoolTranslator.visit(Expression)
-    fn translate_expression(&self, expr: &Expression) -> BooleanMatrix<'a> {
+    fn translate_expression(&self, expr: &Expression) -> BooleanMatrix {
         // Check translation cache (handles both shared nodes and free variables)
         // Following Java: FOL2BoolCache.lookup()
         {
@@ -397,7 +397,7 @@ impl<'a> FOL2BoolTranslator<'a> {
     }
 
     /// Inner expression translation (no caching)
-    fn translate_expression_inner(&self, expr: &Expression) -> BooleanMatrix<'a> {
+    fn translate_expression_inner(&self, expr: &Expression) -> BooleanMatrix {
         match &*expr.inner() {
             ExpressionInner::Relation(rel) => {
                 // Check cache first
@@ -518,7 +518,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Convert an integer value to a set containing the atom for that integer
     /// Following Java: FOL2BoolTranslator.visit(IntToExprCast) with INTCAST operator
-    fn interpret_int_value_as_set(&self, int_value: Int<'a>) -> BooleanMatrix<'a> {
+    fn interpret_int_value_as_set(&self, int_value: Int) -> BooleanMatrix {
         let factory = self.interpreter.factory();
         let usize = self.interpreter.universe().size();
         let dims = Dimensions::square(usize, 1);
@@ -539,7 +539,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Convert an integer value to a set of power-of-2 atoms (bitset representation)
     /// Following Java: FOL2BoolTranslator.visit(IntToExprCast) with BITSETCAST operator
-    fn interpret_int_value_as_bitset(&self, int_value: Int<'a>) -> BooleanMatrix<'a> {
+    fn interpret_int_value_as_bitset(&self, int_value: Int) -> BooleanMatrix {
         let factory = self.interpreter.factory();
         let usize = self.interpreter.universe().size();
         let dims = Dimensions::square(usize, 1);
@@ -575,7 +575,7 @@ impl<'a> FOL2BoolTranslator<'a> {
         quantifier: Quantifier,
         declarations: &Decls,
         body: &Formula
-    ) -> BoolValue<'a> {
+    ) -> BoolValue {
         match quantifier {
             Quantifier::Some => {
                 let mut acc = None;
@@ -601,8 +601,8 @@ impl<'a> FOL2BoolTranslator<'a> {
         decls: &Decls,
         formula: &Formula,
         current_decl: usize,
-        decl_constraints: BoolValue<'a>,
-        acc: &mut Option<BoolValue<'a>>
+        decl_constraints: BoolValue,
+        acc: &mut Option<BoolValue>
     ) {
         // Short-circuit: if we've already found TRUE, stop
         if let Some(BoolValue::Constant(BooleanConstant::TRUE)) = acc {
@@ -672,8 +672,8 @@ impl<'a> FOL2BoolTranslator<'a> {
         decls: &Decls,
         formula: &Formula,
         current_decl: usize,
-        decl_constraints: BoolValue<'a>,
-        acc: &mut Option<BoolValue<'a>>
+        decl_constraints: BoolValue,
+        acc: &mut Option<BoolValue>
     ) {
         // Short-circuit: if we've already found FALSE, stop
         if let Some(BoolValue::Constant(BooleanConstant::FALSE)) = acc {
@@ -742,8 +742,8 @@ impl<'a> FOL2BoolTranslator<'a> {
         decls: &Decls,
         expr: &IntExpression,
         current_decl: usize,
-        decl_constraints: BoolValue<'a>,
-        values: &mut Vec<Int<'a>>
+        decl_constraints: BoolValue,
+        values: &mut Vec<Int>
     ) {
         let factory = self.interpreter.factory();
 
@@ -801,9 +801,9 @@ impl<'a> FOL2BoolTranslator<'a> {
         decls: &Decls,
         formula: &Formula,
         current_decl: usize,
-        decl_constraints: BoolValue<'a>,
+        decl_constraints: BoolValue,
         partial_index: usize,
-        matrix: &mut BooleanMatrix<'a>
+        matrix: &mut BooleanMatrix
     ) {
         let factory = self.interpreter.factory();
 
@@ -857,7 +857,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
     /// Integer expression translation
     /// Following Java: FOL2BoolTranslator integer expression handling
-    fn translate_int_expr(&self, expr: &IntExpression) -> Int<'a> {
+    fn translate_int_expr(&self, expr: &IntExpression) -> Int {
         match expr.inner() {
             IntExpressionInner::Constant(c) => {
                 let factory = self.interpreter.factory();
@@ -979,7 +979,7 @@ impl<'a> FOL2BoolTranslator<'a> {
 
             IntExpressionInner::Sum { decls, expr } => {
                 // Collect all integer values for each binding
-                let mut values: Vec<Int<'a>> = Vec::new();
+                let mut values: Vec<Int> = Vec::new();
                 self.sum_over_declarations(
                     decls,
                     expr,
@@ -1037,11 +1037,11 @@ impl<'a> FOL2BoolTranslator<'a> {
     /// Following Java: FOL2BoolTranslator.sum(BooleanMatrix, IntIterator, int, int)
     fn sum_helper(
         &self,
-        matrix: &BooleanMatrix<'a>,
+        matrix: &BooleanMatrix,
         ints: &[i32],
         low: usize,
         high: usize,
-    ) -> Int<'a> {
+    ) -> Int {
         let factory = self.interpreter.factory();
 
         if low > high {

@@ -2,7 +2,7 @@
 //!
 //! Converts boolean gates to CNF clauses using Tseitin transformation.
 
-use crate::bool::{BoolValue, BooleanFormula, FormulaKind, MatrixArena};
+use crate::bool::{BoolValue, BooleanFormula, FormulaKind};
 use std::collections::HashSet;
 
 /// CNF representation
@@ -39,19 +39,17 @@ impl CNF {
 }
 
 /// Translates boolean circuits to CNF
-pub struct CNFTranslator<'a> {
+pub struct CNFTranslator {
     cnf: CNF,
-    arena: &'a MatrixArena,
     /// Track which formulas have already been translated (by label)
     visited: HashSet<i32>,
 }
 
-impl<'a> CNFTranslator<'a> {
+impl CNFTranslator {
     /// Creates a new CNF translator
-    pub fn new(arena: &'a MatrixArena) -> Self {
+    pub fn new() -> Self {
         Self {
             cnf: CNF::new(),
-            arena,
             visited: HashSet::new(),
         }
     }
@@ -108,21 +106,21 @@ impl<'a> CNFTranslator<'a> {
 
         match formula.kind() {
             FormulaKind::And(handle) => {
-                let inputs = self.arena.resolve_handle(*handle);
+                let inputs = &**handle;
                 self.translate_and(output, inputs);
             }
             FormulaKind::Or(handle) => {
-                let inputs = self.arena.resolve_handle(*handle);
+                let inputs = &**handle;
                 self.translate_or(output, inputs);
             }
             FormulaKind::Not(handle) => {
-                let input = self.arena.resolve_handle(*handle);
+                let input = &**handle;
                 self.translate_not(output, input);
             }
             FormulaKind::Ite { condition, then_val, else_val } => {
-                let cond = self.arena.resolve_handle(*condition);
-                let then = self.arena.resolve_handle(*then_val);
-                let else_val = self.arena.resolve_handle(*else_val);
+                let cond = &**condition;
+                let then = &**then_val;
+                let else_val = &**else_val;
                 self.translate_ite(output, cond, then, else_val);
             }
         }
@@ -348,8 +346,7 @@ mod tests {
 
     #[test]
     fn translate_constant() {
-        let arena = crate::bool::MatrixArena::new();
-        let translator = CNFTranslator::new(&arena);
+        let translator = CNFTranslator::new();
         let value = BoolValue::Constant(BooleanConstant::TRUE);
         let (_label, cnf) = translator.translate(&value);
 
@@ -359,8 +356,7 @@ mod tests {
 
     #[test]
     fn translate_variable() {
-        let arena = crate::bool::MatrixArena::new();
-        let translator = CNFTranslator::new(&arena);
+        let translator = CNFTranslator::new();
         let value = BoolValue::Variable(BooleanVariable::new(5));
         let (label, cnf) = translator.translate(&value);
 
@@ -372,13 +368,12 @@ mod tests {
 
     #[test]
     fn translate_and_gate() {
-        let arena = crate::bool::MatrixArena::new();
         let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
         let and = factory.and(v1, v2);
 
-        let translator = CNFTranslator::new(&arena);
+        let translator = CNFTranslator::new();
         let (_label, cnf) = translator.translate(&and);
 
         // Should have clauses for AND encoding plus assertion
@@ -391,7 +386,6 @@ mod tests {
         // Test that memoization works: shared subexpressions should be translated only once
         // Create circuit: (v1 AND v2) OR (v1 AND v2)
         // Without memoization, (v1 AND v2) would be translated twice
-        let arena = crate::bool::MatrixArena::new();
         let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
@@ -402,7 +396,7 @@ mod tests {
         // Use the same AND gate in two places
         let or = factory.or(and.clone(), and.clone());
 
-        let translator = CNFTranslator::new(&arena);
+        let translator = CNFTranslator::new();
         let (_label, cnf) = translator.translate(&or);
 
         // With memoization: AND gate translated once, OR gate uses its label
@@ -419,13 +413,12 @@ mod tests {
 
     #[test]
     fn translate_or_gate() {
-        let arena = crate::bool::MatrixArena::new();
         let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
         let or = factory.or(v1, v2);
 
-        let translator = CNFTranslator::new(&arena);
+        let translator = CNFTranslator::new();
         let (_label, cnf) = translator.translate(&or);
 
         // Should have clauses for OR encoding plus assertion
@@ -435,12 +428,11 @@ mod tests {
 
     #[test]
     fn translate_not_gate() {
-        let arena = crate::bool::MatrixArena::new();
         let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let not = factory.not(v1);
 
-        let translator = CNFTranslator::new(&arena);
+        let translator = CNFTranslator::new();
         let (_label, cnf) = translator.translate(&not);
 
         // Should have clauses for NOT encoding plus assertion
@@ -450,7 +442,6 @@ mod tests {
 
     #[test]
     fn translate_complex_formula() {
-        let arena = crate::bool::MatrixArena::new();
         let factory = BooleanFactory::new(10, Options::default());
         let v1 = factory.variable(1);
         let v2 = factory.variable(2);
@@ -460,7 +451,7 @@ mod tests {
         let and = factory.and(v1, v2);
         let formula = factory.or(and, v3);
 
-        let translator = CNFTranslator::new(&arena);
+        let translator = CNFTranslator::new();
         let (_label, cnf) = translator.translate(&formula);
 
         // Should produce multiple clauses

@@ -7,7 +7,7 @@
 //! - `BooleanValue`: Trait for all boolean values (constants, variables, formulas)
 //! - `BooleanConstant`: TRUE (label 0) or FALSE (label -1)
 //! - `BooleanVariable`: Variables with positive integer labels
-//! - `BoolValue<'arena>`: Enum encompassing all boolean value types
+//! - `BoolValue`: Enum encompassing all boolean value types
 //! - `BooleanFormula`: Boolean gates (AND, OR, NOT, ITE)
 //! - `Operator`: Boolean operators
 //! - `Dimensions`: Matrix dimensions for relation encoding
@@ -17,59 +17,13 @@
 mod factory;
 pub mod var_allocator;
 pub mod int;
-pub mod arena;
 
 pub use factory::{BooleanFactory, Options};
 pub use var_allocator::VariableAllocator;
 pub use int::Int;
-pub use arena::MatrixArena;
 
 use rustc_hash::FxHashMap;
-use std::marker::PhantomData;
-
-/// Index handle for a value stored in the arena
-///
-/// A lightweight copy-able reference to a value allocated in an arena.
-/// The lifetime parameter `'arena` ties the handle to a specific arena instance,
-/// preventing accidental mixing of handles from different arenas.
-///
-/// Handles are type-safe: `Handle<'a, X>` cannot be used where `Handle<'a, Y>` is expected.
-/// Can point to either a single value `Handle<'arena, T>` or a slice `Handle<'arena, [T]>`.
-#[derive(Eq, PartialEq, Hash)]
-pub struct Handle<'arena, T: ?Sized> {
-    ptr: *const T,
-    _phantom: PhantomData<&'arena ()>,
-}
-
-impl<'arena, T: ?Sized + std::fmt::Debug> std::fmt::Debug for Handle<'arena, T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // SAFETY: Handle is only created from valid arena allocations
-        // NOTE: This can stack overflow if there are cycles in the data structure,
-        // but BooleanFactory should only create DAGs (directed acyclic graphs)
-        unsafe { (*self.ptr).fmt(f) }
-    }
-}
-
-impl<'arena, T: ?Sized> Copy for Handle<'arena, T> {}
-
-impl<'arena, T: ?Sized> Clone for Handle<'arena, T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<'arena, T: ?Sized> Handle<'arena, T> {
-    /// Creates a new handle from a pointer.
-    ///
-    /// # Safety
-    /// The pointer must point to a valid value that outlives the arena lifetime.
-    pub(crate) unsafe fn new(ptr: *const T) -> Self {
-        Self {
-            ptr,
-            _phantom: PhantomData,
-        }
-    }
-}
+use std::rc::Rc;
 
 /// Trait for all Boolean values
 ///
@@ -148,16 +102,15 @@ impl BooleanValue for BooleanVariable {
 /// Boolean formula (gate)
 ///
 /// Formulas have identity-based equality using their unique labels.
-/// Small enough (40 bytes) to be Copy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BooleanFormula<'arena> {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BooleanFormula {
     label: i32,
-    kind: FormulaKind<'arena>,
+    kind: FormulaKind,
 }
 
-impl<'arena> BooleanFormula<'arena> {
+impl BooleanFormula {
     /// Creates a new formula with the given label and kind
-    pub(crate) fn new(label: i32, kind: FormulaKind<'arena>) -> Self {
+    pub(crate) fn new(label: i32, kind: FormulaKind) -> Self {
         Self { label, kind }
     }
 
@@ -167,34 +120,34 @@ impl<'arena> BooleanFormula<'arena> {
     }
 
     /// Returns the kind of this formula
-    pub fn kind(&self) -> &FormulaKind<'arena> {
+    pub fn kind(&self) -> &FormulaKind {
         &self.kind
     }
 }
 
-impl<'arena> BooleanValue for BooleanFormula<'arena> {
+impl BooleanValue for BooleanFormula {
     fn label(&self) -> i32 {
         self.label
     }
 }
 
 /// Formula kind (gate type)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FormulaKind<'arena> {
-    /// Multi-input AND gate - handle to slice of BoolValue<'arena>s in arena
-    And(Handle<'arena, [BoolValue<'arena>]>),
-    /// Multi-input OR gate - handle to slice of BoolValue<'arena>s in arena
-    Or(Handle<'arena, [BoolValue<'arena>]>),
-    /// NOT gate - handle to BoolValue<'arena> in arena
-    Not(Handle<'arena, BoolValue<'arena>>),
-    /// If-then-else gate - handles to BoolValue<'arena>s in arena
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FormulaKind {
+    /// Multi-input AND gate
+    And(Rc<[BoolValue]>),
+    /// Multi-input OR gate
+    Or(Rc<[BoolValue]>),
+    /// NOT gate
+    Not(Rc<BoolValue>),
+    /// If-then-else gate
     Ite {
         /// Condition
-        condition: Handle<'arena, BoolValue<'arena>>,
+        condition: Rc<BoolValue>,
         /// Then branch
-        then_val: Handle<'arena, BoolValue<'arena>>,
+        then_val: Rc<BoolValue>,
         /// Else branch
-        else_val: Handle<'arena, BoolValue<'arena>>,
+        else_val: Rc<BoolValue>,
     },
 }
 
@@ -202,16 +155,16 @@ pub enum FormulaKind<'arena> {
 ///
 /// Encompasses constants, variables, and formulas.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum BoolValue<'arena> {
+pub enum BoolValue {
     /// Constant (TRUE or FALSE)
     Constant(BooleanConstant),
     /// Variable
     Variable(BooleanVariable),
     /// Formula (gate)
-    Formula(BooleanFormula<'arena>),
+    Formula(BooleanFormula),
 }
 
-impl<'arena> BoolValue<'arena> {
+impl BoolValue {
     /// Returns the label for this value
     pub fn label(&self) -> i32 {
         match self {
@@ -237,26 +190,26 @@ impl<'arena> BoolValue<'arena> {
     }
 }
 
-impl<'arena> BooleanValue for BoolValue<'arena> {
+impl BooleanValue for BoolValue {
     fn label(&self) -> i32 {
         self.label()
     }
 }
 
-impl<'arena> From<BooleanConstant> for BoolValue<'arena> {
+impl From<BooleanConstant> for BoolValue {
     fn from(c: BooleanConstant) -> Self {
         BoolValue::Constant(c)
     }
 }
 
-impl<'arena> From<BooleanVariable> for BoolValue<'arena> {
+impl From<BooleanVariable> for BoolValue {
     fn from(v: BooleanVariable) -> Self {
         BoolValue::Variable(v)
     }
 }
 
-impl<'arena> From<BooleanFormula<'arena>> for BoolValue<'arena> {
-    fn from(f: BooleanFormula<'arena>) -> Self {
+impl From<BooleanFormula> for BoolValue {
+    fn from(f: BooleanFormula) -> Self {
         BoolValue::Formula(f)
     }
 }
@@ -362,13 +315,13 @@ impl Dimensions {
 /// Used to encode relations during FOL→Boolean translation.
 /// Implements sparse storage: only non-FALSE entries are stored.
 #[derive(Debug, Clone)]
-pub struct BooleanMatrix<'arena> {
+pub struct BooleanMatrix {
     dimensions: Dimensions,
     /// Sparse storage: only non-FALSE entries (index → value)
-    cells: FxHashMap<usize, BoolValue<'arena>>,
+    cells: FxHashMap<usize, BoolValue>,
 }
 
-impl<'arena> BooleanMatrix<'arena> {
+impl BooleanMatrix {
     /// Creates an empty matrix with the given dimensions (all FALSE)
     pub fn empty(dimensions: Dimensions) -> Self {
         Self {
@@ -386,7 +339,7 @@ impl<'arena> BooleanMatrix<'arena> {
     /// * `true_indices` - Lower bound indices (definitely TRUE)
     pub fn with_bounds(
         dims: Dimensions,
-        _factory: &'arena BooleanFactory,
+        _factory: &BooleanFactory,
         all_indices: &[usize],
         true_indices: &[usize],
     ) -> Self {
@@ -411,7 +364,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Sets value at flat index
     /// Following Java: BooleanMatrix.set(int, BooleanValue)
-    pub fn set(&mut self, index: usize, value: BoolValue<'arena>) {
+    pub fn set(&mut self, index: usize, value: BoolValue) {
         if value == BoolValue::Constant(BooleanConstant::FALSE) {
             // Sparse: don't store FALSE
             self.cells.remove(&index);
@@ -422,7 +375,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Gets value at flat index
     /// Following Java: BooleanMatrix.get(int)
-    pub fn get(&self, index: usize) -> BoolValue<'arena> {
+    pub fn get(&self, index: usize) -> BoolValue {
         self.cells
             .get(&index)
             .cloned()
@@ -431,7 +384,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Iterates over (index, value) pairs - ONLY non-FALSE entries
     /// Following Java: BooleanMatrix.iterator()
-    pub fn iter_indexed(&self) -> impl Iterator<Item = (usize, &BoolValue<'arena>)> + '_ {
+    pub fn iter_indexed(&self) -> impl Iterator<Item = (usize, &BoolValue)> + '_ {
         self.cells.iter().map(|(&idx, val)| (idx, val))
     }
 
@@ -461,7 +414,7 @@ impl<'arena> BooleanMatrix<'arena> {
     }
 
     /// Gets the element at the given row and column
-    pub fn get_at(&self, row: usize, col: usize) -> Option<BoolValue<'arena>> {
+    pub fn get_at(&self, row: usize, col: usize) -> Option<BoolValue> {
         if row < self.dimensions.rows && col < self.dimensions.cols {
             Some(self.get(row * self.dimensions.cols + col))
         } else {
@@ -470,14 +423,14 @@ impl<'arena> BooleanMatrix<'arena> {
     }
 
     /// Gets the element at the given row and column, returning FALSE if out of bounds
-    pub fn get_row_col(&self, row: usize, col: usize) -> BoolValue<'arena> {
+    pub fn get_row_col(&self, row: usize, col: usize) -> BoolValue {
         self.get_at(row, col)
             .unwrap_or(BoolValue::Constant(BooleanConstant::FALSE))
     }
 
     /// Union (OR) of two matrices
     /// Following Java: BooleanMatrix.or(BooleanMatrix)
-    pub fn union(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn union(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BooleanMatrix {
         assert_eq!(self.dimensions, other.dimensions);
         let mut result = BooleanMatrix::empty(self.dimensions);
 
@@ -499,7 +452,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Intersection (AND) of two matrices
     /// Following Java: BooleanMatrix.and(BooleanMatrix)
-    pub fn intersection(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn intersection(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BooleanMatrix {
         assert_eq!(self.dimensions, other.dimensions);
         let mut result = BooleanMatrix::empty(self.dimensions);
 
@@ -515,7 +468,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Difference (this AND NOT other)
     /// Following Java: BooleanMatrix.difference(BooleanMatrix)
-    pub fn difference(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn difference(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BooleanMatrix {
         assert_eq!(self.dimensions, other.dimensions);
         if self.cells.is_empty() || other.cells.is_empty() {
             return self.clone();
@@ -533,7 +486,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Element-wise negation
     /// Following Java: BooleanMatrix.not()
-    pub fn not(&self, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn not(&self, factory: &BooleanFactory) -> BooleanMatrix {
         let mut result = BooleanMatrix::empty(self.dimensions);
 
         for i in 0..self.dimensions.capacity() {
@@ -553,7 +506,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Join/Dot Product of two matrices
     /// Following Java: BooleanMatrix.dot(BooleanMatrix)
-    pub fn join(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn join(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BooleanMatrix {
         // Result arity: self.arity + other.arity - 2
         // Following Java: Dimensions.dot()
         let result_arity = self.dimensions.arity() + other.dimensions.arity() - 2;
@@ -601,7 +554,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Cross Product of two matrices
     /// Following Java: BooleanMatrix.cross(BooleanMatrix)
-    pub fn product(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn product(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BooleanMatrix {
         let result_dims = Dimensions::new(
             self.dimensions.capacity() * other.dimensions.capacity(),
             self.dimensions.cols() + other.dimensions.cols(),
@@ -626,7 +579,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Transpose of this matrix
     /// Following Java: BooleanMatrix.transpose()
-    pub fn transpose(&self, _factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn transpose(&self, _factory: &BooleanFactory) -> BooleanMatrix {
         // For a binary relation, transpose only swaps the elements in each pair
         // The capacity (number of tuples) and arity (dimensionality) remain unchanged
         assert_eq!(self.dimensions.arity(), 2, "transpose only works on binary relations");
@@ -650,7 +603,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Override: combine matrices with precedence
     /// Following Java: BooleanMatrix.override(BooleanMatrix)
-    pub fn override_with(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn override_with(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BooleanMatrix {
         assert_eq!(self.dimensions, other.dimensions);
         if other.cells.is_empty() {
             return self.clone();
@@ -683,7 +636,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Helper: Returns conjunction of negated values in range [start, end)
     /// Following Java: BooleanMatrix.nand(int, int)
-    fn nand_row(&self, matrix: &BooleanMatrix<'arena>, start: usize, end: usize, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
+    fn nand_row(&self, matrix: &BooleanMatrix, start: usize, end: usize, factory: &BooleanFactory) -> BoolValue {
         let mut acc = Vec::new();
         for idx in start..end {
             if let Some(val) = matrix.cells.get(&idx) {
@@ -700,7 +653,7 @@ impl<'arena> BooleanMatrix<'arena> {
     /// If-then-else choice between matrices
     /// Following Java: BooleanMatrix.choice(BooleanValue, BooleanMatrix)
     /// Returns a matrix m such that m[i] = condition ? this[i] : other[i]
-    pub fn choice(&self, condition: BoolValue<'arena>, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn choice(&self, condition: BoolValue, other: &BooleanMatrix, factory: &BooleanFactory) -> BooleanMatrix {
         assert_eq!(self.dimensions, other.dimensions);
 
         // Trivial cases
@@ -737,7 +690,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Check equality: all corresponding entries must be equal
     /// Following Java: BooleanMatrix.eq(BooleanMatrix)
-    pub fn equals(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
+    pub fn equals(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BoolValue {
         let subset1 = self.subset(other, factory);
         let subset2 = other.subset(self, factory);
         factory.and(subset1, subset2)
@@ -745,7 +698,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Check subset: all entries in self imply corresponding entries in other
     /// Following Java: BooleanMatrix.subset(BooleanMatrix)
-    pub fn subset(&self, other: &BooleanMatrix<'arena>, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
+    pub fn subset(&self, other: &BooleanMatrix, factory: &BooleanFactory) -> BoolValue {
         assert_eq!(self.dimensions, other.dimensions);
         let mut acc = Vec::new();
 
@@ -766,19 +719,19 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Multiplicity: some (at least one entry is TRUE)
     /// Following Java: BooleanMatrix.some()
-    pub fn some(&self, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
+    pub fn some(&self, factory: &BooleanFactory) -> BoolValue {
         if self.cells.is_empty() {
             return BoolValue::Constant(BooleanConstant::FALSE);
         }
 
-        let values: Vec<BoolValue<'arena>> = self.cells.values().cloned().collect();
+        let values: Vec<BoolValue> = self.cells.values().cloned().collect();
         
         factory.or_multi(values)
     }
 
     /// Multiplicity: none (all entries are FALSE)
     /// Following Java: BooleanMatrix.none()
-    pub fn none(&self, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
+    pub fn none(&self, factory: &BooleanFactory) -> BoolValue {
         let some_val = self.some(factory);
         
         factory.not(some_val)
@@ -786,7 +739,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Multiplicity: one (exactly one entry is TRUE)
     /// Following Java: BooleanMatrix.one()
-    pub fn one(&self, factory: &'arena BooleanFactory) -> BoolValue<'arena> {
+    pub fn one(&self, factory: &BooleanFactory) -> BoolValue {
         if self.cells.is_empty() {
             return BoolValue::Constant(BooleanConstant::FALSE);
         }
@@ -812,7 +765,7 @@ impl<'arena> BooleanMatrix<'arena> {
     /// Transitive closure of a binary relation
     /// Following Java: BooleanMatrix.closure()
     /// Computes R^+ = R ∪ (R.R) ∪ (R.R.R) ∪ ... using iterative squaring
-    pub fn closure(&self, factory: &'arena BooleanFactory) -> BooleanMatrix<'arena> {
+    pub fn closure(&self, factory: &BooleanFactory) -> BooleanMatrix {
         assert_eq!(self.dimensions.cols(), 2, "closure requires binary relation");
 
         if self.cells.is_empty() {
@@ -844,21 +797,21 @@ impl<'arena> BooleanMatrix<'arena> {
 
     /// Reflexive transitive closure
     /// Following Java: R* = IDEN ∪ R^+
-    pub fn reflexive_closure(&self, factory: &'arena BooleanFactory, iden: &BooleanMatrix<'arena>) -> BooleanMatrix<'arena> {
+    pub fn reflexive_closure(&self, factory: &BooleanFactory, iden: &BooleanMatrix) -> BooleanMatrix {
         let closure = self.closure(factory);
         closure.union(iden, factory)
     }
 
     /// Count the number of TRUE entries in this matrix as a boolean circuit
     /// Returns an Int representing the count via popcount circuit
-    pub fn popcount(&self, factory: &'arena BooleanFactory) -> Int<'arena> {
+    pub fn popcount(&self, factory: &BooleanFactory) -> Int {
         if self.cells.is_empty() {
             let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
             return Int::constant(0, factory.bitwidth(), one_bit);
         }
 
         // Collect all values from the matrix (only non-FALSE entries)
-        let values: Vec<BoolValue<'arena>> = self.cells.values().cloned().collect();
+        let values: Vec<BoolValue> = self.cells.values().cloned().collect();
 
         if values.is_empty() {
             let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
@@ -867,7 +820,7 @@ impl<'arena> BooleanMatrix<'arena> {
 
         // Use cascaded full adders to sum the values
         // Start with the first value in bit 0
-        let mut result_bits: Vec<BoolValue<'arena>> = vec![values[0].clone()];
+        let mut result_bits: Vec<BoolValue> = vec![values[0].clone()];
 
         // Add remaining values
         for val in &values[1..] {
@@ -936,12 +889,11 @@ mod tests {
 
     #[test]
     fn boolean_formula() {
-        let arena = MatrixArena::new();
         let v1 = BoolValue::Variable(BooleanVariable::new(1));
         let v2 = BoolValue::Variable(BooleanVariable::new(2));
 
-        let handle = arena.alloc_slice_handle(&[v1, v2]);
-        let formula = BooleanFormula::new(10, FormulaKind::And(handle));
+        let inputs = Rc::from([v1, v2].as_ref());
+        let formula = BooleanFormula::new(10, FormulaKind::And(inputs));
         assert_eq!(formula.label(), 10);
     }
 
@@ -1154,7 +1106,7 @@ mod tests {
     #[test]
     fn matrix_dense_indices_empty() {
         let dims = Dimensions::new(5, 1);
-        let matrix = BooleanMatrix::<'_>::empty(dims);
+        let matrix = BooleanMatrix::empty(dims);
 
         let indices = matrix.dense_indices();
         assert_eq!(indices.len(), 0);

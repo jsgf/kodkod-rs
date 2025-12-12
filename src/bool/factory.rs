@@ -3,11 +3,11 @@
 //! The factory creates boolean values and formulas, with automatic deduplication.
 //! Uses interior mutability (Cell/RefCell) to avoid &mut self everywhere.
 
-use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind, MatrixArena};
+use super::{BoolValue, BooleanConstant, BooleanFormula, BooleanMatrix, BooleanVariable, Dimensions, FormulaKind};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
-use std::mem;
+use std::rc::Rc;
 
 /// Options for boolean factory
 #[derive(Debug, Clone)]
@@ -40,10 +40,8 @@ pub struct BooleanFactory {
     options: Options,
     // Cache for gate deduplication
     // Key: (kind, input labels) -> cached formula
-    cache: RefCell<FxHashMap<CacheKey, BooleanFormula<'static>>>,
+    cache: RefCell<FxHashMap<CacheKey, BooleanFormula>>,
     bitwidth: usize,
-    // Arena for allocating BoolValue handles
-    arena: MatrixArena,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -68,7 +66,6 @@ impl BooleanFactory {
             bitwidth: options.bitwidth,
             options,
             cache: RefCell::new(FxHashMap::default()),
-            arena: MatrixArena::new(),
         }
     }
 
@@ -77,37 +74,15 @@ impl BooleanFactory {
         self.num_variables
     }
 
-    /// Returns a reference to the arena
-    pub fn arena(&self) -> &MatrixArena {
-        &self.arena
-    }
-
-    /// Fetches a cached formula, transmuting from 'static to the arena's lifetime
-    /// This is the ONLY place where lifetime transmutation happens
-    #[inline]
-    fn cache_get<'arena>(&'arena self, key: &CacheKey) -> Option<BooleanFormula<'arena>> {
-        self.cache.borrow().get(key).map(|f| {
-            unsafe { mem::transmute::<BooleanFormula<'static>, BooleanFormula<'arena>>(*f) }
-        })
-    }
-
-    /// Inserts a formula into the cache, transmuting from arena's lifetime to 'static
-    /// This is the ONLY place where lifetime transmutation happens
-    #[inline]
-    fn cache_insert<'arena>(&'arena self, key: CacheKey, formula: BooleanFormula<'arena>) {
-        let static_formula = unsafe { mem::transmute::<BooleanFormula<'arena>, BooleanFormula<'static>>(formula) };
-        self.cache.borrow_mut().insert(key, static_formula);
-    }
-
     /// Creates a boolean variable
-    pub fn variable<'arena>(&'arena self, label: i32) -> BoolValue<'arena> {
+    pub fn variable(&self, label: i32) -> BoolValue {
         assert!(label > 0 && label <= self.num_variables as i32,
                 "Variable label must be in range 1..={}", self.num_variables);
         BoolValue::Variable(BooleanVariable::new(label))
     }
 
     /// Creates a constant
-    pub fn constant<'arena>(&'arena self, value: bool) -> BoolValue<'arena> {
+    pub fn constant(&self, value: bool) -> BoolValue {
         BoolValue::Constant(if value {
             BooleanConstant::TRUE
         } else {
@@ -116,12 +91,12 @@ impl BooleanFactory {
     }
 
     /// Creates an AND gate
-    pub fn and<'arena>(&'arena self, left: BoolValue<'arena>, right: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn and(&self, left: BoolValue, right: BoolValue) -> BoolValue {
         self.and_multi(vec![left, right])
     }
 
     /// Creates a multi-input AND gate
-    pub fn and_multi<'arena>(&'arena self, mut inputs: Vec<BoolValue<'arena>>) -> BoolValue<'arena> {
+    pub fn and_multi(&self, mut inputs: Vec<BoolValue>) -> BoolValue {
         if inputs.is_empty() {
             return self.constant(true);
         }
@@ -188,7 +163,7 @@ impl BooleanFactory {
             match input {
                 BoolValue::Formula(BooleanFormula { kind: FormulaKind::And(inner_inputs), .. }) => {
                     // Flatten nested AND by extracting its inputs
-                    let inner = self.arena.resolve_handle(inner_inputs);
+                    let inner = inner_inputs.as_ref();
                     flattened.extend_from_slice(inner);
                 }
                 other => flattened.push(other),
@@ -223,7 +198,7 @@ impl BooleanFactory {
             // For NOT gates, also check if we've seen the inner formula
             if let BoolValue::Formula(f) = input
                 && let FormulaKind::Not(h) = f.kind() {
-                    let inner_label = self.arena.resolve_handle(*h).label();
+                    let inner_label = h.label();
                     if seen_labels.contains(&inner_label) {
                         return self.constant(false);
                     }
@@ -247,7 +222,7 @@ impl BooleanFactory {
         for (i, input) in inputs.iter().enumerate() {
             if let BoolValue::Formula(f) = input
                 && let FormulaKind::Or(or_inputs_handle) = f.kind() {
-                    let or_inputs = self.arena.resolve_handle(*or_inputs_handle);
+                    let or_inputs = &**or_inputs_handle;
                     // Check if any other input appears in this OR
                     // Now O(m) where m = or_inputs.len(), not O(n)
                     if or_inputs.iter().any(|v| {
@@ -273,30 +248,30 @@ impl BooleanFactory {
             let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
             let key = CacheKey::And(labels.into_boxed_slice());
 
-            if let Some(cached) = self.cache_get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key).cloned() {
                 return BoolValue::Formula(cached);
             }
 
             // Create new formula - allocate inputs slice in arena
             let label = self.allocate_label();
-            let handle = self.arena.alloc_slice_handle(&inputs);
+            let handle = Rc::from(inputs.as_slice());
             let formula = BooleanFormula::new(label, FormulaKind::And(handle));
-            self.cache_insert(key, formula);
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
-            let handle = self.arena.alloc_slice_handle(&inputs);
+            let handle = Rc::from(inputs.as_slice());
             BoolValue::Formula(BooleanFormula::new(label, FormulaKind::And(handle)))
         }
     }
 
     /// Creates an OR gate
-    pub fn or<'arena>(&'arena self, left: BoolValue<'arena>, right: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn or(&self, left: BoolValue, right: BoolValue) -> BoolValue {
         self.or_multi(vec![left, right])
     }
 
     /// Creates a multi-input OR gate
-    pub fn or_multi<'arena>(&'arena self, mut inputs: Vec<BoolValue<'arena>>) -> BoolValue<'arena> {
+    pub fn or_multi(&self, mut inputs: Vec<BoolValue>) -> BoolValue {
         if inputs.is_empty() {
             return self.constant(false);
         }
@@ -363,7 +338,7 @@ impl BooleanFactory {
             match input {
                 BoolValue::Formula(BooleanFormula { kind: FormulaKind::Or(inner_inputs), .. }) => {
                     // Flatten nested OR by extracting its inputs
-                    let inner = self.arena.resolve_handle(inner_inputs);
+                    let inner = inner_inputs.as_ref();
                     flattened.extend_from_slice(inner);
                 }
                 other => flattened.push(other),
@@ -398,7 +373,7 @@ impl BooleanFactory {
             // For NOT gates, also check if we've seen the inner formula
             if let BoolValue::Formula(f) = input
                 && let FormulaKind::Not(h) = f.kind() {
-                    let inner_label = self.arena.resolve_handle(*h).label();
+                    let inner_label = h.label();
                     if seen_labels.contains(&inner_label) {
                         return self.constant(true);
                     }
@@ -422,7 +397,7 @@ impl BooleanFactory {
         for (i, input) in inputs.iter().enumerate() {
             if let BoolValue::Formula(f) = input
                 && let FormulaKind::And(and_inputs_handle) = f.kind() {
-                    let and_inputs = self.arena.resolve_handle(*and_inputs_handle);
+                    let and_inputs = &**and_inputs_handle;
                     // Check if any other input appears in this AND
                     // Now O(m) where m = and_inputs.len(), not O(n)
                     if and_inputs.iter().any(|v| {
@@ -448,32 +423,32 @@ impl BooleanFactory {
             let labels: Vec<i32> = inputs.iter().map(|v| v.label()).collect();
             let key = CacheKey::Or(labels.into_boxed_slice());
 
-            if let Some(cached) = self.cache_get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key).cloned() {
                 return BoolValue::Formula(cached);
             }
 
             // Create new formula - allocate inputs slice in arena
             let label = self.allocate_label();
-            let handle = self.arena.alloc_slice_handle(&inputs);
+            let handle = Rc::from(inputs.as_slice());
             let formula = BooleanFormula::new(label, FormulaKind::Or(handle));
-            self.cache_insert(key, formula);
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
-            let handle = self.arena.alloc_slice_handle(&inputs);
+            let handle = Rc::from(inputs.as_slice());
             BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Or(handle)))
         }
     }
 
     /// Creates a NOT gate
-    pub fn not<'arena>(&'arena self, input: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn not(&self, input: BoolValue) -> BoolValue {
         // Check for optimizations
         match &input {
             BoolValue::Constant(BooleanConstant::TRUE) => return self.constant(false),
             BoolValue::Constant(BooleanConstant::FALSE) => return self.constant(true),
             BoolValue::Formula(BooleanFormula { kind: FormulaKind::Not(inner), .. }) => {
                 // Double negation: NOT(NOT(x)) = x
-                return self.arena.resolve_handle(*inner).clone();
+                return (**inner).clone();
             }
             _ => {}
         }
@@ -482,25 +457,25 @@ impl BooleanFactory {
         if self.options.sharing {
             let key = CacheKey::Not(input.label());
 
-            if let Some(cached) = self.cache_get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key).cloned() {
                 return BoolValue::Formula(cached);
             }
 
             // Create new formula - allocate input handle in arena
             let label = self.allocate_label();
-            let handle = self.arena.alloc_handle(input.clone());
+            let handle = Rc::new(input.clone());
             let formula = BooleanFormula::new(label, FormulaKind::Not(handle));
-            self.cache_insert(key, formula);
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
-            let handle = self.arena.alloc_handle(input);
+            let handle = Rc::new(input);
             BoolValue::Formula(BooleanFormula::new(label, FormulaKind::Not(handle)))
         }
     }
 
     /// Creates an if-then-else gate
-    pub fn ite<'arena>(&'arena self, condition: BoolValue<'arena>, then_val: BoolValue<'arena>, else_val: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn ite(&self, condition: BoolValue, then_val: BoolValue, else_val: BoolValue) -> BoolValue {
         // Check for trivial cases
         if let BoolValue::Constant(c) = condition {
             return match c {
@@ -539,15 +514,15 @@ impl BooleanFactory {
         if self.options.sharing {
             let key = CacheKey::Ite(condition.label(), then_val.label(), else_val.label());
 
-            if let Some(cached) = self.cache_get(&key) {
+            if let Some(cached) = self.cache.borrow().get(&key).cloned() {
                 return BoolValue::Formula(cached);
             }
 
             // Create new formula - allocate value handles in arena
             let label = self.allocate_label();
-            let condition_handle = self.arena.alloc_handle(condition.clone());
-            let then_handle = self.arena.alloc_handle(then_val.clone());
-            let else_handle = self.arena.alloc_handle(else_val.clone());
+            let condition_handle = Rc::new(condition.clone());
+            let then_handle = Rc::new(then_val.clone());
+            let else_handle = Rc::new(else_val.clone());
             let formula = BooleanFormula::new(
                 label,
                 FormulaKind::Ite {
@@ -556,13 +531,13 @@ impl BooleanFactory {
                     else_val: else_handle,
                 },
             );
-            self.cache_insert(key, formula);
+            self.cache.borrow_mut().insert(key, formula.clone());
             BoolValue::Formula(formula)
         } else {
             let label = self.allocate_label();
-            let condition_handle = self.arena.alloc_handle(condition);
-            let then_handle = self.arena.alloc_handle(then_val);
-            let else_handle = self.arena.alloc_handle(else_val);
+            let condition_handle = Rc::new(condition);
+            let then_handle = Rc::new(then_val);
+            let else_handle = Rc::new(else_val);
             BoolValue::Formula(BooleanFormula::new(
                 label,
                 FormulaKind::Ite {
@@ -576,7 +551,7 @@ impl BooleanFactory {
 
     /// Creates an empty boolean matrix with the given dimensions
     /// Following Java: used for quantifier translation
-    pub fn matrix<'arena>(&'arena self, dimensions: Dimensions) -> BooleanMatrix<'arena> {
+    pub fn matrix(&self, dimensions: Dimensions) -> BooleanMatrix {
         BooleanMatrix::empty(dimensions)
     }
 
@@ -586,7 +561,7 @@ impl BooleanFactory {
     }
 
     /// XOR operation: a XOR b = (a AND NOT b) OR (NOT a AND b)
-    pub fn xor<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn xor(&self, a: BoolValue, b: BoolValue) -> BoolValue {
         let not_b = self.not(b.clone());
         let a_and_not_b = self.and(a.clone(), not_b);
 
@@ -597,7 +572,7 @@ impl BooleanFactory {
     }
 
     /// IFF (if and only if): a IFF b = (a AND b) OR (NOT a AND NOT b)
-    pub fn iff<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn iff(&self, a: BoolValue, b: BoolValue) -> BoolValue {
         let a_and_b = self.and(a.clone(), b.clone());
         let not_a = self.not(a);
         let not_b = self.not(b);
@@ -606,20 +581,20 @@ impl BooleanFactory {
     }
 
     /// IMPLIES: a IMPLIES b = NOT a OR b
-    pub fn implies<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn implies(&self, a: BoolValue, b: BoolValue) -> BoolValue {
         let not_a = self.not(a);
         self.or(not_a, b)
     }
 
     /// Full adder sum: a XOR b XOR cin
     /// Returns the sum bit (without carry)
-    pub fn sum<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>, cin: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn sum(&self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
         let ab_xor = self.xor(a, b);
         self.xor(ab_xor, cin)
     }
 
     /// Full adder carry out: (a AND b) OR (cin AND (a XOR b))
-    pub fn carry<'arena>(&'arena self, a: BoolValue<'arena>, b: BoolValue<'arena>, cin: BoolValue<'arena>) -> BoolValue<'arena> {
+    pub fn carry(&self, a: BoolValue, b: BoolValue, cin: BoolValue) -> BoolValue {
         let a_and_b = self.and(a.clone(), b.clone());
         let ab_xor = self.xor(a, b);
         let cin_and_xor = self.and(cin, ab_xor);
@@ -628,7 +603,7 @@ impl BooleanFactory {
 
     /// Creates an Int representing the given constant integer value
     /// Following Java: BooleanFactory.integer(int)
-    pub fn integer<'arena>(&'arena self, value: i32) -> crate::bool::Int<'arena> {
+    pub fn integer(&self, value: i32) -> crate::bool::Int {
         crate::bool::Int::constant(value, self.options.bitwidth, BoolValue::Constant(BooleanConstant::TRUE))
     }
 
@@ -648,21 +623,21 @@ impl BooleanFactory {
     /// # Arguments
     /// * `value` - The value to flatten
     /// * `is_and` - If true, we're flattening AND gates; if false, flattening OR gates
-    fn flatten_gate_inputs<'arena>(&'arena self, value: &BoolValue<'arena>, is_and: bool) -> FxHashSet<i32> {
+    fn flatten_gate_inputs(&self, value: &BoolValue, is_and: bool) -> FxHashSet<i32> {
         let mut result = FxHashSet::default();
         match value {
             BoolValue::Formula(f) => {
                 match f.kind() {
                     FormulaKind::And(handle) if is_and => {
                         // Recursively flatten AND children when we're in AND mode
-                        let inputs = self.arena.resolve_handle(*handle);
+                        let inputs = &**handle;
                         for input in inputs {
                             result.extend(self.flatten_gate_inputs(input, true));
                         }
                     }
                     FormulaKind::Or(handle) if !is_and => {
                         // Recursively flatten OR children when we're in OR mode
-                        let inputs = self.arena.resolve_handle(*handle);
+                        let inputs = &**handle;
                         for input in inputs {
                             result.extend(self.flatten_gate_inputs(input, false));
                         }
@@ -682,12 +657,12 @@ impl BooleanFactory {
 
     /// Get the flattened labels of inputs if this is a same-op gate.
     /// Returns None if the value is not a formula or not the expected op.
-    fn get_flattened_labels<'arena>(&'arena self, value: &BoolValue<'arena>, is_and: bool) -> Option<FxHashSet<i32>> {
+    fn get_flattened_labels(&self, value: &BoolValue, is_and: bool) -> Option<FxHashSet<i32>> {
         match value {
             BoolValue::Formula(f) => {
                 match f.kind() {
                     FormulaKind::And(handle) if is_and => {
-                        let inputs = self.arena.resolve_handle(*handle);
+                        let inputs = &**handle;
                         let mut result = FxHashSet::default();
                         for input in inputs {
                             result.extend(self.flatten_gate_inputs(input, true));
@@ -695,7 +670,7 @@ impl BooleanFactory {
                         Some(result)
                     }
                     FormulaKind::Or(handle) if !is_and => {
-                        let inputs = self.arena.resolve_handle(*handle);
+                        let inputs = &**handle;
                         let mut result = FxHashSet::default();
                         for input in inputs {
                             result.extend(self.flatten_gate_inputs(input, false));

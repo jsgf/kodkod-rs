@@ -509,7 +509,7 @@ impl<T: Clone> MultiVarRecord<T> {
     }
 
     /// Get cached translation if current bindings match
-    fn get<'a>(&self, env: &super::Environment<'a>) -> Option<T> {
+    fn get<'a>(&self, env: &super::Environment) -> Option<T> {
         let translation = self.translation.as_ref()?;
 
         // Check if all variable bindings match
@@ -532,7 +532,7 @@ impl<T: Clone> MultiVarRecord<T> {
     }
 
     /// Set cached translation with current bindings
-    fn set<'a>(&mut self, translation: T, env: &super::Environment<'a>) {
+    fn set<'a>(&mut self, translation: T, env: &super::Environment) {
         for (i, var) in self.variables.iter().enumerate() {
             if let Some(matrix) = env.lookup(var)
                 && let Some((idx, _)) = matrix.iter_indexed().next() {
@@ -550,14 +550,14 @@ enum CacheRecord<T> {
 }
 
 impl<T: Clone> CacheRecord<T> {
-    fn get<'a>(&self, env: &super::Environment<'a>) -> Option<T> {
+    fn get<'a>(&self, env: &super::Environment) -> Option<T> {
         match self {
             CacheRecord::NoVar(r) => r.get(),
             CacheRecord::MultiVar(r) => r.get(env),
         }
     }
 
-    fn set<'a>(&mut self, translation: T, env: &super::Environment<'a>) {
+    fn set<'a>(&mut self, translation: T, env: &super::Environment) {
         match self {
             CacheRecord::NoVar(r) => r.set(translation),
             CacheRecord::MultiVar(r) => r.set(translation, env),
@@ -566,12 +566,12 @@ impl<T: Clone> CacheRecord<T> {
 }
 
 /// Main translation cache following Java's FOL2BoolCache
-pub struct TranslationCache<'a> {
-    expr_cache: FxHashMap<NodeId, CacheRecord<BooleanMatrix<'a>>>,
-    formula_cache: FxHashMap<NodeId, CacheRecord<BoolValue<'a>>>,
+pub struct TranslationCache {
+    expr_cache: FxHashMap<NodeId, CacheRecord<BooleanMatrix>>,
+    formula_cache: FxHashMap<NodeId, CacheRecord<BoolValue>>,
 }
 
-impl<'a> TranslationCache<'a> {
+impl<'a> TranslationCache {
     /// Create an empty cache (for approximate translations that don't need caching)
     pub fn empty() -> Self {
         Self {
@@ -593,7 +593,7 @@ impl<'a> TranslationCache<'a> {
         let mut formula_cache = FxHashMap::default();
 
         for (id, vars) in free_vars {
-            let record: CacheRecord<BooleanMatrix<'a>> = if vars.is_empty() {
+            let record: CacheRecord<BooleanMatrix> = if vars.is_empty() {
                 CacheRecord::NoVar(NoVarRecord::new())
             } else {
                 CacheRecord::MultiVar(MultiVarRecord::new(vars.clone()))
@@ -604,7 +604,7 @@ impl<'a> TranslationCache<'a> {
                     expr_cache.insert(id, record);
                 }
                 NodeId::Formula(_) => {
-                    let record: CacheRecord<BoolValue<'a>> = if vars.is_empty() {
+                    let record: CacheRecord<BoolValue> = if vars.is_empty() {
                         CacheRecord::NoVar(NoVarRecord::new())
                     } else {
                         CacheRecord::MultiVar(MultiVarRecord::new(vars))
@@ -621,13 +621,13 @@ impl<'a> TranslationCache<'a> {
     }
 
     /// Look up cached expression translation
-    pub fn lookup_expr(&self, expr: &Expression, env: &super::Environment<'a>) -> Option<BooleanMatrix<'a>> {
+    pub fn lookup_expr(&self, expr: &Expression, env: &super::Environment) -> Option<BooleanMatrix> {
         let id = NodeId::from_expr(expr)?;
         self.expr_cache.get(&id)?.get(env)
     }
 
     /// Cache expression translation
-    pub fn cache_expr(&mut self, expr: &Expression, translation: BooleanMatrix<'a>, env: &super::Environment<'a>) {
+    pub fn cache_expr(&mut self, expr: &Expression, translation: BooleanMatrix, env: &super::Environment) {
         if let Some(id) = NodeId::from_expr(expr)
             && let Some(record) = self.expr_cache.get_mut(&id) {
                 record.set(translation, env);
@@ -635,13 +635,13 @@ impl<'a> TranslationCache<'a> {
     }
 
     /// Look up cached formula translation
-    pub fn lookup_formula(&self, formula: &Formula, env: &super::Environment<'a>) -> Option<BoolValue<'a>> {
+    pub fn lookup_formula(&self, formula: &Formula, env: &super::Environment) -> Option<BoolValue> {
         let id = NodeId::from_formula(formula)?;
         self.formula_cache.get(&id)?.get(env)
     }
 
     /// Cache formula translation
-    pub fn cache_formula(&mut self, formula: &Formula, translation: BoolValue<'a>, env: &super::Environment<'a>) {
+    pub fn cache_formula(&mut self, formula: &Formula, translation: BoolValue, env: &super::Environment) {
         if let Some(id) = NodeId::from_formula(formula)
             && let Some(record) = self.formula_cache.get_mut(&id) {
                 record.set(translation, env);

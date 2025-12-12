@@ -254,7 +254,7 @@ impl Solver {
             Vec::new()
         };
 
-        let cnf_translator = CNFTranslator::new(interpreter.arena());
+        let cnf_translator = CNFTranslator::new();
         let (_top_level_var, cnf) = cnf_translator.translate(bool_circuit);
         let cnf_time = cnf_start.elapsed();
 
@@ -593,7 +593,7 @@ impl SolutionIterator {
         let extractor = SolutionExtractorData::from_interpreter(interpreter);
 
         // Convert to CNF
-        let cnf_translator = CNFTranslator::new(interpreter.arena());
+        let cnf_translator = CNFTranslator::new();
         let (_top_level_var, cnf) = cnf_translator.translate(translation_result.value());
 
         // Initialize SAT solver with CNF

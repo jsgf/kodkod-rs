@@ -39,11 +39,11 @@ impl SymmetryBreaker {
     /// Creates a lex-leader circuit that enforces canonical ordering
     /// on symmetric partitions, preventing exploration of equivalent
     /// solutions.
-    pub fn generate_sbp<'a>(
+    pub fn generate_sbp(
         &mut self,
-        interpreter: &'a LeafInterpreter,
+        interpreter: &LeafInterpreter,
         pred_length: i32,
-    ) -> BoolValue<'a> {
+    ) -> BoolValue {
         if self.symmetries.is_empty() || pred_length == 0 {
             return BoolValue::Constant(BooleanConstant::TRUE);
         }
@@ -158,12 +158,12 @@ impl SymmetryBreaker {
     ///
     /// Returns a circuit that is true iff the bit string l0
     /// is lexicographically less than or equal to l1.
-    fn lex_leader<'a>(
+    fn lex_leader(
         &self,
-        factory: &'a BooleanFactory,
-        l0: &[BoolValue<'a>],
-        l1: &[BoolValue<'a>],
-    ) -> BoolValue<'a> {
+        factory: &BooleanFactory,
+        l0: &[BoolValue],
+        l1: &[BoolValue],
+    ) -> BoolValue {
         assert_eq!(l0.len(), l1.len());
 
         let mut constraints = Vec::new();
