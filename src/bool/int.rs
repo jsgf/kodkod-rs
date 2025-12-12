@@ -166,6 +166,17 @@ impl<'arena> Int<'arena> {
         factory.and(leq, not_eq)
     }
 
+    /// Conditional choice: returns this if condition is true, otherwise other
+    /// Follows Java: TwosComplementInt.choice()
+    /// Returns condition ? this : other
+    pub fn choice(&self, condition: BoolValue<'arena>, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {
+        let width = self.width().max(other.width());
+        let bits: Vec<BoolValue<'arena>> = (0..width)
+            .map(|i| factory.ite(condition.clone(), self.bit(i), other.bit(i)))
+            .collect();
+        Int::new(bits)
+    }
+
     /// Returns a boolean circuit encoding the addition
     /// Follows Java: TwosComplementInt.plus()
     pub fn plus(&self, other: &Int<'arena>, factory: &'arena BooleanFactory) -> Int<'arena> {

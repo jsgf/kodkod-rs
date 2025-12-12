@@ -312,3 +312,160 @@ fn test_shift_equivalence_constant_vs_dynamic() {
     assert!(solution.is_sat(), "dynamic shift should match expected constant result");
 }
 
+// ========== SUM OVER DECLARATIONS TESTS ==========
+
+#[test]
+fn test_sum_over_declarations_simple() {
+    use kodkod_rs::ast::{Decl, Decls, IntExpression, Relation, Variable};
+    use kodkod_rs::instance::{Bounds, Universe};
+    use kodkod_rs::solver::{Options, Solver};
+
+    // Create universe with integers 1, 2, 3
+    let universe = Universe::new(&["1", "2", "3"]).unwrap();
+    let mut bounds = Bounds::new(universe.clone());
+    let factory = universe.factory();
+
+    // Set up integer bounds [1, 3]
+    bounds.bound_int(1, 3);
+
+    // Create relation R = {1, 2, 3}
+    let r = Relation::unary("R");
+    let r_tuples = factory.tuple_set(&[&["1"], &["2"], &["3"]]).unwrap();
+    bounds.bound_exactly(&r, r_tuples).unwrap();
+
+    // Create sum: sum x: one of R | x
+    // This should sum 1 + 2 + 3 = 6
+    let x = Variable::unary("x");
+    let decl = Decl::one_of(x.clone(), r.into());
+    let decls = Decls::from(decl);
+    let sum_expr = IntExpression::sum(decls, IntExpression::expr_cast(x.into()));
+
+    // Test that sum equals 6
+    let formula = sum_expr.eq(IntExpression::constant(6));
+
+    let mut options = Options::default();
+    options.bool_options.bitwidth = 8;
+    let solver = Solver::new(options);
+
+    let solution = solver.solve(&formula, &bounds).unwrap();
+    assert!(solution.is_sat(), "sum over {{1,2,3}} should equal 6");
+}
+
+#[test]
+fn test_sum_over_declarations_empty() {
+    use kodkod_rs::ast::{Decl, Decls, IntExpression, Relation, Variable};
+    use kodkod_rs::instance::{Bounds, Universe};
+    use kodkod_rs::solver::{Options, Solver};
+
+    // Create universe
+    let universe = Universe::new(&["1", "2", "3"]).unwrap();
+    let mut bounds = Bounds::new(universe.clone());
+    let factory = universe.factory();
+
+    // Set up integer bounds [1, 3]
+    bounds.bound_int(1, 3);
+
+    // Create empty relation R = {}
+    let r = Relation::unary("R");
+    let r_tuples = factory.none(1);
+    bounds.bound_exactly(&r, r_tuples).unwrap();
+
+    // Create sum: sum x: one of R | x
+    // This should be 0 (sum over empty set)
+    let x = Variable::unary("x");
+    let decl = Decl::one_of(x.clone(), r.into());
+    let decls = Decls::from(decl);
+    let sum_expr = IntExpression::sum(decls, IntExpression::expr_cast(x.into()));
+
+    // Test that sum equals 0
+    let formula = sum_expr.eq(IntExpression::constant(0));
+
+    let mut options = Options::default();
+    options.bool_options.bitwidth = 8;
+    let solver = Solver::new(options);
+
+    let solution = solver.solve(&formula, &bounds).unwrap();
+    assert!(solution.is_sat(), "sum over empty set should equal 0");
+}
+
+#[test]
+fn test_sum_over_declarations_with_expression() {
+    use kodkod_rs::ast::{Decl, Decls, IntExpression, Relation, Variable};
+    use kodkod_rs::instance::{Bounds, Universe};
+    use kodkod_rs::solver::{Options, Solver};
+
+    // Create universe with integers 1, 2, 3
+    let universe = Universe::new(&["1", "2", "3"]).unwrap();
+    let mut bounds = Bounds::new(universe.clone());
+    let factory = universe.factory();
+
+    // Set up integer bounds [1, 3]
+    bounds.bound_int(1, 3);
+
+    // Create relation R = {1, 2, 3}
+    let r = Relation::unary("R");
+    let r_tuples = factory.tuple_set(&[&["1"], &["2"], &["3"]]).unwrap();
+    bounds.bound_exactly(&r, r_tuples).unwrap();
+
+    // Create sum: sum x: one of R | (x + x)
+    // This should sum (1+1) + (2+2) + (3+3) = 2 + 4 + 6 = 12
+    let x = Variable::unary("x");
+    let decl = Decl::one_of(x.clone(), r.into());
+    let decls = Decls::from(decl);
+    let x_int = IntExpression::expr_cast(x.into());
+    let doubled = x_int.clone().plus(x_int);
+    let sum_expr = IntExpression::sum(decls, doubled);
+
+    // Test that sum equals 12
+    let formula = sum_expr.eq(IntExpression::constant(12));
+
+    let mut options = Options::default();
+    options.bool_options.bitwidth = 8;
+    let solver = Solver::new(options);
+
+    let solution = solver.solve(&formula, &bounds).unwrap();
+    assert!(solution.is_sat(), "sum over {{1,2,3}} of (x+x) should equal 12");
+}
+
+#[test]
+fn test_sum_over_multiple_declarations() {
+    use kodkod_rs::ast::{Decl, Decls, IntExpression, Relation, Variable};
+    use kodkod_rs::instance::{Bounds, Universe};
+    use kodkod_rs::solver::{Options, Solver};
+
+    // Create universe with integers 1, 2
+    let universe = Universe::new(&["1", "2"]).unwrap();
+    let mut bounds = Bounds::new(universe.clone());
+    let factory = universe.factory();
+
+    // Set up integer bounds [1, 2]
+    bounds.bound_int(1, 2);
+
+    // Create relation R = {1, 2}
+    let r = Relation::unary("R");
+    let r_tuples = factory.tuple_set(&[&["1"], &["2"]]).unwrap();
+    bounds.bound_exactly(&r, r_tuples).unwrap();
+
+    // Create sum: sum x: one of R, y: one of R | x * y
+    // This should sum all products: 1*1 + 1*2 + 2*1 + 2*2 = 1 + 2 + 2 + 4 = 9
+    let x = Variable::unary("x");
+    let y = Variable::unary("y");
+    let decl_x = Decl::one_of(x.clone(), r.clone().into());
+    let decl_y = Decl::one_of(y.clone(), r.into());
+    let decls = Decls::from(decl_x).and(decl_y);
+
+    let x_int = IntExpression::expr_cast(x.into());
+    let y_int = IntExpression::expr_cast(y.into());
+    let product = x_int.multiply(y_int);
+    let sum_expr = IntExpression::sum(decls, product);
+
+    // Test that sum equals 9
+    let formula = sum_expr.eq(IntExpression::constant(9));
+
+    let mut options = Options::default();
+    options.bool_options.bitwidth = 8;
+    let solver = Solver::new(options);
+
+    let solution = solver.solve(&formula, &bounds).unwrap();
+    assert!(solution.is_sat(), "sum over {{1,2}}x{{1,2}} of x*y should equal 9");
+}

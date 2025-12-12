@@ -735,6 +735,64 @@ impl<'a> FOL2BoolTranslator<'a> {
         self.env.borrow_mut().pop();
     }
 
+    /// Sum over declarations - collect integer values for all variable bindings
+    /// Following Java: FOL2BoolTranslator.sum(...)
+    fn sum_over_declarations(
+        &self,
+        decls: &Decls,
+        expr: &IntExpression,
+        current_decl: usize,
+        decl_constraints: BoolValue<'a>,
+        values: &mut Vec<Int<'a>>
+    ) {
+        let factory = self.interpreter.factory();
+
+        // Base case: all variables bound, evaluate expression
+        if current_decl >= decls.size() {
+            let int_val = self.translate_int_expr(expr);
+            // Use choice to conditionally include this value:
+            // If decl_constraints is true, use int_val; otherwise use 0
+            let zero = factory.integer(0);
+            let chosen = int_val.choice(decl_constraints, &zero, factory);
+            values.push(chosen);
+            return;
+        }
+
+        // Get current declaration
+        let decl = decls.iter().nth(current_decl).unwrap();
+        let var = decl.variable();
+        let domain = self.translate_expression(decl.expression());
+
+        // Create ground matrix for this variable
+        let mut ground_value = factory.matrix(*domain.dimensions());
+
+        // PUSH binding
+        self.env.borrow_mut().extend(var.clone(), ground_value.clone());
+
+        // ITERATE over each tuple in domain
+        let indices: Vec<(usize, BoolValue)> = domain.iter_indexed()
+            .map(|(idx, val)| (idx, val.clone()))
+            .collect();
+
+        for (index, value) in indices {
+            // Set this index to TRUE
+            ground_value.set(index, BoolValue::Constant(BooleanConstant::TRUE));
+
+            // Update environment
+            *self.env.borrow_mut().lookup_mut(var).unwrap() = ground_value.clone();
+
+            // Recurse with updated constraints
+            let new_constraints = factory.and(value.clone(), decl_constraints.clone());
+            self.sum_over_declarations(decls, expr, current_decl + 1, new_constraints, values);
+
+            // Reset this index to FALSE
+            ground_value.set(index, BoolValue::Constant(BooleanConstant::FALSE));
+        }
+
+        // POP binding
+        self.env.borrow_mut().pop();
+    }
+
     /// Comprehension translation
     /// Following Java: FOL2BoolTranslator.comprehension(...)
     /// Translates { decls | formula } to a boolean matrix
@@ -919,11 +977,40 @@ impl<'a> FOL2BoolTranslator<'a> {
                 result
             }
 
-            IntExpressionInner::Sum { .. } => {
-                // Sum over declarations not yet supported
+            IntExpressionInner::Sum { decls, expr } => {
+                // Collect all integer values for each binding
+                let mut values: Vec<Int<'a>> = Vec::new();
+                self.sum_over_declarations(
+                    decls,
+                    expr,
+                    0,
+                    BoolValue::Constant(BooleanConstant::TRUE),
+                    &mut values
+                );
+
                 let factory = self.interpreter.factory();
-                let one_bit = BoolValue::Constant(BooleanConstant::TRUE);
-                Int::constant(0, factory.bitwidth(), one_bit)
+
+                // If no values, return 0
+                if values.is_empty() {
+                    return factory.integer(0);
+                }
+
+                // Sum using balanced binary tree reduction (following Java exactly)
+                // This reduces depth of the circuit compared to linear accumulation
+                let mut sums = values.len();
+                while sums > 1 {
+                    let max = sums - 1;
+                    for i in (0..max).step_by(2) {
+                        values[i / 2] = values[i].plus(&values[i + 1], factory);
+                    }
+                    // If odd number of entries, move the last one forward
+                    if max % 2 == 0 {
+                        values[max / 2] = values[max].clone();
+                    }
+                    sums -= sums / 2;
+                }
+
+                values[0].clone()
             }
 
             IntExpressionInner::ExprCast(expr) => {
