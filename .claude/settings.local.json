@@ -8,7 +8,10 @@
       "Bash(find:*)",
       "Bash(timeout 30 cargo check:*)",
       "Bash(timeout 60 cargo check:*)",
-      "Bash(timeout 120 cargo check:*)"
+      "Bash(timeout 120 cargo check:*)",
+      "Bash(timeout 180 cargo test:*)",
+      "Bash(timeout 300 cargo build:*)",
+      "Bash(timeout 5 cargo run:*)"
     ],
     "deny": [],
     "ask": []
